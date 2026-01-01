@@ -1,0 +1,148 @@
+# BMB Bootstrap System
+
+Self-hosting components for the BMB language, written in BMB itself.
+
+## Philosophy
+
+Following the BMB LAWS principle of 부트스트랩 (self-compilation):
+- **자기 작성**: The compiler is written in the language it compiles
+- **자기 검증**: The bootstrap validates the language semantics
+- **자기 학습**: AI-driven improvement through self-reflection
+
+## Files
+
+### lexer.bmb (8KB)
+Core lexical analyzer that tokenizes BMB source code.
+
+**Features:**
+- Token encoding: `kind * 1000000 + end_position`
+- Comment skipping (`--` style)
+- All BMB keywords and operators
+- Unicode-safe identifier handling
+
+**Test output:**
+```
+777 (start marker)
+<token kinds for each token>
+888 (separator)
+<token count>
+999 (end marker)
+```
+
+### parser.bmb (22KB)
+Recursive descent parser that validates BMB syntax.
+
+**Features:**
+- Full BMB grammar support
+- Expression parsing with operator precedence
+- Function definition parsing
+- Let binding and if-then-else
+- Contract clause handling (pre/post)
+
+**Test output:**
+```
+777 (start marker)
+<1 for each successful parse>
+888 (separator)
+<total passed>
+999 (end marker)
+```
+
+### parser_ast.bmb (21KB)
+Parser that produces S-expression AST representation.
+
+**AST Format:**
+```lisp
+(program
+  (fn <name> (params (p <param> type)...) return-type body))
+
+; Examples:
+(fn <add> (params (p <x> i64) (p <y> i64)) i64 (op + (var <x>) (var <y>)))
+(if (condition) (then-expr) (else-expr))
+(let <name> (value) (body))
+(call <name> (arg1) (arg2)...)
+```
+
+**Design decisions:**
+- Angle brackets `<name>` instead of quotes (BMB string limitation)
+- Result packing: `"pos:ast"` format for position+AST returns
+- Error format: `"ERR:message"`
+
+### parser_test.bmb (25KB)
+Comprehensive test suite with 15 test categories.
+
+**Test coverage:**
+1. Multiple functions in program
+2. Nested if expressions
+3. Complex operator chains
+4. All comparison operators
+5. Let binding chains
+6. Mutable let bindings
+7. Multi-argument function calls
+8. Boolean expressions (and/or/not)
+9. Parenthesized expressions
+10. Negation operations
+11. Mixed types (i32, i64, bool)
+12. Empty parameter lists
+13. Range operator (..)
+14. Deep nesting
+15. Nested function calls
+
+## Token Encoding
+
+Tokens are encoded as a single i64 value:
+```
+encoded = kind * 1000000 + end_position
+```
+
+Decoding:
+```bmb
+fn tok_kind(tok: i64) -> i64 = tok / 1000000;
+fn tok_end(tok: i64) -> i64 = tok - (tok / 1000000) * 1000000;
+```
+
+This allows passing both token type and position in a single return value.
+
+## Result Packing
+
+Since BMB functions return single values, we pack multiple results:
+```bmb
+fn pack_result(pos: i64, ast: String) -> String =
+    int_to_string(pos) + ":" + ast;
+
+fn unpack_pos(result: String) -> i64 =
+    parse_int_prefix(result, 0, 0);
+
+fn unpack_ast(result: String) -> String =
+    result.slice(find_colon(result, 0) + 1, result.len());
+```
+
+## Running Tests
+
+```bash
+# Check syntax
+cargo run --release -- check bootstrap/lexer.bmb
+cargo run --release -- check bootstrap/parser.bmb
+cargo run --release -- check bootstrap/parser_ast.bmb
+cargo run --release -- check bootstrap/parser_test.bmb
+
+# Run tests
+cargo run --release -- run bootstrap/lexer.bmb
+cargo run --release -- run bootstrap/parser.bmb
+cargo run --release -- run bootstrap/parser_ast.bmb
+cargo run --release -- run bootstrap/parser_test.bmb
+```
+
+## Limitations
+
+1. **No imports**: Each file must include all needed functions
+2. **No string escapes**: Can't use `\"` in strings, use alternative notation
+3. **No newlines in strings**: Use separate test cases instead
+4. **println only i64**: String output not available in type system
+
+## Future Work
+
+- [ ] String output support for debugging
+- [ ] Import system for code sharing
+- [ ] Full compiler pipeline in BMB
+- [ ] Self-compilation of the bootstrap
