@@ -1,0 +1,4 @@
+-- This should fail: returns a, not max
+fn wrong_max(a: i32, b: i32) -> i32
+  post ret >= a and ret >= b
+= a;

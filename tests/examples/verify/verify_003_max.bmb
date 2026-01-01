@@ -1,0 +1,4 @@
+-- Verify max function returns the larger value
+fn max(a: i32, b: i32) -> i32
+  post ret >= a and ret >= b
+= if a > b then a else b;

@@ -4,6 +4,7 @@ local-docs/
 .serena/
 CLAUDE.md
 *.local
+/tools/
 
 # Rust/Cargo
 /target/

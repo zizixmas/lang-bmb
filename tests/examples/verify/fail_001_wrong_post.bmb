@@ -1,0 +1,4 @@
+-- This should fail: identity doesn't guarantee positive result
+fn bad_positive(x: i32) -> i32
+  post ret > 0
+= x;

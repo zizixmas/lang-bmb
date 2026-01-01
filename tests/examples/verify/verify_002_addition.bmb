@@ -1,0 +1,5 @@
+-- Verify addition preserves ordering
+fn add_positive(a: i32, b: i32) -> i32
+  pre a > 0 and b > 0
+  post ret > a and ret > b
+= a + b;
