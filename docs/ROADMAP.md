@@ -228,29 +228,31 @@ LLVM으로 네이티브 코드 생성
 
 | 구성요소 | 상태 | 설명 |
 |----------|------|------|
-| MIR | 필수 | 중간 표현 |
-| LLVM IR 생성 | 필수 | MIR → LLVM |
-| 링커 연동 | 필수 | 실행 파일 생성 |
-| 최적화 패스 | 기본 | 기본 최적화 |
-| 디버그 정보 | 기본 | DWARF 생성 |
+| MIR | ✅ 완료 | 중간 표현 (CFG 기반) |
+| LLVM IR 생성 | ✅ 완료 | MIR → LLVM (inkwell) |
+| 링커 연동 | ✅ 완료 | 플랫폼별 링커 지원 |
+| 최적화 패스 | ✅ 완료 | -O0, -O2, -O3 지원 |
+| 디버그 정보 | ⏳ 계획 | DWARF 생성 |
 
 ### 지원 기능
 
 ```
-- 네이티브 실행 파일 생성
-- 정적 라이브러리 생성
-- 동적 라이브러리 생성
-- 기본 FFI (C 호출)
-- 기본 SIMD (수동)
+- 네이티브 실행 파일 생성 ✅
+- LLVM IR 출력 (--emit-ir) ✅
+- 최적화 레벨 선택 (--release) ✅
+- 플랫폼별 빌드 (Windows/Linux/macOS) ✅
+- 기본 FFI (C 호출) ⏳
 ```
 
 ### 산출물
 
 ```
-- `bmb build` 명령어
-- `bmb run --release` 명령어
-- 바이너리 크기 보고서
-- 성능 테스트 시작
+- `bmb build` 명령어 ✅
+- `bmb build --release` 명령어 ✅
+- `bmb build --emit-ir` 명령어 ✅
+- MIR 모듈 (mir/mod.rs, mir/lower.rs)
+- Codegen 모듈 (codegen/mod.rs, codegen/llvm.rs)
+- Build 모듈 (build/mod.rs)
 ```
 
 ### 생태계: action-bmb 시작
@@ -265,14 +267,24 @@ action-bmb/
 - CI/CD 파이프라인에서 BMB 빌드/테스트/검증 자동화
 - `bmb check`, `bmb verify`, `bmb build` 지원
 
+### LLVM 요구사항
+
+```
+LLVM 기능은 선택적입니다:
+- 기본 빌드: cargo build (LLVM 없이 컴파일됨)
+- LLVM 빌드: cargo build --features llvm (LLVM 18 필요)
+
+LLVM 없이 빌드하면 `bmb build`는 "LLVM not available" 에러 반환
+```
+
 ### 마일스톤
 
-- [ ] MIR 정의 완료
-- [ ] LLVM IR 생성 완료
-- [ ] 실행 파일 생성 완료
-- [ ] 디버그 빌드 작동
-- [ ] 릴리스 빌드 작동
-- [ ] C FFI 작동
+- [x] MIR 정의 완료 ✅
+- [x] LLVM IR 생성 완료 ✅
+- [x] 실행 파일 생성 완료 ✅
+- [x] 디버그 빌드 작동 ✅
+- [x] 릴리스 빌드 작동 ✅
+- [ ] C FFI 작동 (v0.5)
 - [ ] action-bmb v0.1 (기본 빌드/테스트)
 
 ---

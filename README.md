@@ -2,7 +2,7 @@
 
 A verified systems programming language with contract verification.
 
-## Current Status: v0.3 Root
+## Current Status: v0.4 Stem
 
 ### Features
 
@@ -11,6 +11,8 @@ A verified systems programming language with contract verification.
 - **Contract Verification**: pre/post condition verification via SMT solver (Z3)
 - **Interpreter**: Tree-walking interpreter for direct execution
 - **REPL**: Interactive environment with rustyline
+- **MIR**: Middle Intermediate Representation for code generation
+- **LLVM Backend**: Native code generation via inkwell (optional)
 - **Error Reporting**: ariadne-based rich error messages
 
 ### Quick Start
@@ -19,7 +21,7 @@ A verified systems programming language with contract verification.
 # Build the compiler
 cargo build --release
 
-# Run a BMB program
+# Run a BMB program (interpreter)
 bmb run examples/hello.bmb
 
 # Start interactive REPL
@@ -30,6 +32,20 @@ bmb check examples/simple.bmb
 
 # Verify contracts (requires Z3)
 bmb verify examples/verify.bmb --z3-path /path/to/z3
+
+# Build native executable (requires LLVM, see below)
+bmb build examples/hello.bmb -o hello
+bmb build examples/hello.bmb --release  # optimized
+bmb build examples/hello.bmb --emit-ir  # output LLVM IR
+```
+
+### Building with LLVM
+
+For native code generation, build with the `llvm` feature:
+
+```bash
+# Requires LLVM 18 installed on your system
+cargo build --release --features llvm
 ```
 
 ### Example
