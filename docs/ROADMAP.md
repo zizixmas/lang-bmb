@@ -21,6 +21,47 @@
 
 ---
 
+## 생태계 레포지토리
+
+| 레포지토리 | 용도 | 초기 버전 | BMB 부트스트래핑 |
+|------------|------|-----------|------------------|
+| [lang-bmb](https://github.com/lang-bmb/lang-bmb) | 메인 컴파일러 | v0.1 (Rust) | v0.5 (BMB) |
+| [bmb-samples](https://github.com/lang-bmb/bmb-samples) | 예제 프로그램 | v0.3 | N/A (BMB 코드) |
+| [gotgan](https://github.com/lang-bmb/gotgan) | 패키지 매니저 | v0.7 (Rust) | v0.8 (BMB) |
+| [action-bmb](https://github.com/lang-bmb/action-bmb) | GitHub Action | v0.4 | v0.8 (BMB) |
+| [tree-sitter-bmb](https://github.com/lang-bmb/tree-sitter-bmb) | 에디터 문법 | v0.8 | N/A (Tree-sitter) |
+| [vscode-bmb](https://github.com/lang-bmb/vscode-bmb) | VS Code 확장 | v0.8 | N/A (TypeScript) |
+
+### 부트스트래핑 전략
+
+```
+Phase 1 (v0.1-v0.3): Rust로 기반 구축
+  - 컴파일러 프론트엔드 (Rust)
+  - 인터프리터/REPL (Rust)
+  - bmb-samples 시작 (BMB 코드)
+
+Phase 2 (v0.4-v0.5): 네이티브 코드 생성 + 자기 컴파일 시작
+  - LLVM 백엔드 (Rust)
+  - 컴파일러 BMB 재작성 시작
+  - action-bmb 초기 버전 (Rust/Shell)
+
+Phase 3 (v0.6-v0.7): 표준 라이브러리 + 패키지 매니저
+  - 표준 라이브러리 (BMB)
+  - gotgan 패키지 매니저 (Rust)
+
+Phase 4 (v0.8-v0.9): 도구 체인 완성 + 부트스트래핑
+  - gotgan BMB 재작성
+  - action-bmb BMB 재작성
+  - tree-sitter-bmb, vscode-bmb 완성
+  - 핵심 패키지 200+
+
+Phase 5 (v1.0-RC): 완전한 자기 컴파일
+  - 모든 도구 BMB로 재작성 완료
+  - 검증 완료
+```
+
+---
+
 ## v0.1 Seed (최소 기반)
 
 ### 목표
@@ -155,11 +196,22 @@ SMT 연동으로 계약 검증 시작
 - 인터프리터 단위 테스트 16개
 ```
 
+### 생태계: bmb-samples 시작
+
+```
+bmb-samples/
+├── basics/          # 기본 문법 예제
+├── contracts/       # 계약 검증 예제
+├── algorithms/      # 알고리즘 구현
+└── tutorials/       # 튜토리얼
+```
+
 ### 마일스톤
 
 - [x] 인터프리터 완료 ✅
 - [x] REPL 작동 ✅
 - [x] `bmb run` 작동 ✅
+- [ ] bmb-samples 기본 예제 10+
 - [ ] `bmb test` 작동 (v0.4+)
 - [ ] 테스트 통과 200+ (현재 16개)
 
@@ -201,6 +253,18 @@ LLVM으로 네이티브 코드 생성
 - 성능 테스트 시작
 ```
 
+### 생태계: action-bmb 시작
+
+```
+action-bmb/
+├── action.yml        # GitHub Action 정의
+├── src/              # Action 로직 (Rust/Shell)
+└── examples/         # 사용 예제
+```
+
+- CI/CD 파이프라인에서 BMB 빌드/테스트/검증 자동화
+- `bmb check`, `bmb verify`, `bmb build` 지원
+
 ### 마일스톤
 
 - [ ] MIR 정의 완료
@@ -209,6 +273,7 @@ LLVM으로 네이티브 코드 생성
 - [ ] 디버그 빌드 작동
 - [ ] 릴리스 빌드 작동
 - [ ] C FFI 작동
+- [ ] action-bmb v0.1 (기본 빌드/테스트)
 
 ---
 
@@ -347,16 +412,27 @@ gotgan lint              # 린트
 gotgan clean             # 정리
 ```
 
-### 곳간 자기 작성
+### 생태계: gotgan 레포지토리
 
 ```
-곳간 v0.7 = Rust로 작성
-곳간 v0.8+ = BMB로 재작성
+gotgan/                  # https://github.com/lang-bmb/gotgan
+├── src/                 # Rust 구현 (v0.7)
+├── bmb-src/             # BMB 재작성 (v0.8+)
+├── registry-api/        # 레지스트리 서버
+└── docs/                # 패키지 매니저 문서
+```
+
+### 곳간 부트스트래핑 전략
+
+```
+v0.7: Rust로 초기 구현 (Cargo 참고)
+v0.8: BMB로 점진적 재작성 시작
+v1.0: 완전한 BMB 구현
 ```
 
 ### 마일스톤
 
-- [ ] CLI 완료
+- [ ] CLI 완료 (Rust)
 - [ ] 레지스트리 API 완료
 - [ ] 의존성 해결 완료
 - [ ] Cargo 호환 완료
@@ -421,15 +497,51 @@ gotgan clean             # 정리
 - WASM 기반 실행
 ```
 
+### 생태계 레포지토리
+
+#### tree-sitter-bmb
+```
+tree-sitter-bmb/         # https://github.com/lang-bmb/tree-sitter-bmb
+├── grammar.js           # Tree-sitter 문법 정의
+├── src/                 # 생성된 파서
+├── queries/             # 하이라이팅, 폴딩 쿼리
+└── bindings/            # 언어별 바인딩
+```
+
+#### vscode-bmb
+```
+vscode-bmb/              # https://github.com/lang-bmb/vscode-bmb
+├── package.json         # 확장 매니페스트
+├── src/                 # TypeScript 소스
+│   ├── extension.ts     # 진입점
+│   ├── lsp-client.ts    # LSP 클라이언트
+│   └── debugger.ts      # 디버거 어댑터
+├── syntaxes/            # TextMate 문법
+└── snippets/            # 코드 스니펫
+```
+
+### BMB 부트스트래핑 (v0.8)
+
+| 도구 | v0.7 구현 | v0.8 재작성 | 상태 |
+|------|-----------|-------------|------|
+| gotgan | Rust | BMB | 진행 중 |
+| action-bmb | Shell/Rust | BMB | 진행 중 |
+| LSP 서버 | Rust | BMB | 계획 |
+| 포매터 | Rust | BMB | 계획 |
+| 린터 | Rust | BMB | 계획 |
+
 ### 마일스톤
 
 - [ ] LSP 서버 완료
-- [ ] VS Code 확장 완료
+- [ ] VS Code 확장 완료 (vscode-bmb)
+- [ ] tree-sitter-bmb 문법 완료
 - [ ] 포매터 완료
 - [ ] 린터 완료 (규칙 50+)
 - [ ] 문서 생성기 완료
 - [ ] 플레이그라운드 완료
 - [ ] 홈페이지 완료
+- [ ] gotgan BMB 재작성 시작
+- [ ] action-bmb BMB 재작성
 
 ---
 
