@@ -17,9 +17,27 @@ pub struct TypeChecker {
 
 impl TypeChecker {
     pub fn new() -> Self {
+        let mut functions = HashMap::new();
+
+        // Register built-in functions
+        // print(x) -> Unit
+        functions.insert("print".to_string(), (vec![Type::I64], Type::Unit));
+        // println(x) -> Unit
+        functions.insert("println".to_string(), (vec![Type::I64], Type::Unit));
+        // assert(cond) -> Unit
+        functions.insert("assert".to_string(), (vec![Type::Bool], Type::Unit));
+        // read_int() -> i64
+        functions.insert("read_int".to_string(), (vec![], Type::I64));
+        // abs(n) -> i64
+        functions.insert("abs".to_string(), (vec![Type::I64], Type::I64));
+        // min(a, b) -> i64
+        functions.insert("min".to_string(), (vec![Type::I64, Type::I64], Type::I64));
+        // max(a, b) -> i64
+        functions.insert("max".to_string(), (vec![Type::I64, Type::I64], Type::I64));
+
         Self {
             env: HashMap::new(),
-            functions: HashMap::new(),
+            functions,
             current_ret_ty: None,
         }
     }
@@ -81,7 +99,7 @@ impl TypeChecker {
     /// Infer expression type
     fn infer(&mut self, expr: &Expr, span: Span) -> Result<Type> {
         match expr {
-            Expr::IntLit(_) => Ok(Type::I32),
+            Expr::IntLit(_) => Ok(Type::I64),
             Expr::FloatLit(_) => Ok(Type::F64),
             Expr::BoolLit(_) => Ok(Type::Bool),
             Expr::Unit => Ok(Type::Unit),

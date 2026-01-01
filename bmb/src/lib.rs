@@ -4,8 +4,10 @@
 
 pub mod ast;
 pub mod error;
+pub mod interp;
 pub mod lexer;
 pub mod parser;
+pub mod repl;
 pub mod smt;
 pub mod types;
 pub mod verify;

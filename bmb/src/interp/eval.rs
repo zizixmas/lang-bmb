@@ -1,0 +1,508 @@
+//! Expression evaluator
+
+use super::env::{child_env, EnvRef, Environment};
+use super::error::{InterpResult, RuntimeError};
+use super::value::Value;
+use crate::ast::{BinOp, Expr, FnDef, Program, Spanned, UnOp};
+use std::collections::HashMap;
+use std::io::{self, BufRead, Write};
+
+/// Maximum recursion depth
+const MAX_RECURSION_DEPTH: usize = 1000;
+
+/// Builtin function type
+pub type BuiltinFn = fn(&[Value]) -> InterpResult<Value>;
+
+/// The interpreter
+pub struct Interpreter {
+    /// Global environment
+    global_env: EnvRef,
+    /// User-defined functions
+    functions: HashMap<String, FnDef>,
+    /// Builtin functions
+    builtins: HashMap<String, BuiltinFn>,
+    /// Current recursion depth
+    recursion_depth: usize,
+}
+
+impl Interpreter {
+    /// Create a new interpreter
+    pub fn new() -> Self {
+        let mut interp = Interpreter {
+            global_env: Environment::new().into_ref(),
+            functions: HashMap::new(),
+            builtins: HashMap::new(),
+            recursion_depth: 0,
+        };
+        interp.register_builtins();
+        interp
+    }
+
+    /// Register built-in functions
+    fn register_builtins(&mut self) {
+        self.builtins.insert("print".to_string(), builtin_print);
+        self.builtins.insert("println".to_string(), builtin_println);
+        self.builtins.insert("assert".to_string(), builtin_assert);
+        self.builtins.insert("read_int".to_string(), builtin_read_int);
+        self.builtins.insert("abs".to_string(), builtin_abs);
+        self.builtins.insert("min".to_string(), builtin_min);
+        self.builtins.insert("max".to_string(), builtin_max);
+    }
+
+    /// Load a program (register functions)
+    pub fn load(&mut self, program: &Program) {
+        for item in &program.items {
+            match item {
+                crate::ast::Item::FnDef(fn_def) => {
+                    self.functions
+                        .insert(fn_def.name.node.clone(), fn_def.clone());
+                }
+            }
+        }
+    }
+
+    /// Run a program (find and call main)
+    pub fn run(&mut self, program: &Program) -> InterpResult<Value> {
+        self.load(program);
+
+        // Look for a main function or evaluate the last function
+        if let Some(main_fn) = self.functions.get("main").cloned() {
+            self.call_function(&main_fn, &[])
+        } else if let Some(last_item) = program.items.last() {
+            match last_item {
+                crate::ast::Item::FnDef(fn_def) => {
+                    // If no main, just evaluate the body of the last function
+                    // (for simple scripts without main)
+                    self.call_function(fn_def, &[])
+                }
+            }
+        } else {
+            Ok(Value::Unit)
+        }
+    }
+
+    /// Evaluate a single expression (for REPL)
+    pub fn eval_expr(&mut self, expr: &Spanned<Expr>) -> InterpResult<Value> {
+        self.eval(expr, &self.global_env.clone())
+    }
+
+    /// Evaluate an expression
+    fn eval(&mut self, expr: &Spanned<Expr>, env: &EnvRef) -> InterpResult<Value> {
+        match &expr.node {
+            Expr::IntLit(n) => Ok(Value::Int(*n)),
+            Expr::FloatLit(f) => Ok(Value::Float(*f)),
+            Expr::BoolLit(b) => Ok(Value::Bool(*b)),
+            Expr::Unit => Ok(Value::Unit),
+
+            Expr::Var(name) => {
+                env.borrow()
+                    .get(name)
+                    .ok_or_else(|| RuntimeError::undefined_variable(name))
+            }
+
+            Expr::Binary { left, op, right } => {
+                let lval = self.eval(left, env)?;
+                let rval = self.eval(right, env)?;
+                self.eval_binary(*op, lval, rval)
+            }
+
+            Expr::Unary { op, expr: inner } => {
+                let val = self.eval(inner, env)?;
+                self.eval_unary(*op, val)
+            }
+
+            Expr::If {
+                cond,
+                then_branch,
+                else_branch,
+            } => {
+                let cond_val = self.eval(cond, env)?;
+                if cond_val.is_truthy() {
+                    self.eval(then_branch, env)
+                } else {
+                    self.eval(else_branch, env)
+                }
+            }
+
+            Expr::Let {
+                name,
+                ty: _,
+                value,
+                body,
+            } => {
+                let val = self.eval(value, env)?;
+                let child = child_env(env);
+                child.borrow_mut().define(name.clone(), val);
+                self.eval(body, &child)
+            }
+
+            Expr::Call { func, args } => {
+                let arg_vals: Vec<Value> = args
+                    .iter()
+                    .map(|a| self.eval(a, env))
+                    .collect::<InterpResult<Vec<_>>>()?;
+
+                self.call(func, arg_vals)
+            }
+
+            Expr::Block(exprs) => {
+                let child = child_env(env);
+                let mut result = Value::Unit;
+                for e in exprs {
+                    result = self.eval(e, &child)?;
+                }
+                Ok(result)
+            }
+
+            Expr::Ret => {
+                // Ret should only appear in post conditions, not in regular evaluation
+                Err(RuntimeError::type_error("value", "ret"))
+            }
+        }
+    }
+
+    /// Call a function by name
+    fn call(&mut self, name: &str, args: Vec<Value>) -> InterpResult<Value> {
+        // Check builtins first
+        if let Some(builtin) = self.builtins.get(name) {
+            return builtin(&args);
+        }
+
+        // Then user-defined functions
+        if let Some(fn_def) = self.functions.get(name).cloned() {
+            return self.call_function(&fn_def, &args);
+        }
+
+        Err(RuntimeError::undefined_function(name))
+    }
+
+    /// Call a user-defined function
+    fn call_function(&mut self, fn_def: &FnDef, args: &[Value]) -> InterpResult<Value> {
+        // Check arity
+        if fn_def.params.len() != args.len() {
+            return Err(RuntimeError::arity_mismatch(
+                &fn_def.name.node,
+                fn_def.params.len(),
+                args.len(),
+            ));
+        }
+
+        // Check recursion depth
+        self.recursion_depth += 1;
+        if self.recursion_depth > MAX_RECURSION_DEPTH {
+            self.recursion_depth -= 1;
+            return Err(RuntimeError::stack_overflow());
+        }
+
+        // Create new environment for function body
+        let func_env = child_env(&self.global_env);
+
+        // Bind parameters
+        for (param, arg) in fn_def.params.iter().zip(args.iter()) {
+            func_env
+                .borrow_mut()
+                .define(param.name.node.clone(), arg.clone());
+        }
+
+        // Evaluate pre-condition if present
+        if let Some(pre) = &fn_def.pre {
+            let pre_val = self.eval(pre, &func_env)?;
+            if !pre_val.is_truthy() {
+                self.recursion_depth -= 1;
+                return Err(RuntimeError::pre_condition_failed(&fn_def.name.node));
+            }
+        }
+
+        // Evaluate body
+        let result = self.eval(&fn_def.body, &func_env);
+        self.recursion_depth -= 1;
+        result
+    }
+
+    /// Evaluate binary operation
+    fn eval_binary(&self, op: BinOp, left: Value, right: Value) -> InterpResult<Value> {
+        match op {
+            // Arithmetic
+            BinOp::Add => match (&left, &right) {
+                (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a + b)),
+                (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
+                (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 + b)),
+                (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a + *b as f64)),
+                _ => Err(RuntimeError::type_error(
+                    "numeric",
+                    &format!("{} + {}", left.type_name(), right.type_name()),
+                )),
+            },
+            BinOp::Sub => match (&left, &right) {
+                (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a - b)),
+                (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a - b)),
+                (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 - b)),
+                (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a - *b as f64)),
+                _ => Err(RuntimeError::type_error(
+                    "numeric",
+                    &format!("{} - {}", left.type_name(), right.type_name()),
+                )),
+            },
+            BinOp::Mul => match (&left, &right) {
+                (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a * b)),
+                (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a * b)),
+                (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 * b)),
+                (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a * *b as f64)),
+                _ => Err(RuntimeError::type_error(
+                    "numeric",
+                    &format!("{} * {}", left.type_name(), right.type_name()),
+                )),
+            },
+            BinOp::Div => match (&left, &right) {
+                (Value::Int(_), Value::Int(0)) => Err(RuntimeError::division_by_zero()),
+                (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a / b)),
+                (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a / b)),
+                (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 / b)),
+                (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a / *b as f64)),
+                _ => Err(RuntimeError::type_error(
+                    "numeric",
+                    &format!("{} / {}", left.type_name(), right.type_name()),
+                )),
+            },
+            BinOp::Mod => match (&left, &right) {
+                (Value::Int(_), Value::Int(0)) => Err(RuntimeError::division_by_zero()),
+                (Value::Int(a), Value::Int(b)) => Ok(Value::Int(a % b)),
+                _ => Err(RuntimeError::type_error("int", left.type_name())),
+            },
+
+            // Comparison
+            BinOp::Eq => Ok(Value::Bool(left == right)),
+            BinOp::Ne => Ok(Value::Bool(left != right)),
+            BinOp::Lt => self.compare_values(&left, &right, |a, b| a < b),
+            BinOp::Gt => self.compare_values(&left, &right, |a, b| a > b),
+            BinOp::Le => self.compare_values(&left, &right, |a, b| a <= b),
+            BinOp::Ge => self.compare_values(&left, &right, |a, b| a >= b),
+
+            // Logical
+            BinOp::And => Ok(Value::Bool(left.is_truthy() && right.is_truthy())),
+            BinOp::Or => Ok(Value::Bool(left.is_truthy() || right.is_truthy())),
+        }
+    }
+
+    /// Compare two values
+    fn compare_values<F>(&self, left: &Value, right: &Value, f: F) -> InterpResult<Value>
+    where
+        F: Fn(f64, f64) -> bool,
+    {
+        match (left, right) {
+            (Value::Int(a), Value::Int(b)) => Ok(Value::Bool(f(*a as f64, *b as f64))),
+            (Value::Float(a), Value::Float(b)) => Ok(Value::Bool(f(*a, *b))),
+            (Value::Int(a), Value::Float(b)) => Ok(Value::Bool(f(*a as f64, *b))),
+            (Value::Float(a), Value::Int(b)) => Ok(Value::Bool(f(*a, *b as f64))),
+            _ => Err(RuntimeError::type_error(
+                "numeric",
+                &format!("{} cmp {}", left.type_name(), right.type_name()),
+            )),
+        }
+    }
+
+    /// Evaluate unary operation
+    fn eval_unary(&self, op: UnOp, val: Value) -> InterpResult<Value> {
+        match op {
+            UnOp::Neg => match val {
+                Value::Int(n) => Ok(Value::Int(-n)),
+                Value::Float(f) => Ok(Value::Float(-f)),
+                _ => Err(RuntimeError::type_error("numeric", val.type_name())),
+            },
+            UnOp::Not => Ok(Value::Bool(!val.is_truthy())),
+        }
+    }
+
+    /// Get the global environment (for REPL)
+    pub fn global_env(&self) -> &EnvRef {
+        &self.global_env
+    }
+
+    /// Define a function (for REPL)
+    pub fn define_function(&mut self, fn_def: FnDef) {
+        self.functions.insert(fn_def.name.node.clone(), fn_def);
+    }
+}
+
+impl Default for Interpreter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============ Built-in Functions ============
+
+fn builtin_print(args: &[Value]) -> InterpResult<Value> {
+    for (i, arg) in args.iter().enumerate() {
+        if i > 0 {
+            print!(" ");
+        }
+        print!("{arg}");
+    }
+    io::stdout().flush().map_err(|e| RuntimeError::io_error(&e.to_string()))?;
+    Ok(Value::Unit)
+}
+
+fn builtin_println(args: &[Value]) -> InterpResult<Value> {
+    for (i, arg) in args.iter().enumerate() {
+        if i > 0 {
+            print!(" ");
+        }
+        print!("{arg}");
+    }
+    println!();
+    Ok(Value::Unit)
+}
+
+fn builtin_assert(args: &[Value]) -> InterpResult<Value> {
+    if args.is_empty() {
+        return Err(RuntimeError::arity_mismatch("assert", 1, 0));
+    }
+    if !args[0].is_truthy() {
+        return Err(RuntimeError::assertion_failed(None));
+    }
+    Ok(Value::Unit)
+}
+
+fn builtin_read_int(_args: &[Value]) -> InterpResult<Value> {
+    let stdin = io::stdin();
+    let line = stdin
+        .lock()
+        .lines()
+        .next()
+        .ok_or_else(|| RuntimeError::io_error("end of input"))?
+        .map_err(|e| RuntimeError::io_error(&e.to_string()))?;
+
+    line.trim()
+        .parse::<i64>()
+        .map(Value::Int)
+        .map_err(|_| RuntimeError::type_error("integer", "invalid input"))
+}
+
+fn builtin_abs(args: &[Value]) -> InterpResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::arity_mismatch("abs", 1, args.len()));
+    }
+    match &args[0] {
+        Value::Int(n) => Ok(Value::Int(n.abs())),
+        Value::Float(f) => Ok(Value::Float(f.abs())),
+        _ => Err(RuntimeError::type_error("numeric", args[0].type_name())),
+    }
+}
+
+fn builtin_min(args: &[Value]) -> InterpResult<Value> {
+    if args.len() != 2 {
+        return Err(RuntimeError::arity_mismatch("min", 2, args.len()));
+    }
+    match (&args[0], &args[1]) {
+        (Value::Int(a), Value::Int(b)) => Ok(Value::Int(*a.min(b))),
+        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a.min(*b))),
+        _ => Err(RuntimeError::type_error("numeric", "mixed types")),
+    }
+}
+
+fn builtin_max(args: &[Value]) -> InterpResult<Value> {
+    if args.len() != 2 {
+        return Err(RuntimeError::arity_mismatch("max", 2, args.len()));
+    }
+    match (&args[0], &args[1]) {
+        (Value::Int(a), Value::Int(b)) => Ok(Value::Int(*a.max(b))),
+        (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a.max(*b))),
+        _ => Err(RuntimeError::type_error("numeric", "mixed types")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::Span;
+
+    fn spanned<T>(node: T) -> Spanned<T> {
+        Spanned {
+            node,
+            span: Span { start: 0, end: 0 },
+        }
+    }
+
+    #[test]
+    fn test_eval_literals() {
+        let mut interp = Interpreter::new();
+        let env = interp.global_env.clone();
+
+        assert_eq!(
+            interp.eval(&spanned(Expr::IntLit(42)), &env).unwrap(),
+            Value::Int(42)
+        );
+        assert_eq!(
+            interp.eval(&spanned(Expr::BoolLit(true)), &env).unwrap(),
+            Value::Bool(true)
+        );
+    }
+
+    #[test]
+    fn test_eval_binary() {
+        let mut interp = Interpreter::new();
+        let env = interp.global_env.clone();
+
+        let add_expr = Expr::Binary {
+            left: Box::new(spanned(Expr::IntLit(2))),
+            op: BinOp::Add,
+            right: Box::new(spanned(Expr::IntLit(3))),
+        };
+        assert_eq!(
+            interp.eval(&spanned(add_expr), &env).unwrap(),
+            Value::Int(5)
+        );
+    }
+
+    #[test]
+    fn test_eval_if() {
+        let mut interp = Interpreter::new();
+        let env = interp.global_env.clone();
+
+        let if_expr = Expr::If {
+            cond: Box::new(spanned(Expr::BoolLit(true))),
+            then_branch: Box::new(spanned(Expr::IntLit(1))),
+            else_branch: Box::new(spanned(Expr::IntLit(2))),
+        };
+        assert_eq!(
+            interp.eval(&spanned(if_expr), &env).unwrap(),
+            Value::Int(1)
+        );
+    }
+
+    #[test]
+    fn test_eval_let() {
+        let mut interp = Interpreter::new();
+        let env = interp.global_env.clone();
+
+        let let_expr = Expr::Let {
+            name: "x".to_string(),
+            ty: None,
+            value: Box::new(spanned(Expr::IntLit(10))),
+            body: Box::new(spanned(Expr::Binary {
+                left: Box::new(spanned(Expr::Var("x".to_string()))),
+                op: BinOp::Mul,
+                right: Box::new(spanned(Expr::IntLit(2))),
+            })),
+        };
+        assert_eq!(
+            interp.eval(&spanned(let_expr), &env).unwrap(),
+            Value::Int(20)
+        );
+    }
+
+    #[test]
+    fn test_division_by_zero() {
+        let mut interp = Interpreter::new();
+        let env = interp.global_env.clone();
+
+        let div_expr = Expr::Binary {
+            left: Box::new(spanned(Expr::IntLit(10))),
+            op: BinOp::Div,
+            right: Box::new(spanned(Expr::IntLit(0))),
+        };
+        let result = interp.eval(&spanned(div_expr), &env);
+        assert!(result.is_err());
+    }
+}

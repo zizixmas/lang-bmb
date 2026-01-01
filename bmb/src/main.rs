@@ -12,6 +12,13 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Run a BMB program
+    Run {
+        /// Source file to run
+        file: PathBuf,
+    },
+    /// Start interactive REPL
+    Repl,
     /// Type check a BMB source file
     Check {
         /// Source file to check
@@ -44,6 +51,8 @@ fn main() {
     let cli = Cli::parse();
 
     let result = match cli.command {
+        Command::Run { file } => run_file(&file),
+        Command::Repl => start_repl(),
         Command::Check { file } => check_file(&file),
         Command::Verify { file, z3_path, timeout } => verify_file(&file, &z3_path, timeout),
         Command::Parse { file } => parse_file(&file),
@@ -54,6 +63,39 @@ fn main() {
         eprintln!("Error: {e}");
         std::process::exit(1);
     }
+}
+
+fn run_file(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    let source = std::fs::read_to_string(path)?;
+    let filename = path.display().to_string();
+
+    // Tokenize
+    let tokens = bmb::lexer::tokenize(&source)?;
+
+    // Parse
+    let ast = bmb::parser::parse(&filename, &source, tokens)?;
+
+    // Type check first
+    let mut checker = bmb::types::TypeChecker::new();
+    checker.check_program(&ast)?;
+
+    // Run with interpreter
+    let mut interpreter = bmb::interp::Interpreter::new();
+    interpreter.load(&ast);
+
+    match interpreter.run(&ast) {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            eprintln!("Runtime error: {}", e.message);
+            std::process::exit(1);
+        }
+    }
+}
+
+fn start_repl() -> Result<(), Box<dyn std::error::Error>> {
+    let mut repl = bmb::repl::Repl::new()?;
+    repl.run()?;
+    Ok(())
 }
 
 fn check_file(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
