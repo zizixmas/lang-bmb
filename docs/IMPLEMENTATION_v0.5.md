@@ -457,8 +457,25 @@ fn array_length(arr: [i64; 5]) -> i64 = arr.len();
 - [x] MIR lowering 및 SMT 확장
 - [x] 모든 기존 테스트 통과 (25개)
 
+### Phase 9 완료 조건 ✅ (완료)
+- [x] BMB 렉서를 BMB로 작성 (bootstrap/lexer.bmb)
+- [x] 순수 함수형/재귀 스타일 (while 루프 없음)
+- [x] 모든 BMB 토큰 인식:
+  - [x] 키워드 (fn, let, if, then, else, etc.)
+  - [x] 식별자, 숫자 리터럴
+  - [x] 연산자 (+, -, *, /, ==, !=, etc.)
+  - [x] 심볼 ((), {}, [], :, ;, etc.)
+  - [x] 2문자 토큰 (->, =>, ::, etc.)
+- [x] 주석 스킵 (-- 스타일)
+- [x] 제한사항 문서화:
+  - [x] 스택 깊이 (TCO 없음으로 짧은 입력만)
+  - [x] and 연산자 short-circuit 없음
+  - [x] let 스코핑 (body에서만 가시)
+- [x] 런타임 C 코드 (runtime/runtime.c)
+
 ### 추후 작업
-- [ ] Phase 9: 자기 컴파일 시작 가능 (렉서 BMB 작성)
+- [ ] Phase 10: 파서 BMB 작성
+- [ ] Phase 11: 코드 생성기 BMB 작성
 
 ---
 

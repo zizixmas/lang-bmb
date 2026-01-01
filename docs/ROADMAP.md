@@ -312,10 +312,11 @@ BMB로 BMB 컴파일러 재작성 시작을 위한 언어 기능 확장
 | 참조 타입 | ✅ 완료 | &T, &mut T 참조 |
 | 배열 타입 | ✅ 완료 | [T; N] 고정 크기, 인덱스 접근 |
 | 멀티 파일 | ✅ 완료 | resolver 모듈, 모듈 로딩/파싱 |
-| 렉서 (BMB) | ⏳ 계획 | BMB로 재작성 |
+| 메서드 호출 | ✅ 완료 | expr.method(args) 지원 |
+| 렉서 (BMB) | ✅ 완료 | bootstrap/lexer.bmb |
 | 파서 (BMB) | ⏳ 계획 | BMB로 재작성 |
 
-### 지원 기능 (Phase 1-7 완료)
+### 지원 기능 (Phase 1-9 완료)
 
 ```
 Phase 1 (완료):
@@ -352,9 +353,20 @@ Phase 7 (완료):
 - 모듈 로딩/파싱 기능
 - use 문 해결 및 이름 임포트
 
+Phase 8 (완료):
+- 메서드 호출 (expr.method(args))
+- 문자열 메서드: len(), char_at(), slice(), is_empty()
+- 배열 메서드: len()
+
+Phase 9 (완료):
+- BMB 렉서 (bootstrap/lexer.bmb)
+- 순수 함수형/재귀 스타일
+- 모든 BMB 토큰 인식
+- 제한사항: 스택 깊이 (TCO 없음), and short-circuit 없음
+
 추후 작업:
-- 자기 컴파일 시작 (렉서 BMB 작성)
 - 파서 BMB 재작성
+- 코드 생성기 BMB 재작성
 ```
 
 ### 산출물
@@ -363,22 +375,26 @@ Phase 7 (완료):
 현재 완료:
 - ast/mod.rs: Struct, Enum, Match, For, Range, Visibility, UseStmt
 - ast/types.rs: Type::Struct, Type::Enum, Type::String, Type::Range, Type::Ref, Type::RefMut, Type::Array
-- ast/expr.rs: Expr::Ref, Expr::RefMut, Expr::Deref, Expr::ArrayLit, Expr::Index
-- grammar.lalrpop: 모든 Phase 1-7 문법
-- mir/lower.rs: Struct/Enum/Match/While/For/Ref/Array MIR 변환
-- interp/eval.rs: 모든 새 표현식 평가 (참조, 배열 포함)
+- ast/expr.rs: Expr::Ref, Expr::RefMut, Expr::Deref, Expr::ArrayLit, Expr::Index, Expr::MethodCall
+- grammar.lalrpop: 모든 Phase 1-8 문법
+- mir/lower.rs: Struct/Enum/Match/While/For/Ref/Array/MethodCall MIR 변환
+- interp/eval.rs: 모든 새 표현식 평가 (참조, 배열, 메서드 호출)
 - interp/value.rs: Value::Ref (Rc<RefCell>), Value::Array
 - types/mod.rs: 모든 새 타입 검사
 - resolver/mod.rs: 멀티 파일 컴파일, 모듈 로딩
 - codegen/llvm.rs: 문자열 리터럴 지원
+- runtime/runtime.c: 문자열 런타임 함수
+
+Bootstrap (완료):
+bootstrap/
+└── lexer.bmb: BMB 렉서 (순수 함수형)
 
 예정:
-bmb-compiler/
-├── lexer.bmb
+bootstrap/
 ├── parser.bmb
 ├── ast.bmb
 ├── types.bmb
-└── tests/
+└── codegen.bmb
 ```
 
 ### 마일스톤
@@ -390,8 +406,9 @@ bmb-compiler/
 - [x] Phase 5: &T, &mut T 참조 타입 ✅
 - [x] Phase 6: [T; N] 배열 타입 ✅
 - [x] Phase 7: 멀티 파일 컴파일 (resolver) ✅
-- [ ] 렉서 자기 작성 완료
-- [ ] 파서 자기 작성 완료
+- [x] Phase 8: 메서드 호출 (expr.method(args)) ✅
+- [x] Phase 9: BMB 렉서 자기 작성 (bootstrap/lexer.bmb) ✅
+- [ ] Phase 10: 파서 자기 작성
 - [ ] BMB 컴파일러가 자기 렉서/파서 컴파일
 
 ---
