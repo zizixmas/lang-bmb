@@ -125,6 +125,9 @@ pub enum Token {
     LBracket,
     #[token("]")]
     RBracket,
+    // v0.5 Phase 5: References
+    #[token("&")]
+    Ampersand,
 
     // Operators
     #[token("+")]
@@ -204,6 +207,7 @@ impl std::fmt::Display for Token {
             Token::RBrace => write!(f, "}}"),
             Token::LBracket => write!(f, "["),
             Token::RBracket => write!(f, "]"),
+            Token::Ampersand => write!(f, "&"),
             Token::Plus => write!(f, "+"),
             Token::Minus => write!(f, "-"),
             Token::Star => write!(f, "*"),

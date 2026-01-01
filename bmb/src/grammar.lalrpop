@@ -66,6 +66,8 @@ extern {
         "}" => Token::RBrace,
         "[" => Token::LBracket,
         "]" => Token::RBracket,
+        // v0.5 Phase 5: References
+        "&" => Token::Ampersand,
 
         "+" => Token::Plus,
         "-" => Token::Minus,
@@ -225,6 +227,11 @@ Type: Type = {
     "bool" => Type::Bool,
     "String" => Type::String,
     "(" ")" => Type::Unit,
+    // v0.5 Phase 5: Reference types
+    "&" <t:Type> => Type::Ref(Box::new(t)),
+    "&" "mut" <t:Type> => Type::RefMut(Box::new(t)),
+    // v0.5 Phase 6: Array types
+    "[" <t:Type> ";" <n:"int"> "]" => Type::Array(Box::new(t), n as usize),
     <name:RawIdent> => Type::Named(name),
 };
 
@@ -451,6 +458,10 @@ UnaryExpr: Expr = {
         op: UnOp::Not,
         expr: Box::new(e),
     },
+    // v0.5 Phase 5: References
+    "&" <e:SpannedUnaryExpr> => Expr::Ref(Box::new(e)),
+    "&" "mut" <e:SpannedUnaryExpr> => Expr::RefMut(Box::new(e)),
+    "*" <e:SpannedUnaryExpr> => Expr::Deref(Box::new(e)),
     PostfixExpr,
 };
 
@@ -458,11 +469,16 @@ SpannedUnaryExpr: Spanned<Expr> = {
     <l:@L> <e:UnaryExpr> <r:@R> => Spanned::new(e, Span::new(l, r)),
 };
 
-// Postfix expression (field access, calls)
+// Postfix expression (field access, calls, index)
 PostfixExpr: Expr = {
     <e:SpannedPostfixExpr> "." <field:Ident> => Expr::FieldAccess {
         expr: Box::new(e),
         field,
+    },
+    // v0.5 Phase 6: Index access
+    <e:SpannedPostfixExpr> "[" <idx:SpannedExpr> "]" => Expr::Index {
+        expr: Box::new(e),
+        index: Box::new(idx),
     },
     CallExpr,
 };
@@ -517,6 +533,20 @@ Primary: Expr = {
     "new" <name:RawIdent> "{" <fields:StructInitFields> "}" => Expr::StructInit {
         name,
         fields,
+    },
+    // v0.5 Phase 6: Array literal
+    "[" <elems:ArrayElems> "]" => Expr::ArrayLit(elems),
+};
+
+// Array elements (v0.5 Phase 6)
+ArrayElems: Vec<Spanned<Expr>> = {
+    <v:(<SpannedExpr> ",")*> <e:SpannedExpr?> => match e {
+        None => v,
+        Some(e) => {
+            let mut v = v;
+            v.push(e);
+            v
+        }
     },
 };
 

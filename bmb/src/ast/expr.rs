@@ -112,6 +112,28 @@ pub enum Expr {
         expr: Box<Spanned<Expr>>,
         arms: Vec<MatchArm>,
     },
+
+    // v0.5 Phase 5: References
+
+    /// Create reference: &expr
+    Ref(Box<Spanned<Expr>>),
+
+    /// Create mutable reference: &mut expr
+    RefMut(Box<Spanned<Expr>>),
+
+    /// Dereference: *expr
+    Deref(Box<Spanned<Expr>>),
+
+    // v0.5 Phase 6: Arrays
+
+    /// Array literal: [elem1, elem2, ...]
+    ArrayLit(Vec<Spanned<Expr>>),
+
+    /// Index access: expr[index]
+    Index {
+        expr: Box<Spanned<Expr>>,
+        index: Box<Spanned<Expr>>,
+    },
 }
 
 /// A single arm in a match expression

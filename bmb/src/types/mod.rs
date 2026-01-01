@@ -393,6 +393,58 @@ impl TypeChecker {
 
                 Ok(result_ty.unwrap_or(Type::Unit))
             }
+
+            // v0.5 Phase 5: References
+            Expr::Ref(inner) => {
+                let inner_ty = self.infer(&inner.node, inner.span)?;
+                Ok(Type::Ref(Box::new(inner_ty)))
+            }
+
+            Expr::RefMut(inner) => {
+                let inner_ty = self.infer(&inner.node, inner.span)?;
+                Ok(Type::RefMut(Box::new(inner_ty)))
+            }
+
+            Expr::Deref(inner) => {
+                let inner_ty = self.infer(&inner.node, inner.span)?;
+                match inner_ty {
+                    Type::Ref(t) | Type::RefMut(t) => Ok(*t),
+                    _ => Err(CompileError::type_error(format!("Cannot dereference non-reference type: {}", inner_ty), span)),
+                }
+            }
+
+            // v0.5 Phase 6: Arrays
+            Expr::ArrayLit(elems) => {
+                if elems.is_empty() {
+                    // Empty array needs type annotation (for now, default to i64)
+                    Ok(Type::Array(Box::new(Type::I64), 0))
+                } else {
+                    let first_ty = self.infer(&elems[0].node, elems[0].span)?;
+                    for elem in elems.iter().skip(1) {
+                        let elem_ty = self.infer(&elem.node, elem.span)?;
+                        self.unify(&first_ty, &elem_ty, elem.span)?;
+                    }
+                    Ok(Type::Array(Box::new(first_ty), elems.len()))
+                }
+            }
+
+            Expr::Index { expr, index } => {
+                let expr_ty = self.infer(&expr.node, expr.span)?;
+                let index_ty = self.infer(&index.node, index.span)?;
+
+                // Index must be an integer
+                match &index_ty {
+                    Type::I32 | Type::I64 => {}
+                    _ => return Err(CompileError::type_error(format!("Array index must be integer, got: {}", index_ty), index.span)),
+                }
+
+                // Expression must be an array
+                match expr_ty {
+                    Type::Array(elem_ty, _) => Ok(*elem_ty),
+                    Type::String => Ok(Type::I64), // String indexing returns char code
+                    _ => Err(CompileError::type_error(format!("Cannot index into type: {}", expr_ty), expr.span)),
+                }
+            }
         }
     }
 

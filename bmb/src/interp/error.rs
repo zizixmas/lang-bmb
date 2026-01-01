@@ -30,6 +30,8 @@ pub enum ErrorKind {
     StackOverflow,
     /// IO error
     IoError,
+    /// Index out of bounds
+    IndexOutOfBounds,
 }
 
 impl RuntimeError {
@@ -97,6 +99,13 @@ impl RuntimeError {
         RuntimeError {
             kind: ErrorKind::IoError,
             message: format!("IO error: {msg}"),
+        }
+    }
+
+    pub fn index_out_of_bounds(index: i64, len: usize) -> Self {
+        RuntimeError {
+            kind: ErrorKind::IndexOutOfBounds,
+            message: format!("index {} out of bounds for length {}", index, len),
         }
     }
 }

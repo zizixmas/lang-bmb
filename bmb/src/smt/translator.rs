@@ -123,6 +123,10 @@ impl SmtTranslator {
             Type::Named(_) => SmtSort::Int, // Named types default to Int for now
             Type::Struct { .. } => SmtSort::Int, // Struct types as Int (simplified)
             Type::Enum { .. } => SmtSort::Int, // Enum types as Int (simplified)
+            // v0.5 Phase 5: References as Int (simplified)
+            Type::Ref(_) | Type::RefMut(_) => SmtSort::Int,
+            // v0.5 Phase 6: Arrays as Int (simplified)
+            Type::Array(_, _) => SmtSort::Int,
         }
     }
 
@@ -247,6 +251,24 @@ impl SmtTranslator {
 
             Expr::For { .. } => {
                 Err(TranslateError::UnsupportedFeature("for loop".to_string()))
+            }
+
+            // v0.5 Phase 5: References - not supported in SMT
+            Expr::Ref(_) | Expr::RefMut(_) => {
+                Err(TranslateError::UnsupportedFeature("reference".to_string()))
+            }
+
+            Expr::Deref(_) => {
+                Err(TranslateError::UnsupportedFeature("dereference".to_string()))
+            }
+
+            // v0.5 Phase 6: Arrays - not supported in SMT
+            Expr::ArrayLit(_) => {
+                Err(TranslateError::UnsupportedFeature("array literal".to_string()))
+            }
+
+            Expr::Index { .. } => {
+                Err(TranslateError::UnsupportedFeature("array index".to_string()))
             }
         }
     }

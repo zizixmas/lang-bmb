@@ -420,6 +420,29 @@ fn lower_expr(expr: &Spanned<Expr>, ctx: &mut LoweringContext) -> Operand {
                 Operand::Constant(Constant::Unit)
             }
         }
+
+        // v0.5 Phase 5: References (simplified - just evaluate inner)
+        Expr::Ref(inner) | Expr::RefMut(inner) => {
+            lower_expr(inner, ctx)
+        }
+
+        Expr::Deref(inner) => {
+            lower_expr(inner, ctx)
+        }
+
+        // v0.5 Phase 6: Arrays (simplified - return unit for now)
+        Expr::ArrayLit(_elems) => {
+            // TODO: Full array support with memory allocation
+            Operand::Constant(Constant::Unit)
+        }
+
+        Expr::Index { expr, index } => {
+            // Simplified: just evaluate both and return a placeholder
+            let _arr = lower_expr(expr, ctx);
+            let _idx = lower_expr(index, ctx);
+            // TODO: Actual array indexing with bounds checking
+            Operand::Constant(Constant::Int(0))
+        }
     }
 }
 
@@ -451,6 +474,10 @@ fn ast_type_to_mir(ty: &Type) -> MirType {
         Type::Named(_) => MirType::I64, // Named types default to pointer-sized int for now
         Type::Struct { .. } => MirType::I64, // Struct types treated as pointers
         Type::Enum { .. } => MirType::I64, // Enum types treated as tagged unions
+        // v0.5 Phase 5: References are pointers
+        Type::Ref(_) | Type::RefMut(_) => MirType::I64,
+        // v0.5 Phase 6: Arrays are pointers to data
+        Type::Array(_, _) => MirType::I64,
     }
 }
 

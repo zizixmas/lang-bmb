@@ -270,6 +270,62 @@ impl Interpreter {
 
                 Err(RuntimeError::type_error("matching arm", "no match found"))
             }
+
+            // v0.5 Phase 5: References
+            Expr::Ref(inner) => {
+                let val = self.eval(inner, env)?;
+                Ok(Value::Ref(std::rc::Rc::new(std::cell::RefCell::new(val))))
+            }
+
+            Expr::RefMut(inner) => {
+                let val = self.eval(inner, env)?;
+                Ok(Value::Ref(std::rc::Rc::new(std::cell::RefCell::new(val))))
+            }
+
+            Expr::Deref(inner) => {
+                let val = self.eval(inner, env)?;
+                match val {
+                    Value::Ref(r) => Ok(r.borrow().clone()),
+                    _ => Err(RuntimeError::type_error("reference", val.type_name())),
+                }
+            }
+
+            // v0.5 Phase 6: Arrays
+            Expr::ArrayLit(elems) => {
+                let mut values = Vec::new();
+                for elem in elems {
+                    values.push(self.eval(elem, env)?);
+                }
+                Ok(Value::Array(values))
+            }
+
+            Expr::Index { expr, index } => {
+                let arr_val = self.eval(expr, env)?;
+                let idx_val = self.eval(index, env)?;
+
+                let idx = match idx_val {
+                    Value::Int(n) => n as usize,
+                    _ => return Err(RuntimeError::type_error("integer", idx_val.type_name())),
+                };
+
+                match arr_val {
+                    Value::Array(arr) => {
+                        if idx < arr.len() {
+                            Ok(arr[idx].clone())
+                        } else {
+                            Err(RuntimeError::index_out_of_bounds(idx as i64, arr.len()))
+                        }
+                    }
+                    Value::Str(s) => {
+                        if idx < s.len() {
+                            Ok(Value::Int(s.as_bytes()[idx] as i64))
+                        } else {
+                            Err(RuntimeError::index_out_of_bounds(idx as i64, s.len()))
+                        }
+                    }
+                    _ => Err(RuntimeError::type_error("array or string", arr_val.type_name())),
+                }
+            }
         }
     }
 

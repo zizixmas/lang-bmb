@@ -31,6 +31,12 @@ pub enum Type {
         name: String,
         variants: Vec<(String, Vec<Box<Type>>)>,
     },
+    /// Reference type (v0.5 Phase 5): &T
+    Ref(Box<Type>),
+    /// Mutable reference type (v0.5 Phase 5): &mut T
+    RefMut(Box<Type>),
+    /// Fixed-size array type (v0.5 Phase 6): [T; N]
+    Array(Box<Type>, usize),
 }
 
 impl std::fmt::Display for Type {
@@ -46,6 +52,9 @@ impl std::fmt::Display for Type {
             Type::Named(name) => write!(f, "{name}"),
             Type::Struct { name, .. } => write!(f, "{name}"),
             Type::Enum { name, .. } => write!(f, "{name}"),
+            Type::Ref(inner) => write!(f, "&{inner}"),
+            Type::RefMut(inner) => write!(f, "&mut {inner}"),
+            Type::Array(elem, size) => write!(f, "[{elem}; {size}]"),
         }
     }
 }

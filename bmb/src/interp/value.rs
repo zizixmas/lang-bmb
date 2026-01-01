@@ -1,6 +1,8 @@
 //! Runtime values for the interpreter
 
 use std::fmt;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 /// Runtime value
 #[derive(Debug, Clone)]
@@ -21,6 +23,10 @@ pub enum Value {
     Enum(String, String, Vec<Value>),
     /// Range value (v0.5 Phase 3): (start, end) exclusive end
     Range(i64, i64),
+    /// Reference value (v0.5 Phase 5): points to a value
+    Ref(Rc<RefCell<Value>>),
+    /// Array value (v0.5 Phase 6): array of values
+    Array(Vec<Value>),
 }
 
 impl Value {
@@ -35,6 +41,8 @@ impl Value {
             Value::Struct(_, _) => true,
             Value::Enum(_, _, _) => true,
             Value::Range(start, end) => start < end,
+            Value::Ref(r) => r.borrow().is_truthy(),
+            Value::Array(arr) => !arr.is_empty(),
         }
     }
 
@@ -49,6 +57,8 @@ impl Value {
             Value::Struct(name, _) => name,
             Value::Enum(name, _, _) => name,
             Value::Range(_, _) => "Range",
+            Value::Ref(_) => "&ref",
+            Value::Array(_) => "array",
         }
     }
 
@@ -119,6 +129,17 @@ impl fmt::Display for Value {
                 Ok(())
             }
             Value::Range(start, end) => write!(f, "{}..{}", start, end),
+            Value::Ref(r) => write!(f, "&{}", r.borrow()),
+            Value::Array(arr) => {
+                write!(f, "[")?;
+                for (i, v) in arr.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", v)?;
+                }
+                write!(f, "]")
+            }
         }
     }
 }
@@ -134,6 +155,8 @@ impl PartialEq for Value {
             (Value::Struct(n1, f1), Value::Struct(n2, f2)) => n1 == n2 && f1 == f2,
             (Value::Enum(e1, v1, a1), Value::Enum(e2, v2, a2)) => e1 == e2 && v1 == v2 && a1 == a2,
             (Value::Range(s1, e1), Value::Range(s2, e2)) => s1 == s2 && e1 == e2,
+            (Value::Ref(r1), Value::Ref(r2)) => *r1.borrow() == *r2.borrow(),
+            (Value::Array(a1), Value::Array(a2)) => a1 == a2,
             _ => false,
         }
     }
