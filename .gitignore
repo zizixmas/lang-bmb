@@ -1,0 +1,16 @@
+# Local
+local-docs/
+/research/
+.serena/
+CLAUDE.md
+*.local
+
+# Rust/Cargo
+/target/
+/bmb/target/
+/gotgan/target/
+**/*.rs.bk
+Cargo.lock
+
+# Compiled output
+*.wasmexperiments/.env.local
