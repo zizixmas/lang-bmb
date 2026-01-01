@@ -134,6 +134,15 @@ pub enum Expr {
         expr: Box<Spanned<Expr>>,
         index: Box<Spanned<Expr>>,
     },
+
+    // v0.5 Phase 8: Method calls
+
+    /// Method call: expr.method(args) (v0.5 Phase 8)
+    MethodCall {
+        receiver: Box<Spanned<Expr>>,
+        method: String,
+        args: Vec<Spanned<Expr>>,
+    },
 }
 
 /// A single arm in a match expression

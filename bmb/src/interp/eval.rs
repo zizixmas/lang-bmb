@@ -326,6 +326,67 @@ impl Interpreter {
                     _ => Err(RuntimeError::type_error("array or string", arr_val.type_name())),
                 }
             }
+
+            // v0.5 Phase 8: Method calls
+            Expr::MethodCall { receiver, method, args } => {
+                let recv_val = self.eval(receiver, env)?;
+                let arg_vals: Vec<Value> = args
+                    .iter()
+                    .map(|a| self.eval(a, env))
+                    .collect::<InterpResult<Vec<_>>>()?;
+                self.eval_method_call(recv_val, method, arg_vals)
+            }
+        }
+    }
+
+    /// Evaluate method call (v0.5 Phase 8)
+    fn eval_method_call(&self, receiver: Value, method: &str, args: Vec<Value>) -> InterpResult<Value> {
+        match receiver {
+            Value::Str(s) => {
+                match method {
+                    "len" => Ok(Value::Int(s.len() as i64)),
+                    "char_at" => {
+                        if args.len() != 1 {
+                            return Err(RuntimeError::arity_mismatch("char_at", 1, args.len()));
+                        }
+                        let idx = match &args[0] {
+                            Value::Int(n) => *n as usize,
+                            _ => return Err(RuntimeError::type_error("integer", args[0].type_name())),
+                        };
+                        if idx < s.len() {
+                            Ok(Value::Int(s.as_bytes()[idx] as i64))
+                        } else {
+                            Err(RuntimeError::index_out_of_bounds(idx as i64, s.len()))
+                        }
+                    }
+                    "slice" => {
+                        if args.len() != 2 {
+                            return Err(RuntimeError::arity_mismatch("slice", 2, args.len()));
+                        }
+                        let start = match &args[0] {
+                            Value::Int(n) => *n as usize,
+                            _ => return Err(RuntimeError::type_error("integer", args[0].type_name())),
+                        };
+                        let end = match &args[1] {
+                            Value::Int(n) => *n as usize,
+                            _ => return Err(RuntimeError::type_error("integer", args[1].type_name())),
+                        };
+                        if start > s.len() || end > s.len() || start > end {
+                            return Err(RuntimeError::index_out_of_bounds(end as i64, s.len()));
+                        }
+                        Ok(Value::Str(s[start..end].to_string()))
+                    }
+                    "is_empty" => Ok(Value::Bool(s.is_empty())),
+                    _ => Err(RuntimeError::undefined_function(&format!("String.{}", method))),
+                }
+            }
+            Value::Array(arr) => {
+                match method {
+                    "len" => Ok(Value::Int(arr.len() as i64)),
+                    _ => Err(RuntimeError::undefined_function(&format!("Array.{}", method))),
+                }
+            }
+            _ => Err(RuntimeError::type_error("object with methods", receiver.type_name())),
         }
     }
 

@@ -270,6 +270,11 @@ impl SmtTranslator {
             Expr::Index { .. } => {
                 Err(TranslateError::UnsupportedFeature("array index".to_string()))
             }
+
+            // v0.5 Phase 8: Method calls - not supported in SMT
+            Expr::MethodCall { .. } => {
+                Err(TranslateError::UnsupportedFeature("method call".to_string()))
+            }
         }
     }
 

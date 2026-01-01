@@ -469,8 +469,15 @@ SpannedUnaryExpr: Spanned<Expr> = {
     <l:@L> <e:UnaryExpr> <r:@R> => Spanned::new(e, Span::new(l, r)),
 };
 
-// Postfix expression (field access, calls, index)
+// Postfix expression (method calls, field access, index)
 PostfixExpr: Expr = {
+    // v0.5 Phase 8: Method call: expr.method(args) - must be before field access
+    <e:SpannedPostfixExpr> "." <method:RawIdent> "(" <args:Args> ")" => Expr::MethodCall {
+        receiver: Box::new(e),
+        method,
+        args,
+    },
+    // Field access: expr.field
     <e:SpannedPostfixExpr> "." <field:Ident> => Expr::FieldAccess {
         expr: Box::new(e),
         field,

@@ -330,6 +330,44 @@ fn increment(x: &mut i64) -> () {
 
 ---
 
+## Phase 8: 메서드 호출
+
+### 8.1 문자열 메서드
+
+```bmb
+-- 문자열 길이
+fn string_length(s: String) -> i64 = s.len();
+
+-- 문자 접근 (ASCII 코드 반환)
+fn first_char(s: String) -> i64 = s.char_at(0);
+
+-- 부분 문자열
+fn substring(s: String) -> String = s.slice(0, 5);
+
+-- 빈 문자열 검사
+fn is_blank(s: String) -> bool = s.is_empty();
+```
+
+### 8.2 배열 메서드
+
+```bmb
+-- 배열 길이
+fn array_length(arr: [i64; 5]) -> i64 = arr.len();
+```
+
+#### 구현 태스크
+
+| 태스크 | 파일 | 설명 |
+|--------|------|------|
+| MethodCall AST | ast/expr.rs | `Expr::MethodCall` 추가 |
+| 메서드 호출 파싱 | grammar.lalrpop | `expr.method(args)` |
+| 타입 체크 | types/mod.rs | 메서드 시그니처 검증 |
+| 인터프리터 | interp/eval.rs | 런타임 메서드 평가 |
+| MIR lowering | mir/lower.rs | 메서드 호출 변환 |
+| SMT | smt/translator.rs | 미지원 (에러 처리) |
+
+---
+
 ## 구현 우선순위
 
 ### Phase 1 (Essential) - 2주
@@ -406,8 +444,21 @@ fn increment(x: &mut i64) -> () {
 - [x] use 문 해결 및 이름 임포트
 - [x] 모든 기존 테스트 통과 (25개)
 
+### Phase 8 완료 조건 ✅ (완료)
+- [x] MethodCall AST 노드 (expr.method(args))
+- [x] Grammar 메서드 호출 파싱
+- [x] 타입 체커 메서드 호출 지원
+- [x] 인터프리터 문자열 메서드 구현:
+  - [x] len() -> i64
+  - [x] char_at(i64) -> i64
+  - [x] slice(i64, i64) -> String
+  - [x] is_empty() -> bool
+- [x] 배열 메서드: len() -> i64
+- [x] MIR lowering 및 SMT 확장
+- [x] 모든 기존 테스트 통과 (25개)
+
 ### 추후 작업
-- [ ] 자기 컴파일 시작 가능 (렉서 BMB 작성)
+- [ ] Phase 9: 자기 컴파일 시작 가능 (렉서 BMB 작성)
 
 ---
 

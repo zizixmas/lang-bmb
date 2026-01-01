@@ -445,6 +445,90 @@ impl TypeChecker {
                     _ => Err(CompileError::type_error(format!("Cannot index into type: {}", expr_ty), expr.span)),
                 }
             }
+
+            // v0.5 Phase 8: Method calls
+            Expr::MethodCall { receiver, method, args } => {
+                let receiver_ty = self.infer(&receiver.node, receiver.span)?;
+                self.check_method_call(&receiver_ty, method, args, span)
+            }
+        }
+    }
+
+    /// Check method call types (v0.5 Phase 8)
+    fn check_method_call(&mut self, receiver_ty: &Type, method: &str, args: &[Spanned<Expr>], span: Span) -> Result<Type> {
+        match receiver_ty {
+            Type::String => {
+                match method {
+                    // len() -> i64
+                    "len" => {
+                        if !args.is_empty() {
+                            return Err(CompileError::type_error("len() takes no arguments", span));
+                        }
+                        Ok(Type::I64)
+                    }
+                    // char_at(index: i64) -> i64
+                    "char_at" => {
+                        if args.len() != 1 {
+                            return Err(CompileError::type_error("char_at() takes 1 argument", span));
+                        }
+                        let arg_ty = self.infer(&args[0].node, args[0].span)?;
+                        match arg_ty {
+                            Type::I32 | Type::I64 => Ok(Type::I64),
+                            _ => Err(CompileError::type_error(
+                                format!("char_at() requires integer argument, got {}", arg_ty),
+                                args[0].span,
+                            )),
+                        }
+                    }
+                    // slice(start: i64, end: i64) -> String
+                    "slice" => {
+                        if args.len() != 2 {
+                            return Err(CompileError::type_error("slice() takes 2 arguments", span));
+                        }
+                        for arg in args {
+                            let arg_ty = self.infer(&arg.node, arg.span)?;
+                            match arg_ty {
+                                Type::I32 | Type::I64 => {}
+                                _ => return Err(CompileError::type_error(
+                                    format!("slice() requires integer arguments, got {}", arg_ty),
+                                    arg.span,
+                                )),
+                            }
+                        }
+                        Ok(Type::String)
+                    }
+                    // is_empty() -> bool
+                    "is_empty" => {
+                        if !args.is_empty() {
+                            return Err(CompileError::type_error("is_empty() takes no arguments", span));
+                        }
+                        Ok(Type::Bool)
+                    }
+                    _ => Err(CompileError::type_error(
+                        format!("unknown method '{}' for String", method),
+                        span,
+                    )),
+                }
+            }
+            Type::Array(_, _) => {
+                match method {
+                    // len() -> i64
+                    "len" => {
+                        if !args.is_empty() {
+                            return Err(CompileError::type_error("len() takes no arguments", span));
+                        }
+                        Ok(Type::I64)
+                    }
+                    _ => Err(CompileError::type_error(
+                        format!("unknown method '{}' for Array", method),
+                        span,
+                    )),
+                }
+            }
+            _ => Err(CompileError::type_error(
+                format!("type {} has no methods", receiver_ty),
+                span,
+            )),
         }
     }
 

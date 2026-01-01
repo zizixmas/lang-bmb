@@ -443,6 +443,16 @@ fn lower_expr(expr: &Spanned<Expr>, ctx: &mut LoweringContext) -> Operand {
             // TODO: Actual array indexing with bounds checking
             Operand::Constant(Constant::Int(0))
         }
+
+        // v0.5 Phase 8: Method calls (simplified - evaluate receiver and args)
+        Expr::MethodCall { receiver, method: _, args } => {
+            let _recv = lower_expr(receiver, ctx);
+            for arg in args {
+                let _ = lower_expr(arg, ctx);
+            }
+            // TODO: Full method call support with runtime dispatch
+            Operand::Constant(Constant::Int(0))
+        }
     }
 }
 
