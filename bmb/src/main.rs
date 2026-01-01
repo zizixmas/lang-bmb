@@ -12,7 +12,24 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Run a BMB program
+    /// Build a native executable (requires LLVM)
+    Build {
+        /// Source file to compile
+        file: PathBuf,
+        /// Output file path
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Build with optimizations
+        #[arg(long)]
+        release: bool,
+        /// Emit LLVM IR instead of executable
+        #[arg(long)]
+        emit_ir: bool,
+        /// Verbose output
+        #[arg(short, long)]
+        verbose: bool,
+    },
+    /// Run a BMB program (interpreter)
     Run {
         /// Source file to run
         file: PathBuf,
@@ -51,6 +68,13 @@ fn main() {
     let cli = Cli::parse();
 
     let result = match cli.command {
+        Command::Build {
+            file,
+            output,
+            release,
+            emit_ir,
+            verbose,
+        } => build_file(&file, output, release, emit_ir, verbose),
         Command::Run { file } => run_file(&file),
         Command::Repl => start_repl(),
         Command::Check { file } => check_file(&file),
@@ -63,6 +87,36 @@ fn main() {
         eprintln!("Error: {e}");
         std::process::exit(1);
     }
+}
+
+fn build_file(
+    path: &PathBuf,
+    output: Option<PathBuf>,
+    release: bool,
+    emit_ir: bool,
+    verbose: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use bmb::build::{BuildConfig, OptLevel};
+
+    let mut config = BuildConfig::new(path.clone())
+        .emit_ir(emit_ir)
+        .verbose(verbose);
+
+    if let Some(out) = output {
+        config = config.output(out);
+    }
+
+    if release {
+        config = config.opt_level(OptLevel::Release);
+    }
+
+    bmb::build::build(&config)?;
+
+    if !emit_ir && verbose {
+        println!("Build complete: {}", config.output.display());
+    }
+
+    Ok(())
 }
 
 fn run_file(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
