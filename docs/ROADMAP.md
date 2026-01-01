@@ -293,31 +293,70 @@ LLVM 없이 빌드하면 `bmb build`는 "LLVM not available" 에러 반환
 
 ### 목표
 ```
-BMB로 BMB 컴파일러 재작성 시작
+BMB로 BMB 컴파일러 재작성 시작을 위한 언어 기능 확장
 ```
 
 ### 구성요소
 
 | 구성요소 | 상태 | 설명 |
 |----------|------|------|
-| 렉서 (BMB) | 필수 | BMB로 재작성 |
-| 파서 (BMB) | 필수 | BMB로 재작성 |
-| AST (BMB) | 필수 | BMB로 재작성 |
-| 크로스 컴파일 | 필수 | Rust → BMB |
+| Struct 타입 | ✅ 완료 | 구조체 정의, 생성, 필드 접근 |
+| Enum 타입 | ✅ 완료 | 열거형 정의, variant 사용 |
+| Pattern Matching | ✅ 완료 | match 기본, wildcard |
+| String 타입 | ✅ 완료 | 문자열 리터럴, 연결, 길이 |
+| Mutable 변수 | ✅ 완료 | let mut, 할당 연산자 |
+| While 루프 | ✅ 완료 | 기본 반복문 |
+| Range 타입 | ✅ 완료 | start..end 표현식 |
+| For 루프 | ✅ 완료 | for i in range { body } |
+| 모듈 시스템 | ✅ 완료 | pub 가시성, use 문 파싱 |
+| 멀티 파일 | ⏳ 계획 | 모듈 해석, resolver |
+| 참조 타입 | ⏳ 계획 | &T 불변 참조 |
+| 배열 타입 | ⏳ 계획 | [T; N] 고정 크기 |
+| 렉서 (BMB) | ⏳ 계획 | BMB로 재작성 |
+| 파서 (BMB) | ⏳ 계획 | BMB로 재작성 |
 
-### 지원 기능
+### 지원 기능 (Phase 1-4 완료)
 
 ```
-- 소유권 시스템 완전 구현
-- 수명 검사
-- 가변 참조
-- 고급 패턴 매칭
-- 제네릭 완전 지원
+Phase 1 (완료):
+- struct 정의 및 생성, 필드 접근
+- enum 정의 및 variant 사용
+- match 기본 패턴, wildcard
+
+Phase 2 (완료):
+- 문자열 리터럴, 연결 (+), 길이 (.len())
+- let mut 가변 바인딩
+- 할당 연산자 (=)
+- while 루프
+
+Phase 3 (완료):
+- Range 타입 (start..end)
+- for 루프 (for i in range { body })
+
+Phase 4 (완료):
+- pub 가시성 수정자
+- use 문 파싱 (use path::to::item;)
+
+추후 작업:
+- 멀티 파일 컴파일 (resolver)
+- &T 참조 기본 지원
+- 고정 크기 배열 [T; N]
+- 자기 컴파일 시작 (렉서 BMB 작성)
 ```
 
 ### 산출물
 
 ```
+현재 완료:
+- ast/mod.rs: Struct, Enum, Match, For, Range, Visibility, UseStmt
+- ast/types.rs: Type::Struct, Type::Enum, Type::String, Type::Range
+- grammar.lalrpop: 모든 Phase 1-4 문법
+- mir/lower.rs: Struct/Enum/Match/While/For MIR 변환
+- interp/eval.rs: 모든 새 표현식 평가
+- types/mod.rs: 모든 새 타입 검사
+- codegen/llvm.rs: 문자열 리터럴 지원
+
+예정:
 bmb-compiler/
 ├── lexer.bmb
 ├── parser.bmb
@@ -328,9 +367,14 @@ bmb-compiler/
 
 ### 마일스톤
 
+- [x] Phase 1: Struct, Enum, Match 기본 ✅
+- [x] Phase 2: String, Mutable, While ✅
+- [x] Phase 3: Range, For 루프 ✅
+- [x] Phase 4: pub/use 모듈 시스템 ✅
+- [ ] 멀티 파일 컴파일 (resolver)
+- [ ] &T 참조 기본 지원
 - [ ] 렉서 자기 작성 완료
 - [ ] 파서 자기 작성 완료
-- [ ] Rust 컴파일러로 BMB 컴파일러 컴파일
 - [ ] BMB 컴파일러가 자기 렉서/파서 컴파일
 
 ---

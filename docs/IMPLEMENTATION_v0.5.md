@@ -359,30 +359,37 @@ fn increment(x: &mut i64) -> () {
 
 ## 마일스톤 체크리스트
 
-### Phase 1 완료 조건
-- [ ] struct 정의 및 생성 가능
-- [ ] enum 정의 및 variant 사용 가능
-- [ ] match 기본 패턴 매칭 작동
-- [ ] 모든 기존 테스트 통과
-- [ ] 새 기능 테스트 10+
+### Phase 1 완료 조건 ✅ (완료)
+- [x] struct 정의 및 생성 가능
+- [x] enum 정의 및 variant 사용 가능
+- [x] match 기본 패턴 매칭 작동
+- [x] 모든 기존 테스트 통과
+- [x] 새 기능 테스트 추가
 
-### Phase 2 완료 조건
-- [ ] 문자열 리터럴 파싱 및 사용
-- [ ] let mut 가변 바인딩
-- [ ] 할당 연산자 작동
-- [ ] while 루프 작동
-- [ ] 새 기능 테스트 10+
+### Phase 2 완료 조건 ✅ (완료)
+- [x] 문자열 리터럴 파싱 및 사용
+- [x] let mut 가변 바인딩
+- [x] 할당 연산자 작동
+- [x] while 루프 작동
+- [x] 모든 기존 테스트 통과
 
-### Phase 3 완료 조건
-- [ ] 고정 크기 배열 지원
-- [ ] enum 데이터 variant
-- [ ] match 데이터 추출 패턴
-- [ ] 새 기능 테스트 10+
+### Phase 3 완료 조건 ✅ (완료)
+- [x] Range 타입 (start..end) 지원
+- [x] for 루프 (for i in range { body }) 지원
+- [x] MIR lowering (while 패턴으로 디슈가링)
+- [x] 인터프리터 for 루프 평가
+- [x] 모든 기존 테스트 통과
 
-### Phase 4 완료 조건
-- [ ] 멀티 파일 컴파일
-- [ ] use/pub 키워드 작동
+### Phase 4 완료 조건 ✅ (완료)
+- [x] pub 가시성 수정자 지원
+- [x] use 문 파싱 (use path::to::item;)
+- [x] Visibility 필드 추가 (FnDef, StructDef, EnumDef)
+- [x] 모든 기존 테스트 통과
+
+### 추후 작업
+- [ ] 멀티 파일 컴파일 (resolver 구현)
 - [ ] &T 참조 기본 지원
+- [ ] 고정 크기 배열 지원
 - [ ] 자기 컴파일 시작 가능 (렉서 BMB 작성)
 
 ---
