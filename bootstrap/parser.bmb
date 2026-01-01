@@ -1,0 +1,605 @@
+-- BMB Parser written in BMB (Phase 12: Self-compilation bootstrap)
+-- A simple recursive descent parser for the BMB language
+-- Uses functional/recursive style to work within BMB's grammar constraints
+--
+-- DESIGN NOTES:
+-- - Parser validates syntax and returns success (0) or error code (1+)
+-- - Token position and result are packed: result * 1000000 + position
+-- - This is a minimal parser demonstrating self-compilation capability
+-- - For production: compile to native code with proper AST output
+
+-- ============================================================
+-- Token Constants (from lexer.bmb)
+-- ============================================================
+
+-- Keywords: 100-199
+fn TK_FN() -> i64 = 100;
+fn TK_LET() -> i64 = 101;
+fn TK_IF() -> i64 = 102;
+fn TK_THEN() -> i64 = 103;
+fn TK_ELSE() -> i64 = 104;
+fn TK_TRUE() -> i64 = 105;
+fn TK_FALSE() -> i64 = 106;
+fn TK_AND() -> i64 = 107;
+fn TK_OR() -> i64 = 108;
+fn TK_NOT() -> i64 = 109;
+fn TK_PRE() -> i64 = 110;
+fn TK_POST() -> i64 = 111;
+fn TK_RET() -> i64 = 112;
+
+-- Types: 150-159
+fn TK_I32() -> i64 = 150;
+fn TK_I64() -> i64 = 151;
+fn TK_F64() -> i64 = 152;
+fn TK_BOOL() -> i64 = 153;
+fn TK_STRING() -> i64 = 154;
+
+-- Literals: 200-299
+fn TK_INT() -> i64 = 200;
+fn TK_IDENT() -> i64 = 201;
+
+-- Symbols: 300-399
+fn TK_COLON() -> i64 = 300;
+fn TK_DOT() -> i64 = 301;
+fn TK_EQ() -> i64 = 302;
+fn TK_SEMI() -> i64 = 303;
+fn TK_COMMA() -> i64 = 304;
+fn TK_LPAREN() -> i64 = 305;
+fn TK_RPAREN() -> i64 = 306;
+fn TK_LBRACE() -> i64 = 307;
+fn TK_RBRACE() -> i64 = 308;
+fn TK_LBRACKET() -> i64 = 309;
+fn TK_RBRACKET() -> i64 = 310;
+
+-- Two-char symbols: 320-329
+fn TK_COLONCOLON() -> i64 = 320;
+fn TK_ARROW() -> i64 = 321;
+fn TK_FATARROW() -> i64 = 322;
+fn TK_DOTDOT() -> i64 = 323;
+
+-- Operators: 400-499
+fn TK_PLUS() -> i64 = 400;
+fn TK_MINUS() -> i64 = 401;
+fn TK_STAR() -> i64 = 402;
+fn TK_SLASH() -> i64 = 403;
+fn TK_PERCENT() -> i64 = 404;
+fn TK_LT() -> i64 = 405;
+fn TK_GT() -> i64 = 406;
+
+-- Comparison operators: 410-419
+fn TK_EQEQ() -> i64 = 410;
+fn TK_NEQ() -> i64 = 411;
+fn TK_LTEQ() -> i64 = 412;
+fn TK_GTEQ() -> i64 = 413;
+
+-- Special: 900-999
+fn TK_EOF() -> i64 = 900;
+fn TK_ERROR() -> i64 = 999;
+
+-- ============================================================
+-- Parse Result Codes
+-- ============================================================
+fn PR_OK() -> i64 = 0;
+fn PR_ERR_UNEXPECTED() -> i64 = 1;
+fn PR_ERR_EXPECTED_IDENT() -> i64 = 2;
+fn PR_ERR_EXPECTED_TYPE() -> i64 = 3;
+fn PR_ERR_EXPECTED_EXPR() -> i64 = 4;
+fn PR_ERR_EXPECTED_SEMI() -> i64 = 5;
+fn PR_ERR_EXPECTED_EQ() -> i64 = 6;
+fn PR_ERR_EXPECTED_RPAREN() -> i64 = 7;
+fn PR_ERR_EXPECTED_THEN() -> i64 = 8;
+fn PR_ERR_EXPECTED_ELSE() -> i64 = 9;
+
+-- ============================================================
+-- Lexer Integration (reusing lexer.bmb functions)
+-- ============================================================
+
+-- Check if character is whitespace
+fn is_whitespace(c: i64) -> bool = c == 32 or c == 9 or c == 10 or c == 13;
+
+fn is_digit(c: i64) -> bool = c >= 48 and c <= 57;
+
+fn is_alpha(c: i64) -> bool = (c >= 65 and c <= 90) or (c >= 97 and c <= 122);
+
+fn is_alnum_or_underscore(c: i64) -> bool =
+    is_alpha(c) or is_digit(c) or c == 95;
+
+fn is_ident_start(c: i64) -> bool = is_alpha(c) or c == 95;
+
+-- Skip whitespace
+fn skip_ws(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then pos
+    else if is_whitespace(s.char_at(pos)) then skip_ws(s, pos + 1)
+    else pos;
+
+-- Skip to end of line (for comments)
+fn skip_to_eol(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then pos
+    else if s.char_at(pos) == 10 then pos
+    else skip_to_eol(s, pos + 1);
+
+-- Skip comment if present
+fn skip_comment(s: String, pos: i64) -> i64 =
+    if pos + 1 < s.len() and s.char_at(pos) == 45 and s.char_at(pos + 1) == 45 then
+        skip_to_eol(s, pos + 2)
+    else pos;
+
+-- Skip all whitespace and comments
+fn skip_all(s: String, pos: i64) -> i64 =
+    let p1 = skip_ws(s, pos);
+    let p2 = skip_comment(s, p1);
+    if p2 == pos then pos else skip_all(s, p2);
+
+-- Find end of identifier
+fn find_ident_end(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then pos
+    else if is_alnum_or_underscore(s.char_at(pos)) then find_ident_end(s, pos + 1)
+    else pos;
+
+-- Find end of number
+fn find_number_end(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then pos
+    else if is_digit(s.char_at(pos)) then find_number_end(s, pos + 1)
+    else pos;
+
+-- Lookup keyword
+fn lookup_keyword(w: String) -> i64 =
+    if w == "fn" then 100
+    else if w == "let" then 101
+    else if w == "if" then 102
+    else if w == "then" then 103
+    else if w == "else" then 104
+    else if w == "true" then 105
+    else if w == "false" then 106
+    else if w == "and" then 107
+    else if w == "or" then 108
+    else if w == "not" then 109
+    else if w == "pre" then 110
+    else if w == "post" then 111
+    else if w == "ret" then 112
+    else if w == "i32" then 150
+    else if w == "i64" then 151
+    else if w == "f64" then 152
+    else if w == "bool" then 153
+    else if w == "String" then 154
+    else 201;
+
+-- Symbol code
+fn symbol_code(c: i64) -> i64 =
+    if c == 58 then 300       -- : Colon
+    else if c == 46 then 301  -- . Dot
+    else if c == 61 then 302  -- = Eq
+    else if c == 59 then 303  -- ; Semi
+    else if c == 44 then 304  -- , Comma
+    else if c == 40 then 305  -- ( LParen
+    else if c == 41 then 306  -- ) RParen
+    else if c == 123 then 307 -- { LBrace
+    else if c == 125 then 308 -- } RBrace
+    else if c == 91 then 309  -- [ LBracket
+    else if c == 93 then 310  -- ] RBracket
+    else if c == 38 then 311  -- & Ampersand
+    else if c == 95 then 312  -- _ Underscore
+    else if c == 43 then 400  -- + Plus
+    else if c == 45 then 401  -- - Minus
+    else if c == 42 then 402  -- * Star
+    else if c == 47 then 403  -- / Slash
+    else if c == 37 then 404  -- % Percent
+    else if c == 60 then 405  -- < Lt
+    else if c == 62 then 406  -- > Gt
+    else 999;
+
+-- Check for two-character tokens
+fn check_two_char(s: String, pos: i64) -> i64 =
+    if pos + 1 >= s.len() then 0
+    else
+        let c1 = s.char_at(pos);
+        let c2 = s.char_at(pos + 1);
+        if c1 == 58 and c2 == 58 then 3202      -- :: ColonColon
+        else if c1 == 45 and c2 == 62 then 3212 -- -> Arrow
+        else if c1 == 61 and c2 == 62 then 3222 -- => FatArrow
+        else if c1 == 46 and c2 == 46 then 3232 -- .. DotDot
+        else if c1 == 61 and c2 == 61 then 4102 -- == EqEq
+        else if c1 == 33 and c2 == 61 then 4112 -- != NotEq
+        else if c1 == 60 and c2 == 61 then 4122 -- <= LtEq
+        else if c1 == 62 and c2 == 61 then 4132 -- >= GtEq
+        else 0;
+
+-- Process identifier token
+fn process_ident(s: String, p: i64) -> i64 =
+    let end = find_ident_end(s, p + 1);
+    let word = s.slice(p, end);
+    let kind = lookup_keyword(word);
+    kind * 1000000 + end;
+
+-- Process number token
+fn process_number(s: String, p: i64) -> i64 =
+    let end = find_number_end(s, p + 1);
+    200 * 1000000 + end;
+
+-- Process symbol token
+fn process_symbol(s: String, p: i64) -> i64 =
+    let two = check_two_char(s, p);
+    if two > 0 then
+        let kind = two / 10;
+        let tlen = two - kind * 10;
+        kind * 1000000 + (p + tlen)
+    else
+        let c = s.char_at(p);
+        let kind = symbol_code(c);
+        kind * 1000000 + (p + 1);
+
+-- Get next token: returns (kind * 1000000 + end_position)
+fn next_token(s: String, pos: i64) -> i64 =
+    let p = skip_all(s, pos);
+    if p >= s.len() then 900 * 1000000 + p  -- EOF
+    else
+        let c = s.char_at(p);
+        if is_ident_start(c) then process_ident(s, p)
+        else if is_digit(c) then process_number(s, p)
+        else process_symbol(s, p);
+
+-- Extract kind from token result
+fn tok_kind(tok: i64) -> i64 = tok / 1000000;
+
+-- Extract end position from token result
+fn tok_end(tok: i64) -> i64 = tok - (tok / 1000000) * 1000000;
+
+-- ============================================================
+-- Parser Result Helpers
+-- ============================================================
+
+-- Pack parse result: result_code * 1000000 + position
+fn pack_result(code: i64, pos: i64) -> i64 = code * 1000000 + pos;
+
+-- Extract result code
+fn result_code(r: i64) -> i64 = r / 1000000;
+
+-- Extract position from result
+fn result_pos(r: i64) -> i64 = r - (r / 1000000) * 1000000;
+
+-- Check if result is OK
+fn is_ok(r: i64) -> bool = result_code(r) == 0;
+
+-- ============================================================
+-- Parser: Type Parsing
+-- ============================================================
+
+-- Parse a type: i32, i64, f64, bool, String
+fn parse_type(s: String, pos: i64) -> i64 =
+    let tok = next_token(s, pos);
+    let kind = tok_kind(tok);
+    let end = tok_end(tok);
+    if kind >= 150 and kind <= 154 then pack_result(PR_OK(), end)
+    else pack_result(PR_ERR_EXPECTED_TYPE(), pos);
+
+-- ============================================================
+-- Parser: Expression Parsing (Pratt-style precedence)
+-- ============================================================
+
+-- Forward declarations via mutual recursion
+-- Parse primary expressions: literals, identifiers, parenthesized, if
+fn parse_primary(s: String, pos: i64) -> i64 =
+    let tok = next_token(s, pos);
+    let kind = tok_kind(tok);
+    let end = tok_end(tok);
+
+    -- Integer literal
+    if kind == TK_INT() then pack_result(PR_OK(), end)
+    -- true/false
+    else if kind == TK_TRUE() or kind == TK_FALSE() then pack_result(PR_OK(), end)
+    -- Identifier (variable or function call)
+    else if kind == TK_IDENT() then parse_call_or_ident(s, end)
+    -- Parenthesized expression
+    else if kind == TK_LPAREN() then parse_paren_expr(s, end)
+    -- If expression
+    else if kind == TK_IF() then parse_if_expr(s, end)
+    -- Let expression
+    else if kind == TK_LET() then parse_let_expr(s, end)
+    -- Not expression
+    else if kind == TK_NOT() then parse_not_expr(s, end)
+    -- Unary minus
+    else if kind == TK_MINUS() then parse_unary_minus(s, end)
+    else pack_result(PR_ERR_EXPECTED_EXPR(), pos);
+
+-- Parse call or just identifier
+fn parse_call_or_ident(s: String, pos: i64) -> i64 =
+    let tok = next_token(s, pos);
+    let kind = tok_kind(tok);
+    let end = tok_end(tok);
+    if kind == TK_LPAREN() then parse_call_args(s, end)
+    else pack_result(PR_OK(), pos);
+
+-- Parse call arguments: expr, expr, ... )
+fn parse_call_args(s: String, pos: i64) -> i64 =
+    let tok = next_token(s, pos);
+    let kind = tok_kind(tok);
+    let end = tok_end(tok);
+    if kind == TK_RPAREN() then pack_result(PR_OK(), end)
+    else
+        let r1 = parse_expr(s, pos);
+        if not is_ok(r1) then r1
+        else parse_more_args(s, result_pos(r1));
+
+-- Parse more arguments or closing paren
+fn parse_more_args(s: String, pos: i64) -> i64 =
+    let tok = next_token(s, pos);
+    let kind = tok_kind(tok);
+    let end = tok_end(tok);
+    if kind == TK_RPAREN() then pack_result(PR_OK(), end)
+    else if kind == TK_COMMA() then
+        let r1 = parse_expr(s, end);
+        if not is_ok(r1) then r1
+        else parse_more_args(s, result_pos(r1))
+    else pack_result(PR_ERR_EXPECTED_RPAREN(), pos);
+
+-- Parse parenthesized expression
+fn parse_paren_expr(s: String, pos: i64) -> i64 =
+    let r1 = parse_expr(s, pos);
+    if not is_ok(r1) then r1
+    else
+        let tok = next_token(s, result_pos(r1));
+        let kind = tok_kind(tok);
+        let end = tok_end(tok);
+        if kind == TK_RPAREN() then pack_result(PR_OK(), end)
+        else pack_result(PR_ERR_EXPECTED_RPAREN(), result_pos(r1));
+
+-- Parse if expression: if cond then expr else expr
+fn parse_if_expr(s: String, pos: i64) -> i64 =
+    let r_cond = parse_expr(s, pos);
+    if not is_ok(r_cond) then r_cond
+    else
+        let tok1 = next_token(s, result_pos(r_cond));
+        let kind1 = tok_kind(tok1);
+        let end1 = tok_end(tok1);
+        if kind1 != TK_THEN() then pack_result(PR_ERR_EXPECTED_THEN(), result_pos(r_cond))
+        else
+            let r_then = parse_expr(s, end1);
+            if not is_ok(r_then) then r_then
+            else
+                let tok2 = next_token(s, result_pos(r_then));
+                let kind2 = tok_kind(tok2);
+                let end2 = tok_end(tok2);
+                if kind2 != TK_ELSE() then pack_result(PR_ERR_EXPECTED_ELSE(), result_pos(r_then))
+                else parse_expr(s, end2);
+
+-- Parse let expression: let name = expr; body
+fn parse_let_expr(s: String, pos: i64) -> i64 =
+    let tok1 = next_token(s, pos);
+    let kind1 = tok_kind(tok1);
+    let end1 = tok_end(tok1);
+    -- Handle 'let mut' pattern
+    let name_pos = if kind1 == 117 then tok_end(next_token(s, end1)) else end1;
+    let tok_name = next_token(s, if kind1 == 117 then end1 else pos);
+    let kind_name = tok_kind(tok_name);
+    if kind_name != TK_IDENT() then pack_result(PR_ERR_EXPECTED_IDENT(), pos)
+    else
+        let tok2 = next_token(s, name_pos);
+        let kind2 = tok_kind(tok2);
+        let end2 = tok_end(tok2);
+        if kind2 != TK_EQ() then pack_result(PR_ERR_EXPECTED_EQ(), name_pos)
+        else
+            let r_val = parse_expr(s, end2);
+            if not is_ok(r_val) then r_val
+            else
+                let tok3 = next_token(s, result_pos(r_val));
+                let kind3 = tok_kind(tok3);
+                let end3 = tok_end(tok3);
+                if kind3 != TK_SEMI() then pack_result(PR_ERR_EXPECTED_SEMI(), result_pos(r_val))
+                else parse_expr(s, end3);
+
+-- Parse not expression
+fn parse_not_expr(s: String, pos: i64) -> i64 = parse_primary(s, pos);
+
+-- Parse unary minus
+fn parse_unary_minus(s: String, pos: i64) -> i64 = parse_primary(s, pos);
+
+-- ============================================================
+-- Binary Expression Parsing (flat precedence for simplicity)
+-- ============================================================
+
+-- Parse full expression with binary operators
+fn parse_expr(s: String, pos: i64) -> i64 =
+    let r1 = parse_primary(s, pos);
+    if not is_ok(r1) then r1
+    else parse_binary_rest(s, result_pos(r1));
+
+-- Parse rest of binary expression
+fn parse_binary_rest(s: String, pos: i64) -> i64 =
+    let tok = next_token(s, pos);
+    let kind = tok_kind(tok);
+    let end = tok_end(tok);
+    if is_binop(kind) then
+        let r2 = parse_primary(s, end);
+        if not is_ok(r2) then r2
+        else parse_binary_rest(s, result_pos(r2))
+    else pack_result(PR_OK(), pos);
+
+-- Check if token is a binary operator
+fn is_binop(kind: i64) -> bool =
+    -- Arithmetic: + - * / %
+    (kind >= 400 and kind <= 404) or
+    -- Comparison: < > == != <= >=
+    kind == 405 or kind == 406 or
+    (kind >= 410 and kind <= 413) or
+    -- Logical: and or
+    kind == TK_AND() or kind == TK_OR() or
+    -- Range: ..
+    kind == TK_DOTDOT();
+
+-- ============================================================
+-- Parser: Function Definition
+-- ============================================================
+
+-- Parse function: fn name(params) -> Type = expr;
+fn parse_fn(s: String, pos: i64) -> i64 =
+    -- Already consumed 'fn', expect identifier
+    let tok1 = next_token(s, pos);
+    let kind1 = tok_kind(tok1);
+    let end1 = tok_end(tok1);
+    if kind1 != TK_IDENT() then pack_result(PR_ERR_EXPECTED_IDENT(), pos)
+    else
+        -- Expect (
+        let tok2 = next_token(s, end1);
+        let kind2 = tok_kind(tok2);
+        let end2 = tok_end(tok2);
+        if kind2 != TK_LPAREN() then pack_result(PR_ERR_UNEXPECTED(), end1)
+        else
+            -- Parse params
+            let r_params = parse_params(s, end2);
+            if not is_ok(r_params) then r_params
+            else
+                -- Expect -> Type
+                let tok3 = next_token(s, result_pos(r_params));
+                let kind3 = tok_kind(tok3);
+                let end3 = tok_end(tok3);
+                if kind3 != TK_ARROW() then pack_result(PR_ERR_UNEXPECTED(), result_pos(r_params))
+                else
+                    let r_type = parse_type(s, end3);
+                    if not is_ok(r_type) then r_type
+                    else
+                        -- Optional pre/post contracts
+                        let r_contracts = skip_contracts(s, result_pos(r_type));
+                        -- Expect =
+                        let tok4 = next_token(s, r_contracts);
+                        let kind4 = tok_kind(tok4);
+                        let end4 = tok_end(tok4);
+                        if kind4 != TK_EQ() then pack_result(PR_ERR_EXPECTED_EQ(), r_contracts)
+                        else
+                            -- Parse body expression
+                            let r_body = parse_expr(s, end4);
+                            if not is_ok(r_body) then r_body
+                            else
+                                -- Expect ;
+                                let tok5 = next_token(s, result_pos(r_body));
+                                let kind5 = tok_kind(tok5);
+                                let end5 = tok_end(tok5);
+                                if kind5 != TK_SEMI() then pack_result(PR_ERR_EXPECTED_SEMI(), result_pos(r_body))
+                                else pack_result(PR_OK(), end5);
+
+-- Skip pre/post contracts
+fn skip_contracts(s: String, pos: i64) -> i64 =
+    let tok = next_token(s, pos);
+    let kind = tok_kind(tok);
+    let end = tok_end(tok);
+    if kind == TK_PRE() or kind == TK_POST() then
+        let r = skip_contract_expr(s, end);
+        skip_contracts(s, r)
+    else pos;
+
+-- Skip a contract expression (until we see = or another pre/post)
+fn skip_contract_expr(s: String, pos: i64) -> i64 =
+    let tok = next_token(s, pos);
+    let kind = tok_kind(tok);
+    let end = tok_end(tok);
+    if kind == TK_EQ() or kind == TK_PRE() or kind == TK_POST() or kind == TK_EOF() then pos
+    else skip_contract_expr(s, end);
+
+-- Parse parameters: ) or name: Type, ...
+fn parse_params(s: String, pos: i64) -> i64 =
+    let tok = next_token(s, pos);
+    let kind = tok_kind(tok);
+    let end = tok_end(tok);
+    if kind == TK_RPAREN() then pack_result(PR_OK(), end)
+    else if kind == TK_IDENT() then
+        -- Expect :
+        let tok2 = next_token(s, end);
+        let kind2 = tok_kind(tok2);
+        let end2 = tok_end(tok2);
+        if kind2 != TK_COLON() then pack_result(PR_ERR_UNEXPECTED(), end)
+        else
+            let r_type = parse_type(s, end2);
+            if not is_ok(r_type) then r_type
+            else parse_more_params(s, result_pos(r_type))
+    else pack_result(PR_ERR_EXPECTED_IDENT(), pos);
+
+-- Parse more parameters or closing paren
+fn parse_more_params(s: String, pos: i64) -> i64 =
+    let tok = next_token(s, pos);
+    let kind = tok_kind(tok);
+    let end = tok_end(tok);
+    if kind == TK_RPAREN() then pack_result(PR_OK(), end)
+    else if kind == TK_COMMA() then
+        let tok2 = next_token(s, end);
+        let kind2 = tok_kind(tok2);
+        let end2 = tok_end(tok2);
+        if kind2 != TK_IDENT() then pack_result(PR_ERR_EXPECTED_IDENT(), end)
+        else
+            let tok3 = next_token(s, end2);
+            let kind3 = tok_kind(tok3);
+            let end3 = tok_end(tok3);
+            if kind3 != TK_COLON() then pack_result(PR_ERR_UNEXPECTED(), end2)
+            else
+                let r_type = parse_type(s, end3);
+                if not is_ok(r_type) then r_type
+                else parse_more_params(s, result_pos(r_type))
+    else pack_result(PR_ERR_EXPECTED_RPAREN(), pos);
+
+-- ============================================================
+-- Parser: Program (sequence of function definitions)
+-- ============================================================
+
+-- Parse a program: sequence of fn definitions
+fn parse_program(s: String, pos: i64) -> i64 =
+    let tok = next_token(s, pos);
+    let kind = tok_kind(tok);
+    let end = tok_end(tok);
+    if kind == TK_EOF() then pack_result(PR_OK(), end)
+    else if kind == TK_FN() then
+        let r = parse_fn(s, end);
+        if not is_ok(r) then r
+        else parse_program(s, result_pos(r))
+    else pack_result(PR_ERR_UNEXPECTED(), pos);
+
+-- ============================================================
+-- Main: Parse a test program
+-- ============================================================
+
+-- Test helper: parse and print result
+fn test_parse(src: String, expected: i64) -> i64 =
+    let r = parse_program(src, 0);
+    let code = result_code(r);
+    let ok = if code == expected then 1 else 0;
+    let u = println(ok);
+    ok;
+
+fn main() -> i64 =
+    let u0 = println(777);  -- Start marker
+
+    -- Test 1: Simple function
+    let t1 = test_parse("fn add(x: i64, y: i64) -> i64 = x + y;", 0);
+
+    -- Test 2: If expression
+    let t2 = test_parse("fn max(a: i64, b: i64) -> i64 = if a > b then a else b;", 0);
+
+    -- Test 3: Let expression
+    let t3 = test_parse("fn foo(x: i64) -> i64 = let y = x + 1; y;", 0);
+
+    -- Test 4: Boolean literals
+    let t4 = test_parse("fn yes() -> bool = true;", 0);
+
+    -- Test 5: Comparison operators
+    let t5 = test_parse("fn cmp(a: i64, b: i64) -> bool = a == b;", 0);
+
+    -- Test 6: Logical and
+    let t6 = test_parse("fn both(a: bool, b: bool) -> bool = a and b;", 0);
+
+    -- Test 7: Function call
+    let t7 = test_parse("fn double(x: i64) -> i64 = add(x, x);", 0);
+
+    -- Test 8: Nested if
+    let t8 = test_parse("fn sign(x: i64) -> i64 = if x > 0 then 1 else if x < 0 then 0 - 1 else 0;", 0);
+
+    -- Test 9: No params
+    let t9 = test_parse("fn zero() -> i64 = 0;", 0);
+
+    -- Test 10: Multiple functions
+    let t10 = test_parse("fn a() -> i64 = 1; fn b() -> i64 = 2;", 0);
+
+    let u1 = println(888);  -- End marker
+
+    -- Count passed tests
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10;
+    let u2 = println(passed);  -- Should be 10
+
+    let u3 = println(999);  -- Final marker
+    passed;
