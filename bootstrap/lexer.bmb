@@ -5,7 +5,7 @@
 -- LIMITATIONS:
 -- - Stack depth: Due to recursive execution without tail call optimization,
 --   the lexer can only process short inputs (~10 tokens) before stack overflow.
--- - Short-circuit: BMB's `and` operator doesn't short-circuit, so we use nested ifs.
+-- - Short-circuit: Fixed in Phase 10 - `and`/`or` now short-circuit properly.
 -- - Let scoping: In `let x = v; body`, x is only visible in body expression.
 --
 -- This implementation demonstrates BMB's self-compilation capability.
@@ -53,14 +53,10 @@ fn skip_to_eol(s: String, pos: i64) -> i64 =
     else skip_to_eol(s, pos + 1);
 
 -- Skip comment if present, return new position
--- Note: Using nested if to ensure proper short-circuit evaluation
+-- Note: Now uses short-circuit `and` (fixed in Phase 10)
 fn skip_comment(s: String, pos: i64) -> i64 =
-    if pos + 1 < s.len() then
-        if s.char_at(pos) == 45 then  -- '-'
-            if s.char_at(pos + 1) == 45 then  -- '-'
-                skip_to_eol(s, pos + 2)
-            else pos
-        else pos
+    if pos + 1 < s.len() and s.char_at(pos) == 45 and s.char_at(pos + 1) == 45 then
+        skip_to_eol(s, pos + 2)
     else pos;
 
 -- Skip all whitespace and comments, return new position

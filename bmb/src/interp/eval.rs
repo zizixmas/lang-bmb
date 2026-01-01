@@ -124,9 +124,30 @@ impl Interpreter {
             }
 
             Expr::Binary { left, op, right } => {
-                let lval = self.eval(left, env)?;
-                let rval = self.eval(right, env)?;
-                self.eval_binary(*op, lval, rval)
+                // Short-circuit evaluation for logical operators
+                match op {
+                    BinOp::And => {
+                        let lval = self.eval(left, env)?;
+                        if !lval.is_truthy() {
+                            return Ok(Value::Bool(false));
+                        }
+                        let rval = self.eval(right, env)?;
+                        Ok(Value::Bool(rval.is_truthy()))
+                    }
+                    BinOp::Or => {
+                        let lval = self.eval(left, env)?;
+                        if lval.is_truthy() {
+                            return Ok(Value::Bool(true));
+                        }
+                        let rval = self.eval(right, env)?;
+                        Ok(Value::Bool(rval.is_truthy()))
+                    }
+                    _ => {
+                        let lval = self.eval(left, env)?;
+                        let rval = self.eval(right, env)?;
+                        self.eval_binary(*op, lval, rval)
+                    }
+                }
             }
 
             Expr::Unary { op, expr: inner } => {
@@ -819,6 +840,52 @@ mod tests {
         assert_eq!(
             interp.eval(&spanned(concat_expr), &env).unwrap(),
             Value::Str("hello world".to_string())
+        );
+    }
+
+    #[test]
+    fn test_short_circuit_and() {
+        // Test: false and <error> should return false without evaluating right side
+        let mut interp = Interpreter::new();
+        let env = interp.global_env.clone();
+
+        // false and (1/0) - if short-circuit works, no division by zero error
+        let expr = Expr::Binary {
+            left: Box::new(spanned(Expr::BoolLit(false))),
+            op: BinOp::And,
+            right: Box::new(spanned(Expr::Binary {
+                left: Box::new(spanned(Expr::IntLit(1))),
+                op: BinOp::Div,
+                right: Box::new(spanned(Expr::IntLit(0))),
+            })),
+        };
+        // Should succeed with false (short-circuit prevents division by zero)
+        assert_eq!(
+            interp.eval(&spanned(expr), &env).unwrap(),
+            Value::Bool(false)
+        );
+    }
+
+    #[test]
+    fn test_short_circuit_or() {
+        // Test: true or <error> should return true without evaluating right side
+        let mut interp = Interpreter::new();
+        let env = interp.global_env.clone();
+
+        // true or (1/0) - if short-circuit works, no division by zero error
+        let expr = Expr::Binary {
+            left: Box::new(spanned(Expr::BoolLit(true))),
+            op: BinOp::Or,
+            right: Box::new(spanned(Expr::Binary {
+                left: Box::new(spanned(Expr::IntLit(1))),
+                op: BinOp::Div,
+                right: Box::new(spanned(Expr::IntLit(0))),
+            })),
+        };
+        // Should succeed with true (short-circuit prevents division by zero)
+        assert_eq!(
+            interp.eval(&spanned(expr), &env).unwrap(),
+            Value::Bool(true)
         );
     }
 }
