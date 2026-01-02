@@ -702,27 +702,36 @@ lang-bmb-site/
 - `/changes` - Changelog (Version timeline)
 - `/blog` - 개발 블로그 (Posts list)
 
-### v0.9.6 - benchmark-bmb
+### v0.9.6 - benchmark-bmb ✅ 완료
 
 ```
 benchmark-bmb/
 ├── benches/
-│   ├── compute/      # n-body, mandelbrot
-│   ├── memory/       # binary-trees
-│   ├── realworld/    # json-parse
-│   └── contract/     # bounds-check-elim
-├── runner/           # 벤치마크 러너 (Rust)
-└── dashboard/        # 웹 대시보드
+│   ├── compute/
+│   │   ├── fibonacci/        # 재귀 함수 호출
+│   │   │   ├── c/main.c
+│   │   │   └── bmb/main.bmb
+│   │   └── n_body/           # N-body 시뮬레이션
+│   │       ├── c/main.c
+│   │       └── bmb/main.bmb
+│   └── contract/
+│       └── bounds_check/     # 경계 검사 제거
+│           ├── c/main.c
+│           └── bmb/main.bmb
+├── runner/
+│   ├── Cargo.toml
+│   └── src/main.rs           # 벤치마크 러너
+└── results/
 ```
 
-**목표**: BMB >= C -O3
+**구현 완료**:
+- Rust 기반 벤치마크 러너 (CLI)
+- run, list, new, compare, validate 명령어
+- fibonacci 벤치마크 (compute)
+- n_body 벤치마크 (compute, C 완료)
+- bounds_check 벤치마크 (contract)
 
-| 카테고리 | 벤치마크 |
-|----------|----------|
-| Compute | n-body, mandelbrot, fannkuch, spectral-norm |
-| Memory | binary-trees, reverse-complement |
-| Real-world | json-parse, regex-redux, http-throughput |
-| Contract | bounds-check-elim, null-check-elim, purity-opt |
+**목표**: BMB >= C -O3
 
 ---
 
@@ -900,7 +909,7 @@ v0.9.1 → v0.9.2: vscode-bmb (📈 적당) ✅
 v0.9.2 → v0.9.3: 원격 레지스트리 (📈 적당) ✅
 v0.9.3 → v0.9.4: playground (📈 적당) ✅
 v0.9.4 → v0.9.5: lang-bmb-site (📈 적당) ✅
-v0.9.5 → v0.9.6: benchmark-bmb (📈 적당)
+v0.9.5 → v0.9.6: benchmark-bmb (📈 적당) ✅
 v0.10.x: Bootstrap 점진적 진행 (📈 적당)
 v0.11.x: BMB 재작성 완성 (📈 적당)
 ```
