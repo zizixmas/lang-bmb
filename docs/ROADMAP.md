@@ -475,7 +475,20 @@ ecosystem/gotgan/src/
 └── resolver.rs       # 의존성 해석기 (200+ lines)
 ```
 
-### v0.8.3 - Rust Fallback (계획)
+### v0.8.3 - 유틸리티 명령어 ✅ 완료
+
+```bash
+gotgan clean          # 빌드 아티팩트 정리 (target/)
+gotgan tree           # 의존성 트리 출력
+gotgan tree -a        # 상세 정보 포함 (경로, 소스 파일 수)
+```
+
+**구현 세부**:
+- clean: target 디렉토리 완전 삭제
+- tree: 프로젝트 및 의존성 트리 시각화
+- 의존성 없는 경우 적절한 안내 메시지
+
+### v0.8.4 - Rust Fallback (계획)
 
 ```toml
 [dependencies.rust]
