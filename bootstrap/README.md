@@ -156,6 +156,48 @@ entry:
 999 (end marker)
 ```
 
+### lowering.bmb (25KB) - v0.10.2
+AST to MIR lowering (transformation) module.
+
+**Features:**
+- S-expression AST parsing (from parser_ast.bmb output)
+- Expression lowering: int, bool, var, binop, unary, if, let, call
+- Function lowering with basic block generation
+- Program lowering (multiple functions)
+- Pack/unpack result format: `temp:block:place:text`
+
+**Supported Transformations:**
+```lisp
+; AST → MIR examples
+(int 42)              →  %_t0 = const I:42
+(var <x>)             →  %x (no instruction, just reference)
+(op + (var <a>) (var <b>)) →  %_t0 = + %a, %b
+(if (var <c>) (int 1) (int 2)) →  branch %c, then_0, else_0 ...
+(let <x> (int 5) (var <x>))   →  %_t0 = const I:5 | %x = copy %_t0
+(call <foo> (var <a>))        →  %_t0 = call foo(%a)
+```
+
+**Test output:**
+```
+777 (start marker)
+6  (node type detection)
+5  (value extraction)
+5  (child extraction)
+3  (integer lowering)
+2  (boolean lowering)
+2  (variable lowering)
+3  (binop lowering)
+2  (unary lowering)
+3  (if lowering)
+2  (let lowering)
+3  (call lowering)
+3  (function lowering)
+2  (program lowering)
+888 (separator)
+41 (total passed)
+999 (end marker)
+```
+
 ## Token Encoding
 
 Tokens are encoded as a single i64 value:
@@ -195,6 +237,7 @@ cargo run --release --bin bmb -- check bootstrap/parser_ast.bmb
 cargo run --release --bin bmb -- check bootstrap/parser_test.bmb
 cargo run --release --bin bmb -- check bootstrap/types.bmb
 cargo run --release --bin bmb -- check bootstrap/mir.bmb
+cargo run --release --bin bmb -- check bootstrap/lowering.bmb
 
 # Run tests
 cargo run --release --bin bmb -- run bootstrap/lexer.bmb
@@ -203,6 +246,7 @@ cargo run --release --bin bmb -- run bootstrap/parser_ast.bmb
 cargo run --release --bin bmb -- run bootstrap/parser_test.bmb
 cargo run --release --bin bmb -- run bootstrap/types.bmb
 cargo run --release --bin bmb -- run bootstrap/mir.bmb
+cargo run --release --bin bmb -- run bootstrap/lowering.bmb
 ```
 
 ## Limitations
@@ -218,7 +262,8 @@ cargo run --release --bin bmb -- run bootstrap/mir.bmb
 - [ ] Import system for code sharing
 - [ ] Full compiler pipeline in BMB
 - [ ] Self-compilation of the bootstrap
-- [ ] Struct/Enum type checking (v0.10.2)
 - [x] MIR foundation (v0.10.1) ✅
-- [ ] AST → MIR lowering (v0.10.2)
-- [ ] MIR → text IR output (v0.10.2+)
+- [x] AST → MIR lowering (v0.10.2) ✅
+- [ ] End-to-end pipeline: source → AST → MIR → text output (v0.10.3)
+- [ ] Struct/Enum lowering support (v0.10.3+)
+- [ ] Optimization passes in BMB (v0.11+)

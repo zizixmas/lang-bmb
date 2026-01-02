@@ -1,0 +1,820 @@
+-- BMB AST to MIR Lowering (v0.10.2: Bootstrap Phase 6)
+-- Converts S-expression AST (from parser_ast.bmb) to MIR text format (from mir.bmb)
+--
+-- DESIGN:
+-- - Parses S-expression AST strings
+-- - Generates MIR text output using mir.bmb patterns
+-- - Uses functional/recursive style following bootstrap patterns
+--
+-- SCOPE (v0.10.2):
+-- - Expression lowering: int, bool, var, binop, unary, if, let, call
+-- - Function lowering with basic blocks
+-- - Complete program lowering
+--
+-- LIMITATIONS:
+-- - No struct/array support
+-- - Simple type inference (i64 default)
+-- - Text-based output only
+
+-- ============================================================================
+-- String Utility Functions (no imports in bootstrap)
+-- ============================================================================
+
+fn digit_char(d: i64) -> String =
+    if d == 0 then "0" else if d == 1 then "1" else if d == 2 then "2"
+    else if d == 3 then "3" else if d == 4 then "4" else if d == 5 then "5"
+    else if d == 6 then "6" else if d == 7 then "7" else if d == 8 then "8"
+    else "9";
+
+fn int_to_string(n: i64) -> String =
+    if n < 0 then "-" + int_to_string(0 - n)
+    else if n < 10 then digit_char(n)
+    else int_to_string(n / 10) + digit_char(n - (n / 10) * 10);
+
+fn is_digit(c: i64) -> bool = c >= 48 and c <= 57;
+fn is_whitespace(c: i64) -> bool = c == 32 or c == 9 or c == 10 or c == 13;
+
+-- Parse integer from string position
+fn parse_int_at(s: String, pos: i64, acc: i64) -> i64 =
+    if pos >= s.len() then acc
+    else let c = s.char_at(pos);
+        if c >= 48 and c <= 57 then
+            parse_int_at(s, pos + 1, acc * 10 + (c - 48))
+        else acc;
+
+-- Find end of integer in string
+fn find_int_end(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then pos
+    else let c = s.char_at(pos);
+        if c >= 48 and c <= 57 then find_int_end(s, pos + 1)
+        else pos;
+
+-- ============================================================================
+-- S-Expression Parser Utilities
+-- ============================================================================
+
+-- Skip whitespace
+fn skip_ws(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then pos
+    else if is_whitespace(s.char_at(pos)) then skip_ws(s, pos + 1)
+    else pos;
+
+-- Check if char is identifier char
+fn is_ident_char(c: i64) -> bool =
+    (c >= 65 and c <= 90) or (c >= 97 and c <= 122) or
+    (c >= 48 and c <= 57) or c == 95 or c == 45;
+
+-- Check if char is operator char (+, -, *, /, %, <, >, =, !)
+fn is_op_char(c: i64) -> bool =
+    c == 43 or c == 45 or c == 42 or c == 47 or c == 37 or  -- + - * / %
+    c == 60 or c == 62 or c == 61 or c == 33;               -- < > = !
+
+-- Find end of identifier/symbol
+fn find_ident_end(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then pos
+    else if is_ident_char(s.char_at(pos)) then find_ident_end(s, pos + 1)
+    else pos;
+
+-- Find end of operator symbol (like +, ==, !=, <=, >=)
+fn find_op_end(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then pos
+    else if is_op_char(s.char_at(pos)) then find_op_end(s, pos + 1)
+    else pos;
+
+-- Check if string starts with prefix at position
+fn starts_with_at(s: String, pos: i64, prefix: String) -> bool =
+    if pos + prefix.len() > s.len() then false
+    else s.slice(pos, pos + prefix.len()) == prefix;
+
+-- Find matching close paren, handling nesting
+fn find_close_paren(s: String, pos: i64, depth: i64) -> i64 =
+    if pos >= s.len() then pos
+    else let c = s.char_at(pos);
+        if c == 40 then find_close_paren(s, pos + 1, depth + 1)  -- '('
+        else if c == 41 then  -- ')'
+            if depth == 1 then pos
+            else find_close_paren(s, pos + 1, depth - 1)
+        else find_close_paren(s, pos + 1, depth);
+
+-- Extract content between parens: "(content)" -> "content"
+fn extract_paren_content(s: String) -> String =
+    if s.len() < 2 then s
+    else if s.char_at(0) == 40 and s.char_at(s.len() - 1) == 41 then
+        s.slice(1, s.len() - 1)
+    else s;
+
+-- ============================================================================
+-- AST Node Type Detection
+-- ============================================================================
+
+-- Get node type from S-expression: "(type ...)" -> "type"
+fn get_node_type(s: String) -> String =
+    let trimmed = skip_ws(s, 0);
+    if trimmed >= s.len() then "empty"
+    else if s.char_at(trimmed) != 40 then "atom"  -- Not '('
+    else
+        let start = skip_ws(s, trimmed + 1);
+        let send = find_ident_end(s, start);
+        if send == start then "unknown"
+        else s.slice(start, send);
+
+-- Check AST node types
+fn is_int_node(s: String) -> bool = get_node_type(s) == "int";
+fn is_bool_node(s: String) -> bool = get_node_type(s) == "bool";
+fn is_var_node(s: String) -> bool = get_node_type(s) == "var";
+fn is_op_node(s: String) -> bool = get_node_type(s) == "op";
+fn is_not_node(s: String) -> bool = get_node_type(s) == "not";
+fn is_neg_node(s: String) -> bool = get_node_type(s) == "neg";
+fn is_if_node(s: String) -> bool = get_node_type(s) == "if";
+fn is_let_node(s: String) -> bool = get_node_type(s) == "let";
+fn is_let_mut_node(s: String) -> bool = get_node_type(s) == "let-mut";
+fn is_call_node(s: String) -> bool = get_node_type(s) == "call";
+fn is_fn_node(s: String) -> bool = get_node_type(s) == "fn";
+fn is_program_node(s: String) -> bool = get_node_type(s) == "program";
+fn is_params_node(s: String) -> bool = get_node_type(s) == "params";
+
+-- ============================================================================
+-- AST Content Extraction
+-- ============================================================================
+
+-- Extract name from <name>
+fn extract_name(s: String) -> String =
+    let start = 0;
+    let pos = skip_ws(s, start);
+    if pos >= s.len() then ""
+    else if s.char_at(pos) != 60 then ""  -- '<'
+    else
+        let nstart = pos + 1;
+        let nend = find_name_end(s, nstart);
+        s.slice(nstart, nend);
+
+fn find_name_end(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then pos
+    else if s.char_at(pos) == 62 then pos  -- '>'
+    else find_name_end(s, pos + 1);
+
+-- Extract integer value from "(int 42)" -> 42
+fn extract_int_value(s: String) -> i64 =
+    let content = extract_paren_content(s);
+    let pos = skip_ws(content, 0);
+    let pos2 = find_ident_end(content, pos);  -- skip "int"
+    let pos3 = skip_ws(content, pos2);
+    let is_neg = pos3 < content.len() and content.char_at(pos3) == 45;  -- '-'
+    let num_start = if is_neg then pos3 + 1 else pos3;
+    let value = parse_int_at(content, num_start, 0);
+    if is_neg then 0 - value else value;
+
+-- Extract bool value from "(bool true)" -> true
+fn extract_bool_value(s: String) -> bool =
+    let content = extract_paren_content(s);
+    let pos = skip_ws(content, 0);
+    let pos2 = find_ident_end(content, pos);  -- skip "bool"
+    let pos3 = skip_ws(content, pos2);
+    starts_with_at(content, pos3, "true");
+
+-- Extract var name from "(var <name>)" -> name
+fn extract_var_name(s: String) -> String =
+    let content = extract_paren_content(s);
+    let pos = skip_ws(content, 0);
+    let pos2 = find_ident_end(content, pos);  -- skip "var"
+    let pos3 = skip_ws(content, pos2);
+    extract_name(content.slice(pos3, content.len()));
+
+-- ============================================================================
+-- S-Expression Child Extraction
+-- ============================================================================
+
+-- Skip first N children in S-expr content
+fn skip_children(s: String, pos: i64, n: i64) -> i64 =
+    if n == 0 then pos
+    else
+        let p = skip_ws(s, pos);
+        if p >= s.len() then p
+        else
+            let child_end = find_child_end(s, p);
+            skip_children(s, child_end, n - 1);
+
+-- Find end of current child (handles nested parens)
+fn find_child_end(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then pos
+    else let c = s.char_at(pos);
+        if c == 40 then find_close_paren(s, pos, 0) + 1  -- '(' - nested expr
+        else if c == 60 then find_name_end(s, pos) + 1  -- '<' - name
+        else if is_op_char(c) then find_op_end(s, pos)  -- operator symbol
+        else find_ident_end(s, pos);  -- identifier/symbol
+
+-- Get nth child (0-indexed) from S-expression content
+fn get_child(s: String, n: i64) -> String =
+    let content = extract_paren_content(s);
+    let pos = skip_ws(content, 0);
+    let pos2 = find_ident_end(content, pos);  -- skip node type
+    let start = skip_children(content, pos2, n);
+    let start2 = skip_ws(content, start);
+    let ending = find_child_end(content, start2);
+    content.slice(start2, ending);
+
+-- Get operator from "(op + ...)" -> "+"
+fn get_op_symbol(s: String) -> String = get_child(s, 0);
+
+-- Get left operand from "(op + left right)"
+fn get_op_left(s: String) -> String = get_child(s, 1);
+
+-- Get right operand from "(op + left right)"
+fn get_op_right(s: String) -> String = get_child(s, 2);
+
+-- Get not/neg operand
+fn get_unary_operand(s: String) -> String = get_child(s, 0);
+
+-- Get if condition/then/else
+fn get_if_cond(s: String) -> String = get_child(s, 0);
+fn get_if_then(s: String) -> String = get_child(s, 1);
+fn get_if_else(s: String) -> String = get_child(s, 2);
+
+-- Get let name/value/body
+fn get_let_name(s: String) -> String =
+    let child = get_child(s, 0);
+    extract_name(child);
+fn get_let_value(s: String) -> String = get_child(s, 1);
+fn get_let_body(s: String) -> String = get_child(s, 2);
+
+-- Get call name and args
+fn get_call_name(s: String) -> String =
+    let child = get_child(s, 0);
+    extract_name(child);
+
+-- ============================================================================
+-- MIR Type Encoding (from mir.bmb)
+-- ============================================================================
+
+fn mir_type_i32() -> i64 = 1000;
+fn mir_type_i64() -> i64 = 2000;
+fn mir_type_f64() -> i64 = 3000;
+fn mir_type_bool() -> i64 = 4000;
+fn mir_type_string() -> i64 = 5000;
+fn mir_type_unit() -> i64 = 6000;
+
+fn mir_type_from_string(ty: String) -> i64 =
+    if ty == "i32" then mir_type_i32()
+    else if ty == "i64" then mir_type_i64()
+    else if ty == "f64" then mir_type_f64()
+    else if ty == "bool" then mir_type_bool()
+    else if ty == "String" then mir_type_string()
+    else mir_type_unit();
+
+fn mir_type_name(ty: i64) -> String =
+    if ty == mir_type_i32() then "i32"
+    else if ty == mir_type_i64() then "i64"
+    else if ty == mir_type_f64() then "f64"
+    else if ty == mir_type_bool() then "bool"
+    else if ty == mir_type_string() then "String"
+    else "()";
+
+-- ============================================================================
+-- MIR Operator Encoding
+-- ============================================================================
+
+fn binop_from_symbol(s: String) -> i64 =
+    if s == "+" then 1
+    else if s == "-" then 2
+    else if s == "*" then 3
+    else if s == "/" then 4
+    else if s == "%" then 5
+    else if s == "==" then 6
+    else if s == "!=" then 7
+    else if s == "<" then 8
+    else if s == ">" then 9
+    else if s == "<=" then 10
+    else if s == ">=" then 11
+    else if s == "and" then 12
+    else if s == "or" then 13
+    else 0;
+
+fn binop_symbol(op: i64) -> String =
+    if op == 1 then "+" else if op == 2 then "-"
+    else if op == 3 then "*" else if op == 4 then "/"
+    else if op == 5 then "%" else if op == 6 then "=="
+    else if op == 7 then "!=" else if op == 8 then "<"
+    else if op == 9 then ">" else if op == 10 then "<="
+    else if op == 11 then ">=" else if op == 12 then "and"
+    else if op == 13 then "or" else "?";
+
+-- ============================================================================
+-- MIR Place Encoding
+-- ============================================================================
+
+fn place_var(name: String) -> String = "%" + name;
+fn place_temp(idx: i64) -> String = "%_t" + int_to_string(idx);
+
+-- ============================================================================
+-- MIR Text Generation
+-- ============================================================================
+
+fn mir_text_const(dest: String, value: String) -> String =
+    "  " + dest + " = const " + value;
+
+fn mir_text_copy(dest: String, src: String) -> String =
+    "  " + dest + " = copy " + src;
+
+fn mir_text_binop(dest: String, op: i64, lhs: String, rhs: String) -> String =
+    "  " + dest + " = " + binop_symbol(op) + " " + lhs + ", " + rhs;
+
+fn mir_text_unary_neg(dest: String, src: String) -> String =
+    "  " + dest + " = neg " + src;
+
+fn mir_text_unary_not(dest: String, src: String) -> String =
+    "  " + dest + " = not " + src;
+
+fn mir_text_call(dest: String, func: String, args: String) -> String =
+    "  " + dest + " = call " + func + "(" + args + ")";
+
+fn mir_text_call_void(func: String, args: String) -> String =
+    "  call " + func + "(" + args + ")";
+
+fn mir_text_ret(value: String) -> String =
+    if value.len() == 0 then "  return"
+    else "  return " + value;
+
+fn mir_text_goto(label: String) -> String = "  goto " + label;
+
+fn mir_text_branch(cond: String, then_l: String, else_l: String) -> String =
+    "  branch " + cond + ", " + then_l + ", " + else_l;
+
+fn mir_text_block_start(label: String) -> String = label + ":";
+
+fn mir_text_fn_start(name: String, params: String, ret_ty: i64) -> String =
+    "fn " + name + "(" + params + ") -> " + mir_type_name(ret_ty) + " {";
+
+fn mir_text_fn_end() -> String = "}";
+
+-- ============================================================================
+-- Lowering State: Pack result with temp counter and block counter
+-- ============================================================================
+-- Format: "temp_count:block_count:result_place:mir_text"
+
+fn pack_lower_result(temp: i64, block: i64, result: String, text: String) -> String =
+    int_to_string(temp) + ":" + int_to_string(block) + ":" + result + ":" + text;
+
+fn unpack_temp(r: String) -> i64 = parse_int_at(r, 0, 0);
+
+fn find_nth_colon(s: String, pos: i64, n: i64) -> i64 =
+    if pos >= s.len() then pos
+    else if s.char_at(pos) == 58 then  -- ':'
+        if n == 0 then pos
+        else find_nth_colon(s, pos + 1, n - 1)
+    else find_nth_colon(s, pos + 1, n);
+
+fn unpack_block(r: String) -> i64 =
+    let colon1 = find_nth_colon(r, 0, 0);
+    parse_int_at(r, colon1 + 1, 0);
+
+fn unpack_result_place(r: String) -> String =
+    let colon2 = find_nth_colon(r, 0, 1);
+    let colon3 = find_nth_colon(r, 0, 2);
+    r.slice(colon2 + 1, colon3);
+
+fn unpack_text(r: String) -> String =
+    let colon3 = find_nth_colon(r, 0, 2);
+    r.slice(colon3 + 1, r.len());
+
+-- ============================================================================
+-- Expression Lowering
+-- ============================================================================
+
+-- Lower an expression AST node to MIR
+-- Returns: temp:block:result_place:mir_text
+fn lower_expr(ast: String, temp: i64, block: i64) -> String =
+    if is_int_node(ast) then lower_int(ast, temp, block)
+    else if is_bool_node(ast) then lower_bool(ast, temp, block)
+    else if is_var_node(ast) then lower_var(ast, temp, block)
+    else if is_op_node(ast) then lower_binop(ast, temp, block)
+    else if is_neg_node(ast) then lower_neg(ast, temp, block)
+    else if is_not_node(ast) then lower_not(ast, temp, block)
+    else if is_if_node(ast) then lower_if(ast, temp, block)
+    else if is_let_node(ast) or is_let_mut_node(ast) then lower_let(ast, temp, block)
+    else if is_call_node(ast) then lower_call(ast, temp, block)
+    else pack_lower_result(temp, block, "%error", "  ; unknown: " + get_node_type(ast));
+
+-- Lower integer literal: (int 42)
+fn lower_int(ast: String, temp: i64, block: i64) -> String =
+    let value = extract_int_value(ast);
+    let dest = place_temp(temp);
+    let text = mir_text_const(dest, "I:" + int_to_string(value));
+    pack_lower_result(temp + 1, block, dest, text);
+
+-- Lower boolean literal: (bool true)
+fn lower_bool(ast: String, temp: i64, block: i64) -> String =
+    let value = extract_bool_value(ast);
+    let dest = place_temp(temp);
+    let bstr = if value then "B:1" else "B:0";
+    let text = mir_text_const(dest, bstr);
+    pack_lower_result(temp + 1, block, dest, text);
+
+-- Lower variable reference: (var <name>)
+fn lower_var(ast: String, temp: i64, block: i64) -> String =
+    let name = extract_var_name(ast);
+    pack_lower_result(temp, block, place_var(name), "");
+
+-- Lower binary operation: (op + left right)
+fn lower_binop(ast: String, temp: i64, block: i64) -> String =
+    let op_sym = get_op_symbol(ast);
+    let op = binop_from_symbol(op_sym);
+    let left = get_op_left(ast);
+    let right = get_op_right(ast);
+
+    let r1 = lower_expr(left, temp, block);
+    let t1 = unpack_temp(r1);
+    let b1 = unpack_block(r1);
+    let p1 = unpack_result_place(r1);
+    let text1 = unpack_text(r1);
+
+    let r2 = lower_expr(right, t1, b1);
+    let t2 = unpack_temp(r2);
+    let b2 = unpack_block(r2);
+    let p2 = unpack_result_place(r2);
+    let text2 = unpack_text(r2);
+
+    let dest = place_temp(t2);
+    let op_text = mir_text_binop(dest, op, p1, p2);
+    let combined = if text1.len() > 0 and text2.len() > 0 then text1 + "|" + text2 + "|" + op_text
+                   else if text1.len() > 0 then text1 + "|" + op_text
+                   else if text2.len() > 0 then text2 + "|" + op_text
+                   else op_text;
+    pack_lower_result(t2 + 1, b2, dest, combined);
+
+-- Lower negation: (neg expr)
+fn lower_neg(ast: String, temp: i64, block: i64) -> String =
+    let operand = get_unary_operand(ast);
+    let r = lower_expr(operand, temp, block);
+    let t = unpack_temp(r);
+    let b = unpack_block(r);
+    let p = unpack_result_place(r);
+    let text = unpack_text(r);
+
+    let dest = place_temp(t);
+    let neg_text = mir_text_unary_neg(dest, p);
+    let combined = if text.len() > 0 then text + "|" + neg_text else neg_text;
+    pack_lower_result(t + 1, b, dest, combined);
+
+-- Lower not: (not expr)
+fn lower_not(ast: String, temp: i64, block: i64) -> String =
+    let operand = get_unary_operand(ast);
+    let r = lower_expr(operand, temp, block);
+    let t = unpack_temp(r);
+    let b = unpack_block(r);
+    let p = unpack_result_place(r);
+    let text = unpack_text(r);
+
+    let dest = place_temp(t);
+    let not_text = mir_text_unary_not(dest, p);
+    let combined = if text.len() > 0 then text + "|" + not_text else not_text;
+    pack_lower_result(t + 1, b, dest, combined);
+
+-- Lower if expression: (if cond then else)
+fn lower_if(ast: String, temp: i64, block: i64) -> String =
+    let cond_ast = get_if_cond(ast);
+    let then_ast = get_if_then(ast);
+    let else_ast = get_if_else(ast);
+
+    -- Lower condition
+    let rc = lower_expr(cond_ast, temp, block);
+    let tc = unpack_temp(rc);
+    let bc = unpack_block(rc);
+    let pc = unpack_result_place(rc);
+    let textc = unpack_text(rc);
+
+    -- Generate block labels
+    let then_lbl = "then_" + int_to_string(bc);
+    let else_lbl = "else_" + int_to_string(bc);
+    let merge_lbl = "merge_" + int_to_string(bc);
+    let next_block = bc + 1;
+
+    -- Result place for phi
+    let result_place = place_temp(tc);
+    let tc2 = tc + 1;
+
+    -- Branch instruction
+    let branch_text = mir_text_branch(pc, then_lbl, else_lbl);
+
+    -- Lower then branch
+    let rt = lower_expr(then_ast, tc2, next_block);
+    let tt = unpack_temp(rt);
+    let bt = unpack_block(rt);
+    let pt = unpack_result_place(rt);
+    let textt = unpack_text(rt);
+
+    -- Lower else branch
+    let re = lower_expr(else_ast, tt, bt);
+    let te = unpack_temp(re);
+    let be = unpack_block(re);
+    let pe = unpack_result_place(re);
+    let texte = unpack_text(re);
+
+    -- Build then block
+    let then_block = mir_text_block_start(then_lbl) + "|" +
+                     (if textt.len() > 0 then textt + "|" else "") +
+                     mir_text_copy(result_place, pt) + "|" +
+                     mir_text_goto(merge_lbl);
+
+    -- Build else block
+    let else_block = mir_text_block_start(else_lbl) + "|" +
+                     (if texte.len() > 0 then texte + "|" else "") +
+                     mir_text_copy(result_place, pe) + "|" +
+                     mir_text_goto(merge_lbl);
+
+    -- Build merge block
+    let merge_block = mir_text_block_start(merge_lbl);
+
+    -- Combine all
+    let entry_text = if textc.len() > 0 then textc + "|" + branch_text else branch_text;
+    let full_text = entry_text + "|" + then_block + "|" + else_block + "|" + merge_block;
+
+    pack_lower_result(te, be + 1, result_place, full_text);
+
+-- Lower let binding: (let <name> value body)
+fn lower_let(ast: String, temp: i64, block: i64) -> String =
+    let name = get_let_name(ast);
+    let value_ast = get_let_value(ast);
+    let body_ast = get_let_body(ast);
+
+    -- Lower value
+    let rv = lower_expr(value_ast, temp, block);
+    let tv = unpack_temp(rv);
+    let bv = unpack_block(rv);
+    let pv = unpack_result_place(rv);
+    let textv = unpack_text(rv);
+
+    -- Assign to named variable
+    let assign_text = mir_text_copy(place_var(name), pv);
+    let value_text = if textv.len() > 0 then textv + "|" + assign_text else assign_text;
+
+    -- Lower body
+    let rb = lower_expr(body_ast, tv, bv);
+    let tb = unpack_temp(rb);
+    let bb = unpack_block(rb);
+    let pb = unpack_result_place(rb);
+    let textb = unpack_text(rb);
+
+    -- Combine
+    let combined = if textb.len() > 0 then value_text + "|" + textb else value_text;
+    pack_lower_result(tb, bb, pb, combined);
+
+-- Lower function call: (call <name> arg1 arg2...)
+fn lower_call(ast: String, temp: i64, block: i64) -> String =
+    let name = get_call_name(ast);
+    let args_result = lower_call_args(ast, 1, temp, block, "");
+    let t = unpack_temp(args_result);
+    let b = unpack_block(args_result);
+    let args_places = unpack_result_place(args_result);
+    let args_text = unpack_text(args_result);
+
+    let dest = place_temp(t);
+    let call_text = mir_text_call(dest, name, args_places);
+    let combined = if args_text.len() > 0 then args_text + "|" + call_text else call_text;
+    pack_lower_result(t + 1, b, dest, combined);
+
+-- Lower call arguments recursively
+fn lower_call_args(ast: String, idx: i64, temp: i64, block: i64, places: String) -> String =
+    let arg = get_child(ast, idx);
+    if arg.len() == 0 or arg == "" then
+        pack_lower_result(temp, block, places, "")
+    else if arg.char_at(0) != 40 and not is_ident_char(arg.char_at(0)) then
+        pack_lower_result(temp, block, places, "")
+    else
+        let r = lower_expr(arg, temp, block);
+        let t = unpack_temp(r);
+        let b = unpack_block(r);
+        let p = unpack_result_place(r);
+        let text = unpack_text(r);
+
+        let new_places = if places.len() > 0 then places + ", " + p else p;
+        let next_result = lower_call_args(ast, idx + 1, t, b, new_places);
+        let t2 = unpack_temp(next_result);
+        let b2 = unpack_block(next_result);
+        let p2 = unpack_result_place(next_result);
+        let text2 = unpack_text(next_result);
+
+        let combined = if text.len() > 0 and text2.len() > 0 then text + "|" + text2
+                       else if text.len() > 0 then text
+                       else text2;
+        pack_lower_result(t2, b2, p2, combined);
+
+-- ============================================================================
+-- Function Lowering
+-- ============================================================================
+
+-- Get function name from "(fn <name> ...)"
+fn get_fn_name(ast: String) -> String =
+    let child = get_child(ast, 0);
+    extract_name(child);
+
+-- Get function params from "(fn <name> (params ...) ...)"
+fn get_fn_params(ast: String) -> String = get_child(ast, 1);
+
+-- Get function return type from "(fn <name> (params ...) type ...)"
+fn get_fn_ret_type(ast: String) -> String = get_child(ast, 2);
+
+-- Get function body from "(fn <name> (params ...) type body)"
+fn get_fn_body(ast: String) -> String = get_child(ast, 3);
+
+-- Format parameters for MIR: "(params (p <x> i64) (p <y> i64))" -> "x: i64, y: i64"
+fn format_params(params_ast: String) -> String =
+    format_params_inner(params_ast, 0, "");
+
+fn format_params_inner(params_ast: String, idx: i64, acc: String) -> String =
+    let param = get_child(params_ast, idx);
+    if param.len() == 0 or param == "" then acc
+    else if param.char_at(0) != 40 then acc  -- Not a paren
+    else
+        let name = extract_name(get_child(param, 0));
+        let ty = get_child(param, 1);
+        let param_str = name + ": " + ty;
+        let new_acc = if acc.len() > 0 then acc + ", " + param_str else param_str;
+        format_params_inner(params_ast, idx + 1, new_acc);
+
+-- Lower a complete function
+fn lower_function(ast: String) -> String =
+    let name = get_fn_name(ast);
+    let params_ast = get_fn_params(ast);
+    let ret_type_str = get_fn_ret_type(ast);
+    let body_ast = get_fn_body(ast);
+
+    let ret_type = mir_type_from_string(ret_type_str);
+    let params_str = format_params(params_ast);
+
+    -- Lower body
+    let rb = lower_expr(body_ast, 0, 0);
+    let result_place = unpack_result_place(rb);
+    let body_text = unpack_text(rb);
+
+    -- Generate function
+    let header = mir_text_fn_start(name, params_str, ret_type);
+    let entry = mir_text_block_start("entry");
+    let ret_inst = mir_text_ret(result_place);
+    let footer = mir_text_fn_end();
+
+    let body_part = if body_text.len() > 0 then body_text + "|" + ret_inst else ret_inst;
+    header + "|" + entry + "|" + body_part + "|" + footer;
+
+-- ============================================================================
+-- Program Lowering
+-- ============================================================================
+
+-- Lower program: "(program (fn ...) (fn ...)...)"
+fn lower_program(ast: String) -> String =
+    lower_program_inner(ast, 0, "");
+
+fn lower_program_inner(ast: String, idx: i64, acc: String) -> String =
+    let fn_ast = get_child(ast, idx);
+    if fn_ast.len() == 0 or fn_ast == "" then acc
+    else if not is_fn_node(fn_ast) then acc
+    else
+        let fn_mir = lower_function(fn_ast);
+        let new_acc = if acc.len() > 0 then acc + "||" + fn_mir else fn_mir;
+        lower_program_inner(ast, idx + 1, new_acc);
+
+-- ============================================================================
+-- Test Helpers
+-- ============================================================================
+
+fn test_node_type(ast: String, expected: String) -> i64 =
+    if get_node_type(ast) == expected then 1 else 0;
+
+fn test_extract_int(ast: String, expected: i64) -> i64 =
+    if extract_int_value(ast) == expected then 1 else 0;
+
+fn test_extract_var(ast: String, expected: String) -> i64 =
+    if extract_var_name(ast) == expected then 1 else 0;
+
+fn test_lower_contains(ast: String, substr: String) -> i64 =
+    let result = lower_expr(ast, 0, 0);
+    let text = unpack_text(result);
+    if str_contains(text, substr) then 1 else 0;
+
+fn str_contains(s: String, sub: String) -> bool =
+    str_contains_at(s, sub, 0);
+
+fn str_contains_at(s: String, sub: String, pos: i64) -> bool =
+    if pos + sub.len() > s.len() then false
+    else if s.slice(pos, pos + sub.len()) == sub then true
+    else str_contains_at(s, sub, pos + 1);
+
+-- ============================================================================
+-- Main: Test Suite
+-- ============================================================================
+
+fn main() -> i64 =
+    let u0 = println(777);  -- Start marker
+
+    -- Test 1: Node type detection (6 tests)
+    let n1 = test_node_type("(int 42)", "int");
+    let n2 = test_node_type("(bool true)", "bool");
+    let n3 = test_node_type("(var <x>)", "var");
+    let n4 = test_node_type("(op + (int 1) (int 2))", "op");
+    let n5 = test_node_type("(if (bool true) (int 1) (int 2))", "if");
+    let n6 = test_node_type("(call <foo>)", "call");
+    let node_tests = n1 + n2 + n3 + n4 + n5 + n6;
+    let u1 = println(node_tests);  -- Should be 6
+
+    -- Test 2: Value extraction (5 tests)
+    let e1 = test_extract_int("(int 42)", 42);
+    let e2 = test_extract_int("(int 0)", 0);
+    let e3 = test_extract_int("(int 123)", 123);
+    let e4 = test_extract_var("(var <x>)", "x");
+    let e5 = test_extract_var("(var <foo>)", "foo");
+    let extract_tests = e1 + e2 + e3 + e4 + e5;
+    let u2 = println(extract_tests);  -- Should be 5
+
+    -- Test 3: Child extraction (5 tests)
+    let c1 = if get_op_symbol("(op + (int 1) (int 2))") == "+" then 1 else 0;
+    let c2 = if get_node_type(get_op_left("(op + (int 1) (int 2))")) == "int" then 1 else 0;
+    let c3 = if get_let_name("(let <x> (int 5) (var <x>))") == "x" then 1 else 0;
+    let c4 = if get_call_name("(call <add> (int 1) (int 2))") == "add" then 1 else 0;
+    let c5 = if get_fn_name("(fn <foo> (params) i64 (int 1))") == "foo" then 1 else 0;
+    let child_tests = c1 + c2 + c3 + c4 + c5;
+    let u3 = println(child_tests);  -- Should be 5
+
+    -- Test 4: Integer lowering (3 tests)
+    let i1 = test_lower_contains("(int 42)", "const I:42");
+    let i2 = test_lower_contains("(int 0)", "const I:0");
+    let i3 = test_lower_contains("(int 100)", "const I:100");
+    let int_tests = i1 + i2 + i3;
+    let u4 = println(int_tests);  -- Should be 3
+
+    -- Test 5: Boolean lowering (2 tests)
+    let b1 = test_lower_contains("(bool true)", "const B:1");
+    let b2 = test_lower_contains("(bool false)", "const B:0");
+    let bool_tests = b1 + b2;
+    let u5 = println(bool_tests);  -- Should be 2
+
+    -- Test 6: Variable lowering (2 tests)
+    let v1r = lower_expr("(var <x>)", 0, 0);
+    let v1 = if unpack_result_place(v1r) == "%x" then 1 else 0;
+    let v2r = lower_expr("(var <foo>)", 0, 0);
+    let v2 = if unpack_result_place(v2r) == "%foo" then 1 else 0;
+    let var_tests = v1 + v2;
+    let u6 = println(var_tests);  -- Should be 2
+
+    -- Test 7: Binary operation lowering (4 tests)
+    let o1 = test_lower_contains("(op + (var <x>) (var <y>))", "+ %x, %y");
+    let o2 = test_lower_contains("(op * (int 2) (int 3))", "* %_t0, %_t1");
+    let o3 = test_lower_contains("(op == (var <a>) (int 0))", "== %a, %_t0");
+    let o4 = test_lower_contains("(op < (var <x>) (var <y>))", "< %x, %y");
+    let binop_tests = o1 + o2 + o3 + o4;
+    let u7 = println(binop_tests);  -- Should be 4
+
+    -- Test 8: Unary operation lowering (2 tests)
+    let un1 = test_lower_contains("(neg (var <x>))", "neg %x");
+    let un2 = test_lower_contains("(not (var <b>))", "not %b");
+    let unary_tests = un1 + un2;
+    let u8 = println(unary_tests);  -- Should be 2
+
+    -- Test 9: If expression lowering (3 tests)
+    let if1 = test_lower_contains("(if (var <c>) (int 1) (int 2))", "branch %c");
+    let if2 = test_lower_contains("(if (var <c>) (int 1) (int 2))", "then_0:");
+    let if3 = test_lower_contains("(if (var <c>) (int 1) (int 2))", "else_0:");
+    let if_tests = if1 + if2 + if3;
+    let u9 = println(if_tests);  -- Should be 3
+
+    -- Test 10: Let binding lowering (3 tests)
+    let l1 = test_lower_contains("(let <x> (int 5) (var <x>))", "const I:5");
+    let l2 = test_lower_contains("(let <x> (int 5) (var <x>))", "copy %x");
+    let l3r = lower_expr("(let <y> (int 10) (var <y>))", 0, 0);
+    let l3 = if unpack_result_place(l3r) == "%y" then 1 else 0;
+    let let_tests = l1 + l2 + l3;
+    let u10 = println(let_tests);  -- Should be 3
+
+    -- Test 11: Call lowering (3 tests)
+    let call1 = test_lower_contains("(call <foo>)", "call foo()");
+    let call2 = test_lower_contains("(call <add> (var <x>) (var <y>))", "call add(%x, %y)");
+    let call3 = test_lower_contains("(call <inc> (int 5))", "call inc(%_t0)");
+    let call_tests = call1 + call2 + call3;
+    let u11 = println(call_tests);  -- Should be 3
+
+    -- Test 12: Function lowering (3 tests)
+    let fn1 = lower_function("(fn <id> (params (p <x> i64)) i64 (var <x>))");
+    let fn1_ok = if str_contains(fn1, "fn id(x: i64)") then 1 else 0;
+    let fn2 = lower_function("(fn <add> (params (p <a> i64) (p <b> i64)) i64 (op + (var <a>) (var <b>)))");
+    let fn2_ok = if str_contains(fn2, "+ %a, %b") then 1 else 0;
+    let fn3 = lower_function("(fn <zero> (params) i64 (int 0))");
+    let fn3_ok = if str_contains(fn3, "const I:0") then 1 else 0;
+    let fn_tests = fn1_ok + fn2_ok + fn3_ok;
+    let u12 = println(fn_tests);  -- Should be 3
+
+    -- Test 13: Program lowering (2 tests)
+    let prog1 = lower_program("(program (fn <one> (params) i64 (int 1)))");
+    let prog1_ok = if str_contains(prog1, "fn one()") then 1 else 0;
+    let prog2 = lower_program("(program (fn <a> (params) i64 (int 1)) (fn <b> (params) i64 (int 2)))");
+    let prog2_ok = if str_contains(prog2, "fn a()") and str_contains(prog2, "fn b()") then 1 else 0;
+    let prog_tests = prog1_ok + prog2_ok;
+    let u13 = println(prog_tests);  -- Should be 2
+
+    let u14 = println(888);  -- Separator
+
+    let total = node_tests + extract_tests + child_tests + int_tests + bool_tests +
+                var_tests + binop_tests + unary_tests + if_tests + let_tests +
+                call_tests + fn_tests + prog_tests;
+    let u15 = println(total);  -- Should be 43
+
+    let u16 = println(999);  -- End marker
+
+    total;
