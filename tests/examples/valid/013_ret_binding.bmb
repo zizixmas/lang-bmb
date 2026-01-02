@@ -1,0 +1,24 @@
+-- v0.2 Feature Test: Explicit Return Binding
+-- Tests for explicit return value binding syntax: -> name: Type
+
+-- Legacy syntax: implicit ret
+fn add_legacy(a: i64, b: i64) -> i64
+  post ret == a + b
+= a + b;
+
+-- v0.2 syntax: explicit ret binding
+fn add_explicit(a: i64, b: i64) -> result: i64
+  post result == a + b
+= a + b;
+
+-- Named return with pre/post contracts
+fn safe_divide(a: i64, b: i64) -> quotient: i64
+  pre b != 0
+  post quotient * b <= a
+= a / b;
+
+-- Named return for complex postcondition
+fn factorial(n: i64) -> fact: i64
+  pre n >= 0
+  post fact >= 1
+= if n <= 1 then 1 else n * factorial(n - 1);

@@ -672,8 +672,12 @@ fn format_expr(expr: &bmb::ast::Expr) -> String {
             )
         }
 
-        Expr::Range { start, end } => {
-            format!("{}..{}", format_expr(&start.node), format_expr(&end.node))
+        Expr::Range { start, end, kind } => {
+            let op = match kind {
+                bmb::ast::RangeKind::Exclusive => "..<",
+                bmb::ast::RangeKind::Inclusive => "..=",
+            };
+            format!("{}{}{}", format_expr(&start.node), op, format_expr(&end.node))
         }
 
         Expr::EnumVariant { enum_name, variant, args } => {

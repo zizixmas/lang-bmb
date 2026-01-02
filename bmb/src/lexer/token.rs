@@ -103,6 +103,11 @@ pub enum Token {
     FatArrow,
     #[token("_")]
     Underscore,
+    // v0.2: Range operators (order matters - longer first)
+    #[token("..<")]
+    DotDotLt,
+    #[token("..=")]
+    DotDotEq,
     #[token("..")]
     DotDot,
     #[token(".")]
@@ -128,6 +133,9 @@ pub enum Token {
     // v0.5 Phase 5: References
     #[token("&")]
     Ampersand,
+    // v0.2: Attributes
+    #[token("@")]
+    At,
 
     // Operators
     #[token("+")]
@@ -196,6 +204,8 @@ impl std::fmt::Display for Token {
             Token::Arrow => write!(f, "->"),
             Token::FatArrow => write!(f, "=>"),
             Token::Underscore => write!(f, "_"),
+            Token::DotDotLt => write!(f, "..<"),
+            Token::DotDotEq => write!(f, "..="),
             Token::DotDot => write!(f, ".."),
             Token::Dot => write!(f, "."),
             Token::Eq => write!(f, "="),
@@ -208,6 +218,7 @@ impl std::fmt::Display for Token {
             Token::LBracket => write!(f, "["),
             Token::RBracket => write!(f, "]"),
             Token::Ampersand => write!(f, "&"),
+            Token::At => write!(f, "@"),
             Token::Plus => write!(f, "+"),
             Token::Minus => write!(f, "-"),
             Token::Star => write!(f, "*"),

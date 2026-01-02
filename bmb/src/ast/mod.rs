@@ -86,9 +86,15 @@ pub struct EnumVariant {
 /// Function definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FnDef {
+    /// Attributes (v0.2): @inline, @pure, @decreases, etc.
+    pub attributes: Vec<Attribute>,
     pub visibility: Visibility,
     pub name: Spanned<String>,
     pub params: Vec<Param>,
+    /// Optional explicit return value binding name (v0.2)
+    /// e.g., `-> r: i64` binds return value to `r`
+    /// If None, implicit `ret` is used
+    pub ret_name: Option<Spanned<String>>,
     pub ret_ty: Spanned<Type>,
     pub pre: Option<Spanned<Expr>>,
     pub post: Option<Spanned<Expr>>,
@@ -101,4 +107,39 @@ pub struct FnDef {
 pub struct Param {
     pub name: Spanned<String>,
     pub ty: Spanned<Type>,
+}
+
+/// Attribute (v0.2)
+/// e.g., `@inline`, `@inline(always)`, `@decreases(n)`
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Attribute {
+    /// Simple attribute: @name
+    Simple {
+        name: Spanned<String>,
+        span: Span,
+    },
+    /// Attribute with arguments: @name(arg1, arg2, ...)
+    WithArgs {
+        name: Spanned<String>,
+        args: Vec<Spanned<Expr>>,
+        span: Span,
+    },
+}
+
+impl Attribute {
+    /// Get the attribute name
+    pub fn name(&self) -> &str {
+        match self {
+            Attribute::Simple { name, .. } => &name.node,
+            Attribute::WithArgs { name, .. } => &name.node,
+        }
+    }
+
+    /// Get the span of the attribute
+    pub fn span(&self) -> Span {
+        match self {
+            Attribute::Simple { span, .. } => *span,
+            Attribute::WithArgs { span, .. } => *span,
+        }
+    }
 }

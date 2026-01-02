@@ -224,15 +224,22 @@ impl Interpreter {
                 Ok(Value::Unit)
             }
 
-            // v0.5 Phase 3: Range expression
-            Expr::Range { start, end } => {
+            // v0.2: Range expression with kind
+            Expr::Range { start, end, kind } => {
                 let start_val = self.eval(start, env)?;
                 let end_val = self.eval(end, env)?;
                 match (&start_val, &end_val) {
-                    (Value::Int(s), Value::Int(e)) => Ok(Value::Range(*s, *e)),
+                    (Value::Int(s), Value::Int(e)) => {
+                        // For inclusive range (..=), add 1 to end for iteration purposes
+                        let effective_end = match kind {
+                            crate::ast::RangeKind::Inclusive => *e + 1,
+                            crate::ast::RangeKind::Exclusive => *e,
+                        };
+                        Ok(Value::Range(*s, effective_end))
+                    }
                     _ => Err(RuntimeError::type_error(
                         "integer",
-                        &format!("{} .. {}", start_val.type_name(), end_val.type_name()),
+                        &format!("{} {} {}", start_val.type_name(), kind, end_val.type_name()),
                     )),
                 }
             }

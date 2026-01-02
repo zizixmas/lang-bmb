@@ -68,10 +68,11 @@ pub enum Expr {
         body: Box<Spanned<Expr>>,
     },
 
-    /// Range expression: start..end (v0.5 Phase 3)
+    /// Range expression: start..end, start..<end, start..=end (v0.2)
     Range {
         start: Box<Spanned<Expr>>,
         end: Box<Spanned<Expr>>,
+        kind: RangeKind,
     },
 
     /// Function call
@@ -240,6 +241,26 @@ impl std::fmt::Display for UnOp {
         match self {
             UnOp::Neg => write!(f, "-"),
             UnOp::Not => write!(f, "not"),
+        }
+    }
+}
+
+/// Range kind for different range operators (v0.2)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RangeKind {
+    /// Exclusive/half-open range: start..<end or start..end (legacy)
+    /// Represents [start, end)
+    Exclusive,
+    /// Inclusive/closed range: start..=end
+    /// Represents [start, end]
+    Inclusive,
+}
+
+impl std::fmt::Display for RangeKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RangeKind::Exclusive => write!(f, "..<"),
+            RangeKind::Inclusive => write!(f, "..="),
         }
     }
 }

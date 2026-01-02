@@ -211,8 +211,8 @@ impl TypeChecker {
                 Ok(Type::Unit)
             }
 
-            // v0.5 Phase 3: Range expression
-            Expr::Range { start, end } => {
+            // v0.2: Range expression with kind
+            Expr::Range { start, end, .. } => {
                 let start_ty = self.infer(&start.node, start.span)?;
                 let end_ty = self.infer(&end.node, end.span)?;
 

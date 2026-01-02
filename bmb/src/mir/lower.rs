@@ -320,7 +320,7 @@ fn lower_expr(expr: &Spanned<Expr>, ctx: &mut LoweringContext) -> Operand {
             // Lower the iterator (expecting Range expression)
             // Extract start and end from range
             let (start_op, end_op) = match &iter.node {
-                Expr::Range { start, end } => {
+                Expr::Range { start, end, .. } => {
                     (lower_expr(start, ctx), lower_expr(end, ctx))
                 }
                 _ => {
@@ -545,6 +545,7 @@ mod tests {
     fn test_lower_simple_function() {
         let program = Program {
             items: vec![Item::FnDef(FnDef {
+                attributes: vec![],
                 visibility: Visibility::Private,
                 name: spanned("add".to_string()),
                 params: vec![
@@ -557,6 +558,7 @@ mod tests {
                         ty: spanned(Type::I64),
                     },
                 ],
+                ret_name: None,
                 ret_ty: spanned(Type::I64),
                 pre: None,
                 post: None,
@@ -588,6 +590,7 @@ mod tests {
     fn test_lower_if_expression() {
         let program = Program {
             items: vec![Item::FnDef(FnDef {
+                attributes: vec![],
                 visibility: Visibility::Private,
                 name: spanned("max".to_string()),
                 params: vec![
@@ -600,6 +603,7 @@ mod tests {
                         ty: spanned(Type::I64),
                     },
                 ],
+                ret_name: None,
                 ret_ty: spanned(Type::I64),
                 pre: None,
                 post: None,
@@ -633,9 +637,11 @@ mod tests {
     fn test_lower_let_binding() {
         let program = Program {
             items: vec![Item::FnDef(FnDef {
+                attributes: vec![],
                 visibility: Visibility::Private,
                 name: spanned("test".to_string()),
                 params: vec![],
+                ret_name: None,
                 ret_ty: spanned(Type::I64),
                 pre: None,
                 post: None,
@@ -662,9 +668,11 @@ mod tests {
     fn test_lower_string_literal() {
         let program = Program {
             items: vec![Item::FnDef(FnDef {
+                attributes: vec![],
                 visibility: Visibility::Private,
                 name: spanned("test".to_string()),
                 params: vec![],
+                ret_name: None,
                 ret_ty: spanned(Type::I64),
                 pre: None,
                 post: None,
@@ -690,9 +698,11 @@ mod tests {
     fn test_lower_while_loop() {
         let program = Program {
             items: vec![Item::FnDef(FnDef {
+                attributes: vec![],
                 visibility: Visibility::Private,
                 name: spanned("test".to_string()),
                 params: vec![],
+                ret_name: None,
                 ret_ty: spanned(Type::Unit),
                 pre: None,
                 post: None,

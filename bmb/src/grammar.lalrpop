@@ -55,6 +55,9 @@ extern {
         "->" => Token::Arrow,
         "=>" => Token::FatArrow,
         "_" => Token::Underscore,
+        // v0.2: Range operators
+        "..<" => Token::DotDotLt,
+        "..=" => Token::DotDotEq,
         ".." => Token::DotDot,
         "." => Token::Dot,
         "=" => Token::Eq,
@@ -68,6 +71,8 @@ extern {
         "]" => Token::RBracket,
         // v0.5 Phase 5: References
         "&" => Token::Ampersand,
+        // v0.2: Attributes
+        "@" => Token::At,
 
         "+" => Token::Plus,
         "-" => Token::Minus,
@@ -100,6 +105,22 @@ Item: Item = {
 Visibility: Visibility = {
     "pub" => Visibility::Public,
     => Visibility::Private,
+};
+
+// Attributes (v0.2)
+// Note: Attr+ requires at least one attribute, used to avoid LALRPOP shift/reduce conflicts
+Attr: Attribute = {
+    // Simple attribute: @name
+    <l:@L> "@" <name:Ident> <r:@R> => Attribute::Simple {
+        name,
+        span: Span::new(l, r),
+    },
+    // Attribute with args: @name(arg1, arg2, ...)
+    <l:@L> "@" <name:Ident> "(" <args:Args> ")" <r:@R> => Attribute::WithArgs {
+        name,
+        args,
+        span: Span::new(l, r),
+    },
 };
 
 // Use statement (v0.5 Phase 4)
@@ -182,15 +203,66 @@ TypeList: Vec<Spanned<Type>> = {
     },
 };
 
-// Function definition
+// Function definition (v0.2: supports both `-> Type` and `-> name: Type`)
 FnDef: FnDef = {
+    // v0.2: With attributes and explicit ret binding: @attr fn name() -> r: Type
+    <l:@L> <attrs:Attr+> <vis:Visibility> "fn" <name:Ident> "(" <params:Params> ")" "->" <ret_name:Ident> ":" <ret_ty:SpannedType>
+    <pre:("pre" <SpannedExpr>)?>
+    <post:("post" <SpannedExpr>)?>
+    "=" <body:SpannedExpr> ";" <r:@R> => FnDef {
+        attributes: attrs,
+        visibility: vis,
+        name,
+        params,
+        ret_name: Some(ret_name),
+        ret_ty,
+        pre,
+        post,
+        body,
+        span: Span::new(l, r),
+    },
+    // v0.2: With attributes, legacy ret: @attr fn name() -> Type
+    <l:@L> <attrs:Attr+> <vis:Visibility> "fn" <name:Ident> "(" <params:Params> ")" "->" <ret_ty:SpannedType>
+    <pre:("pre" <SpannedExpr>)?>
+    <post:("post" <SpannedExpr>)?>
+    "=" <body:SpannedExpr> ";" <r:@R> => FnDef {
+        attributes: attrs,
+        visibility: vis,
+        name,
+        params,
+        ret_name: None,
+        ret_ty,
+        pre,
+        post,
+        body,
+        span: Span::new(l, r),
+    },
+    // Without attributes, explicit ret binding: fn name() -> r: Type
+    <l:@L> <vis:Visibility> "fn" <name:Ident> "(" <params:Params> ")" "->" <ret_name:Ident> ":" <ret_ty:SpannedType>
+    <pre:("pre" <SpannedExpr>)?>
+    <post:("post" <SpannedExpr>)?>
+    "=" <body:SpannedExpr> ";" <r:@R> => FnDef {
+        attributes: vec![],
+        visibility: vis,
+        name,
+        params,
+        ret_name: Some(ret_name),
+        ret_ty,
+        pre,
+        post,
+        body,
+        span: Span::new(l, r),
+    },
+    // Without attributes, legacy ret: fn name() -> Type
     <l:@L> <vis:Visibility> "fn" <name:Ident> "(" <params:Params> ")" "->" <ret_ty:SpannedType>
     <pre:("pre" <SpannedExpr>)?>
     <post:("post" <SpannedExpr>)?>
     "=" <body:SpannedExpr> ";" <r:@R> => FnDef {
+        attributes: vec![],
         visibility: vis,
         name,
         params,
+        ret_name: None,
         ret_ty,
         pre,
         post,
@@ -345,11 +417,25 @@ PatternBindings: Vec<Spanned<String>> = {
     },
 };
 
-// Range expression (v0.5 Phase 3) - lower precedence than comparison
+// Range expression (v0.2) - lower precedence than comparison
+// ..<  = exclusive/half-open [start, end)
+// ..=  = inclusive/closed [start, end]
+// ..   = legacy, treated as exclusive (backward compat)
 RangeExpr: Expr = {
+    <start:SpannedAddExpr> "..<" <end:SpannedAddExpr> => Expr::Range {
+        start: Box::new(start),
+        end: Box::new(end),
+        kind: RangeKind::Exclusive,
+    },
+    <start:SpannedAddExpr> "..=" <end:SpannedAddExpr> => Expr::Range {
+        start: Box::new(start),
+        end: Box::new(end),
+        kind: RangeKind::Inclusive,
+    },
     <start:SpannedAddExpr> ".." <end:SpannedAddExpr> => Expr::Range {
         start: Box::new(start),
         end: Box::new(end),
+        kind: RangeKind::Exclusive, // legacy: treat as exclusive
     },
     OrExpr,
 };
