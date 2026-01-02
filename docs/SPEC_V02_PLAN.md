@@ -254,7 +254,22 @@ pub enum Type {
 - Type::Refined 핸들러 (lower.rs, translator.rs, types/mod.rs, main.rs)
 - 테스트 케이스: `016_inline_refinement.bmb`
 
-### Week 7-8: 마이그레이션
+### Week 7: 검증 시스템 통합 ✅ 완료
+
+| 일 | 작업 | 파일 | 상태 |
+|----|------|------|------|
+| 1-2 | NamedContract 검증 통합 | verify/contract.rs | ✅ |
+| 3-4 | 정제 타입 제약조건 검증 | verify/contract.rs, translator.rs | ✅ |
+| 5-6 | 검증 테스트 케이스 작성 | verify/contract.rs (tests) | ✅ |
+
+**구현 완료 (2026-01-02)**:
+- `where {}` 블록의 NamedContract가 SMT 검증에 통합
+- `FunctionReport`에 `contract_results`, `refinement_results` 필드 추가
+- 반환 타입 정제 (`-> i64{it >= 0}`) 검증 지원
+- `ret_name` 명시적 바인딩의 SMT 변수 선언
+- 단위 테스트 6개 추가 (총 33개 테스트)
+
+### Week 8: 마이그레이션
 
 | 일 | 작업 | 파일 |
 |----|------|------|
@@ -299,13 +314,14 @@ fn clamp(x: i64, lo: i64, hi: i64{>= lo}) -> r: i64{>= lo, <= hi}
 
 | 파일 | 변경 유형 | 설명 |
 |------|----------|------|
-| `bmb/src/lexer/token.rs` | Modify | `..<`, `..=`, `where`, `@` 토큰 |
+| `bmb/src/lexer/token.rs` | Modify | `..<`, `..=`, `where`, `@`, `it` 토큰 |
 | `bmb/src/grammar.lalrpop` | Modify | 모든 새 문법 규칙 |
 | `bmb/src/ast/mod.rs` | Modify | NamedContract, Attribute |
-| `bmb/src/ast/expr.rs` | Modify | RangeKind, StateKind, StateRef |
+| `bmb/src/ast/expr.rs` | Modify | RangeKind, StateKind, StateRef, It |
 | `bmb/src/ast/types.rs` | Modify | Type::Refined |
 | `bmb/src/types/mod.rs` | Modify | 정제 타입 체크 |
-| `bmb/src/smt/translator.rs` | Modify | 새 AST 노드 번역 |
+| `bmb/src/smt/translator.rs` | Modify | 새 AST 노드 번역, ret_name 선언 |
+| `bmb/src/verify/contract.rs` | Modify | NamedContract/정제타입 검증 통합 |
 | `bmb/src/error/mod.rs` | Modify | 이름 있는 계약 에러 |
 | `stdlib/**/*.bmb` | Migrate | 새 문법 적용 |
 | `tests/**/*.bmb` | Migrate | 새 문법 테스트 |
@@ -322,8 +338,8 @@ fn clamp(x: i64, lo: i64, hi: i64{>= lo}) -> r: i64{>= lo, <= hi}
 - [x] `it` 키워드로 정제값 자기참조 ✅
 - [x] `@inline`, `@pure`, `@decreases`, `@invariant` 속성 파싱 ✅
 - [ ] stdlib 140+ 함수 마이그레이션 완료
-- [x] 기존 테스트 + 새 테스트 통과 ✅
-- [ ] Z3 기본 통합 작동
+- [x] 기존 테스트 + 새 테스트 통과 ✅ (33개)
+- [x] Z3 검증 시스템 통합 ✅ (where 블록, 정제 타입)
 
 ---
 
@@ -338,3 +354,4 @@ fn clamp(x: i64, lo: i64, hi: i64{>= lo}) -> r: i64{>= lo, <= hi}
 *Last Updated: 2026-01-02*
 *Week 1-2 구현 완료: 2026-01-02*
 *Week 3-6 구현 완료: 2026-01-02*
+*Week 7 검증 시스템 통합 완료: 2026-01-02*

@@ -110,6 +110,12 @@ impl SmtTranslator {
         let ret_sort = Self::type_to_sort(&func.ret_ty.node);
         generator.declare_var("__ret__", ret_sort);
         self.var_types.insert("__ret__".to_string(), ret_sort);
+
+        // v0.2: Also declare named return binding if present (e.g., -> r: i64)
+        if let Some(ret_name) = &func.ret_name {
+            generator.declare_var(&ret_name.node, ret_sort);
+            self.var_types.insert(ret_name.node.clone(), ret_sort);
+        }
     }
 
     /// Convert BMB Type to SMT Sort
