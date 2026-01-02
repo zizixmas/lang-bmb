@@ -841,16 +841,38 @@ bootstrap/
 
 **Note**: 원래 계획된 표준 라이브러리 확장(io, fs, net, time)은 OS FFI가 필요하여 bootstrap 범위를 벗어남. v0.11+ Rust FFI 통합 시 추가 예정.
 
-### v0.10.3 - End-to-End 파이프라인 + 마이그레이션 도구
+### v0.10.3 - End-to-End 파이프라인 ✅ 완료
 
-```bash
-gotgan migrate --analyze my_crate     # Rust crate 분석
-gotgan migrate --generate my_crate    # BMB 스켈레톤 생성
+```
+bootstrap/
+├── lexer.bmb       # ✅ 완료 (8KB)
+├── parser.bmb      # ✅ 완료 (22KB)
+├── parser_ast.bmb  # ✅ 완료 (21KB)
+├── parser_test.bmb # ✅ 완료 (25KB)
+├── types.bmb       # ✅ 완료 (15KB)
+├── mir.bmb         # ✅ 완료 (18KB)
+├── lowering.bmb    # ✅ 완료 (25KB)
+├── pipeline.bmb    # ✅ 완료 (25KB) - 신규
+└── README.md
 ```
 
-**특징**:
-- 점진적 마이그레이션 (함수 단위)
-- 계약 추론 (Rust 코드에서 pre/post 조건)
+**pipeline.bmb 구현 내용**:
+- 통합 Source → AST → MIR 파이프라인 데모
+- S-expression AST 생성 (parser_ast.bmb 패턴)
+- MIR 텍스트 생성 (lowering.bmb 패턴)
+- 표현식 레벨 컴파일: `compile_expr(src) -> MIR text`
+- 14개 테스트 통과
+
+**지원 컴파일:**
+```bmb
+compile_expr("42")         →  "%_t0 = const I:42"
+compile_expr("a + b")      →  "%_t0 = + %a, %b"
+compile_expr("a * b + c")  →  "%_t0 = * %a, %b|%_t1 = + %_t0, %c"
+compile_expr("-x")         →  "%_t0 = neg %x"
+compile_expr("not b")      →  "%_t0 = not %b"
+```
+
+**Note**: gotgan migrate (Rust crate 분석/마이그레이션)는 Rust 전용 도구로 v0.11+ 계획.
 
 ---
 
@@ -987,8 +1009,8 @@ v0.9.5 → v0.9.6: benchmark-bmb (📈 적당) ✅
 v0.9.6 → v0.10.0: 타입 체커 BMB (📈 적당) ✅
 v0.10.0 → v0.10.1: MIR 기초 정의 (📈 적당) ✅
 v0.10.1 → v0.10.2: AST→MIR Lowering (📈 적당) ✅
-v0.10.2 → v0.10.3: End-to-End 파이프라인 (📈 적당)
-v0.11.x: BMB 재작성 완성 (📈 적당)
+v0.10.2 → v0.10.3: End-to-End 파이프라인 (📈 적당) ✅
+v0.10.x → v0.11.x: BMB 재작성 완성 (📈 적당)
 ```
 
 ---
@@ -1001,7 +1023,7 @@ v0.6: 표준 라이브러리 기초 (100+개 함수) ✅
 v0.7: 도구 기초 (fmt, lsp, test, action-bmb) ✅
 v0.8: 패키지 기초 (곳간) ✅
 v0.9: 생태계 (에디터, 원격 패키지, playground, site, benchmark) ✅
-v0.10: Bootstrap 진행 (타입체커 ✅, MIR기초 ✅, Lowering ✅) 🔄
+v0.10: Bootstrap 진행 (타입체커 ✅, MIR기초 ✅, Lowering ✅, Pipeline ✅) 🔄
 v0.11: Bootstrap 완성 (Stage 2, 도구 BMB 재작성)
 v1.0: 안정성 약속 + 검증 완료
 

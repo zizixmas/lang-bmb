@@ -198,6 +198,48 @@ AST to MIR lowering (transformation) module.
 999 (end marker)
 ```
 
+### pipeline.bmb (25KB) - v0.10.3
+End-to-end compilation pipeline demonstrating Source → AST → MIR.
+
+**Features:**
+- Integrated parsing and lowering from single source
+- S-expression AST generation (from parser_ast.bmb patterns)
+- MIR text generation (from lowering.bmb patterns)
+- Expression-level compilation: `compile_expr(src) -> MIR text`
+- Full pipeline test suite
+
+**Architecture:**
+```
+Source (BMB) → Lexer (Tokens) → Parser (S-expr AST) → Lowering (MIR Text)
+```
+
+**Compilation Examples:**
+```bmb
+-- Integer literal
+compile_expr("42")      →  "%_t0 = const I:42"
+
+-- Binary operation
+compile_expr("a + b")   →  "%_t0 = + %a, %b"
+
+-- Nested operations
+compile_expr("a * b + c")  →  "%_t0 = * %a, %b|%_t1 = + %_t0, %c"
+
+-- Unary operations
+compile_expr("-x")      →  "%_t0 = neg %x"
+compile_expr("not b")   →  "%_t0 = not %b"
+```
+
+**Test output:**
+```
+777 (start marker)
+5  (parsing tests)
+5  (expression pipeline tests)
+4  (complex expression tests)
+888 (separator)
+14 (total passed)
+999 (end marker)
+```
+
 ## Token Encoding
 
 Tokens are encoded as a single i64 value:
@@ -238,6 +280,7 @@ cargo run --release --bin bmb -- check bootstrap/parser_test.bmb
 cargo run --release --bin bmb -- check bootstrap/types.bmb
 cargo run --release --bin bmb -- check bootstrap/mir.bmb
 cargo run --release --bin bmb -- check bootstrap/lowering.bmb
+cargo run --release --bin bmb -- check bootstrap/pipeline.bmb
 
 # Run tests
 cargo run --release --bin bmb -- run bootstrap/lexer.bmb
@@ -247,6 +290,7 @@ cargo run --release --bin bmb -- run bootstrap/parser_test.bmb
 cargo run --release --bin bmb -- run bootstrap/types.bmb
 cargo run --release --bin bmb -- run bootstrap/mir.bmb
 cargo run --release --bin bmb -- run bootstrap/lowering.bmb
+cargo run --release --bin bmb -- run bootstrap/pipeline.bmb
 ```
 
 ## Limitations
@@ -264,6 +308,6 @@ cargo run --release --bin bmb -- run bootstrap/lowering.bmb
 - [ ] Self-compilation of the bootstrap
 - [x] MIR foundation (v0.10.1) ✅
 - [x] AST → MIR lowering (v0.10.2) ✅
-- [ ] End-to-end pipeline: source → AST → MIR → text output (v0.10.3)
-- [ ] Struct/Enum lowering support (v0.10.3+)
+- [x] End-to-end pipeline: source → AST → MIR → text output (v0.10.3) ✅
+- [ ] Struct/Enum lowering support (v0.11+)
 - [ ] Optimization passes in BMB (v0.11+)
