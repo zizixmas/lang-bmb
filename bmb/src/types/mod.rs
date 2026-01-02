@@ -451,6 +451,19 @@ impl TypeChecker {
                 let receiver_ty = self.infer(&receiver.node, receiver.span)?;
                 self.check_method_call(&receiver_ty, method, args, span)
             }
+
+            // v0.2: State references for contracts
+            Expr::StateRef { expr, .. } => {
+                // The type of a state reference is the same as the underlying expression
+                self.infer(&expr.node, expr.span)
+            }
+
+            // v0.2: Refinement self-reference (type depends on context)
+            // When used in T{constraints}, 'it' has type T
+            Expr::It => {
+                // For now, return a placeholder type; actual type comes from context
+                Ok(Type::I64)
+            }
         }
     }
 

@@ -38,6 +38,9 @@ extern {
         "pub" => Token::Pub,
         "use" => Token::Use,
         "mod" => Token::Mod,
+        // v0.2: Contract system
+        "where" => Token::Where,
+        "it" => Token::It,
 
         "i32" => Token::TyI32,
         "i64" => Token::TyI64,
@@ -203,12 +206,46 @@ TypeList: Vec<Spanned<Type>> = {
     },
 };
 
-// Function definition (v0.2: supports both `-> Type` and `-> name: Type`)
+// Named contracts in where {} block (v0.2)
+NamedContracts: Vec<NamedContract> = {
+    <v:(<NamedContract> ",")*> <e:NamedContract?> => match e {
+        None => v,
+        Some(e) => {
+            let mut v = v;
+            v.push(e);
+            v
+        }
+    },
+};
+
+NamedContract: NamedContract = {
+    // Named contract: name: condition
+    <l:@L> <name:Ident> ":" <cond:SpannedExpr> <r:@R> => NamedContract {
+        name: Some(name),
+        condition: cond,
+        span: Span::new(l, r),
+    },
+    // Anonymous contract: just condition
+    <l:@L> <cond:SpannedExpr> <r:@R> => NamedContract {
+        name: None,
+        condition: cond,
+        span: Span::new(l, r),
+    },
+};
+
+// Contract clause options (legacy pre/post OR new where block)
+ContractClause: (Option<Spanned<Expr>>, Option<Spanned<Expr>>, Vec<NamedContract>) = {
+    // v0.2: where {} block (new style)
+    "where" "{" <contracts:NamedContracts> "}" => (None, None, contracts),
+    // Legacy: pre/post (deprecated)
+    <pre:("pre" <SpannedExpr>)?> <post:("post" <SpannedExpr>)?> => (pre, post, vec![]),
+};
+
+// Function definition (v0.2: supports where {}, pre/post, ret binding)
 FnDef: FnDef = {
     // v0.2: With attributes and explicit ret binding: @attr fn name() -> r: Type
     <l:@L> <attrs:Attr+> <vis:Visibility> "fn" <name:Ident> "(" <params:Params> ")" "->" <ret_name:Ident> ":" <ret_ty:SpannedType>
-    <pre:("pre" <SpannedExpr>)?>
-    <post:("post" <SpannedExpr>)?>
+    <clause:ContractClause>
     "=" <body:SpannedExpr> ";" <r:@R> => FnDef {
         attributes: attrs,
         visibility: vis,
@@ -216,15 +253,15 @@ FnDef: FnDef = {
         params,
         ret_name: Some(ret_name),
         ret_ty,
-        pre,
-        post,
+        pre: clause.0,
+        post: clause.1,
+        contracts: clause.2,
         body,
         span: Span::new(l, r),
     },
     // v0.2: With attributes, legacy ret: @attr fn name() -> Type
     <l:@L> <attrs:Attr+> <vis:Visibility> "fn" <name:Ident> "(" <params:Params> ")" "->" <ret_ty:SpannedType>
-    <pre:("pre" <SpannedExpr>)?>
-    <post:("post" <SpannedExpr>)?>
+    <clause:ContractClause>
     "=" <body:SpannedExpr> ";" <r:@R> => FnDef {
         attributes: attrs,
         visibility: vis,
@@ -232,15 +269,15 @@ FnDef: FnDef = {
         params,
         ret_name: None,
         ret_ty,
-        pre,
-        post,
+        pre: clause.0,
+        post: clause.1,
+        contracts: clause.2,
         body,
         span: Span::new(l, r),
     },
     // Without attributes, explicit ret binding: fn name() -> r: Type
     <l:@L> <vis:Visibility> "fn" <name:Ident> "(" <params:Params> ")" "->" <ret_name:Ident> ":" <ret_ty:SpannedType>
-    <pre:("pre" <SpannedExpr>)?>
-    <post:("post" <SpannedExpr>)?>
+    <clause:ContractClause>
     "=" <body:SpannedExpr> ";" <r:@R> => FnDef {
         attributes: vec![],
         visibility: vis,
@@ -248,15 +285,15 @@ FnDef: FnDef = {
         params,
         ret_name: Some(ret_name),
         ret_ty,
-        pre,
-        post,
+        pre: clause.0,
+        post: clause.1,
+        contracts: clause.2,
         body,
         span: Span::new(l, r),
     },
     // Without attributes, legacy ret: fn name() -> Type
     <l:@L> <vis:Visibility> "fn" <name:Ident> "(" <params:Params> ")" "->" <ret_ty:SpannedType>
-    <pre:("pre" <SpannedExpr>)?>
-    <post:("post" <SpannedExpr>)?>
+    <clause:ContractClause>
     "=" <body:SpannedExpr> ";" <r:@R> => FnDef {
         attributes: vec![],
         visibility: vis,
@@ -264,8 +301,9 @@ FnDef: FnDef = {
         params,
         ret_name: None,
         ret_ty,
-        pre,
-        post,
+        pre: clause.0,
+        post: clause.1,
+        contracts: clause.2,
         body,
         span: Span::new(l, r),
     },
@@ -292,7 +330,37 @@ SpannedType: Spanned<Type> = {
     <l:@L> <t:Type> <r:@R> => Spanned::new(t, Span::new(l, r)),
 };
 
+// Refinement constraint list for T{constraints}
+RefinementConstraints: Vec<Spanned<Expr>> = {
+    <v:(<SpannedExpr> ",")*> <e:SpannedExpr?> => match e {
+        None => v,
+        Some(e) => {
+            let mut v = v;
+            v.push(e);
+            v
+        }
+    },
+};
+
 Type: Type = {
+    // v0.2: Refinement types (only for primitive types to avoid ambiguity)
+    "i32" "{" <constraints:RefinementConstraints> "}" => Type::Refined {
+        base: Box::new(Type::I32),
+        constraints,
+    },
+    "i64" "{" <constraints:RefinementConstraints> "}" => Type::Refined {
+        base: Box::new(Type::I64),
+        constraints,
+    },
+    "f64" "{" <constraints:RefinementConstraints> "}" => Type::Refined {
+        base: Box::new(Type::F64),
+        constraints,
+    },
+    "bool" "{" <constraints:RefinementConstraints> "}" => Type::Refined {
+        base: Box::new(Type::Bool),
+        constraints,
+    },
+    // Plain types (without refinement)
     "i32" => Type::I32,
     "i64" => Type::I64,
     "f64" => Type::F64,
@@ -555,8 +623,18 @@ SpannedUnaryExpr: Spanned<Expr> = {
     <l:@L> <e:UnaryExpr> <r:@R> => Spanned::new(e, Span::new(l, r)),
 };
 
-// Postfix expression (method calls, field access, index)
+// Postfix expression (method calls, field access, index, state refs)
 PostfixExpr: Expr = {
+    // v0.2: State reference: expr.pre (pre-state in contracts)
+    <e:SpannedPostfixExpr> "." "pre" => Expr::StateRef {
+        expr: Box::new(e),
+        state: StateKind::Pre,
+    },
+    // v0.2: State reference: expr.post (post-state in contracts)
+    <e:SpannedPostfixExpr> "." "post" => Expr::StateRef {
+        expr: Box::new(e),
+        state: StateKind::Post,
+    },
     // v0.5 Phase 8: Method call: expr.method(args) - must be before field access
     <e:SpannedPostfixExpr> "." <method:RawIdent> "(" <args:Args> ")" => Expr::MethodCall {
         receiver: Box::new(e),
@@ -619,6 +697,7 @@ Primary: Expr = {
     "true" => Expr::BoolLit(true),
     "false" => Expr::BoolLit(false),
     "ret" => Expr::Ret,
+    "it" => Expr::It,
     "(" ")" => Expr::Unit,
     "(" <Expr> ")",
     <n:RawIdent> => Expr::Var(n),

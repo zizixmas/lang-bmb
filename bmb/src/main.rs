@@ -545,6 +545,14 @@ fn format_type(ty: &bmb::ast::Type) -> String {
         Type::Array(elem, size) => format!("[{}; {}]", format_type(elem), size),
         Type::Ref(inner) => format!("&{}", format_type(inner)),
         Type::RefMut(inner) => format!("&mut {}", format_type(inner)),
+        // v0.2: Refined types display base{constraints}
+        Type::Refined { base, constraints } => {
+            let constraint_str = constraints.iter()
+                .map(|c| format_expr(&c.node))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("{}{{{}}}", format_type(base), constraint_str)
+        }
     }
 }
 
@@ -559,6 +567,7 @@ fn format_expr(expr: &bmb::ast::Expr) -> String {
         Expr::Unit => "()".to_string(),
         Expr::Var(name) => name.clone(),
         Expr::Ret => "ret".to_string(),
+        Expr::It => "it".to_string(),
 
         Expr::Binary { left, op, right } => {
             let op_str = match op {
@@ -699,6 +708,10 @@ fn format_expr(expr: &bmb::ast::Expr) -> String {
 
         Expr::Deref(inner) => {
             format!("*{}", format_expr(&inner.node))
+        }
+
+        Expr::StateRef { expr, state } => {
+            format!("{}{}", format_expr(&expr.node), state)
         }
     }
 }

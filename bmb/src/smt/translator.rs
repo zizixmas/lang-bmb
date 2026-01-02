@@ -127,6 +127,8 @@ impl SmtTranslator {
             Type::Ref(_) | Type::RefMut(_) => SmtSort::Int,
             // v0.5 Phase 6: Arrays as Int (simplified)
             Type::Array(_, _) => SmtSort::Int,
+            // v0.2: Refined types use base type sort
+            Type::Refined { base, .. } => Self::type_to_sort(base),
         }
     }
 
@@ -275,6 +277,21 @@ impl SmtTranslator {
             Expr::MethodCall { .. } => {
                 Err(TranslateError::UnsupportedFeature("method call".to_string()))
             }
+
+            // v0.2: State references for contracts
+            Expr::StateRef { expr, state } => {
+                let base = self.translate_expr(&expr.node)?;
+                // Append state suffix to create unique SMT variable
+                // e.g., x.pre -> x_pre, x.post -> x_post
+                let suffix = match state {
+                    crate::ast::StateKind::Pre => "_pre",
+                    crate::ast::StateKind::Post => "_post",
+                };
+                Ok(format!("{}{}", base, suffix))
+            }
+
+            // v0.2: Refinement self-reference
+            Expr::It => Ok("__it__".to_string()),
         }
     }
 

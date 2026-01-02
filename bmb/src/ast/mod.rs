@@ -83,6 +83,20 @@ pub struct EnumVariant {
     pub fields: Vec<Spanned<Type>>,
 }
 
+/// Named contract (v0.2)
+/// A contract with an optional name for better error messages
+/// e.g., `sorted_input: forall(i in 0..<len(arr)-1): arr[i] <= arr[i+1]`
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NamedContract {
+    /// Optional name for the contract (for error messages)
+    /// e.g., "sorted_input", "found_correct"
+    pub name: Option<Spanned<String>>,
+    /// The contract condition expression
+    pub condition: Spanned<Expr>,
+    /// Span of the entire contract
+    pub span: Span,
+}
+
 /// Function definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FnDef {
@@ -96,8 +110,13 @@ pub struct FnDef {
     /// If None, implicit `ret` is used
     pub ret_name: Option<Spanned<String>>,
     pub ret_ty: Spanned<Type>,
+    /// Legacy pre-condition (deprecated in v0.2, use contracts)
     pub pre: Option<Spanned<Expr>>,
+    /// Legacy post-condition (deprecated in v0.2, use contracts)
     pub post: Option<Spanned<Expr>>,
+    /// Named contracts in where {} block (v0.2)
+    /// Replaces pre/post with named, structured contracts
+    pub contracts: Vec<NamedContract>,
     pub body: Spanned<Expr>,
     pub span: Span,
 }

@@ -1,9 +1,10 @@
 //! Type AST nodes
 
+use super::{Spanned, Expr};
 use serde::{Deserialize, Serialize};
 
 /// Type representation
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Type {
     /// 32-bit signed integer
     I32,
@@ -37,7 +38,49 @@ pub enum Type {
     RefMut(Box<Type>),
     /// Fixed-size array type (v0.5 Phase 6): [T; N]
     Array(Box<Type>, usize),
+    /// Inline refinement type (v0.2): T{constraints}
+    /// e.g., i64{!= 0}, i64{>= lo, <= hi}
+    /// The constraints are expressions relative to the refined value
+    Refined {
+        base: Box<Type>,
+        constraints: Vec<Spanned<Expr>>,
+    },
 }
+
+/// Manual PartialEq implementation for Type
+/// Ignores refinement constraints for type equality checks (structural equality)
+impl PartialEq for Type {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Type::I32, Type::I32) => true,
+            (Type::I64, Type::I64) => true,
+            (Type::F64, Type::F64) => true,
+            (Type::Bool, Type::Bool) => true,
+            (Type::Unit, Type::Unit) => true,
+            (Type::String, Type::String) => true,
+            (Type::Range(a), Type::Range(b)) => a == b,
+            (Type::Named(a), Type::Named(b)) => a == b,
+            (Type::Struct { name: n1, fields: f1 }, Type::Struct { name: n2, fields: f2 }) => {
+                n1 == n2 && f1 == f2
+            }
+            (Type::Enum { name: n1, variants: v1 }, Type::Enum { name: n2, variants: v2 }) => {
+                n1 == n2 && v1 == v2
+            }
+            (Type::Ref(a), Type::Ref(b)) => a == b,
+            (Type::RefMut(a), Type::RefMut(b)) => a == b,
+            (Type::Array(t1, s1), Type::Array(t2, s2)) => t1 == t2 && s1 == s2,
+            // Refined types are equal if base types are equal
+            // (constraints are semantic, not structural)
+            (Type::Refined { base: b1, .. }, Type::Refined { base: b2, .. }) => b1 == b2,
+            (Type::Refined { base, .. }, other) | (other, Type::Refined { base, .. }) => {
+                base.as_ref() == other
+            }
+            _ => false,
+        }
+    }
+}
+
+impl Eq for Type {}
 
 impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -55,6 +98,16 @@ impl std::fmt::Display for Type {
             Type::Ref(inner) => write!(f, "&{inner}"),
             Type::RefMut(inner) => write!(f, "&mut {inner}"),
             Type::Array(elem, size) => write!(f, "[{elem}; {size}]"),
+            Type::Refined { base, constraints } => {
+                write!(f, "{}{{", base)?;
+                for (i, _) in constraints.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "<constraint>")?;
+                }
+                write!(f, "}}")
+            }
         }
     }
 }

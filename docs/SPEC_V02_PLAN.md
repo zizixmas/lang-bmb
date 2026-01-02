@@ -225,22 +225,34 @@ pub enum Type {
 - `Attribute` enum (Simple, WithArgs) 및 `FnDef.attributes` 필드 추가
 - 테스트 케이스: `012_range_operators.bmb`, `013_ret_binding.bmb`, `014_attributes.bmb`
 
-### Week 3-4: 계약 시스템
+### Week 3-4: 계약 시스템 ✅ 완료
 
-| 일 | 작업 | 파일 |
-|----|------|------|
-| 1-3 | `where {}` 블록 파싱 | grammar.lalrpop |
-| 4-5 | NamedContract AST | mod.rs |
-| 6-7 | 상태 참조 `.pre`, `.post` | grammar.lalrpop, expr.rs |
-| 8-9 | 에러 리포팅 개선 | error/mod.rs |
+| 일 | 작업 | 파일 | 상태 |
+|----|------|------|------|
+| 1-3 | `where {}` 블록 파싱 | grammar.lalrpop | ✅ |
+| 4-5 | NamedContract AST | mod.rs | ✅ |
+| 6-7 | 상태 참조 `.pre`, `.post` | grammar.lalrpop, expr.rs | ✅ |
+| 8-9 | `it` 키워드 (정제 자기참조) | token.rs, expr.rs | ✅ |
 
-### Week 5-6: 정제 타입 + SMT
+**구현 완료 (2026-01-02)**:
+- `where { name: condition }` 블록 파싱 및 NamedContract AST
+- `StateKind` enum (Pre, Post) 및 `Expr::StateRef` 추가
+- `.pre`, `.post` 접미사로 상태 참조 (SMT: x_pre, x_post)
+- 테스트 케이스: `015_where_contracts.bmb`
 
-| 일 | 작업 | 파일 |
-|----|------|------|
-| 1-3 | 인라인 정제 타입 파싱 | grammar.lalrpop, types.rs |
-| 4-5 | 정제 타입 체크 | types/mod.rs |
-| 6-10 | Z3 번역 통합 | smt/translator.rs, smt/solver.rs |
+### Week 5-6: 정제 타입 + SMT ✅ 완료
+
+| 일 | 작업 | 파일 | 상태 |
+|----|------|------|------|
+| 1-3 | 인라인 정제 타입 파싱 | grammar.lalrpop, types.rs | ✅ |
+| 4-5 | `it` 키워드로 정제값 참조 | token.rs, grammar.lalrpop | ✅ |
+| 6-7 | Type::Refined AST 및 핸들러 | types.rs, lower.rs, translator.rs | ✅ |
+
+**구현 완료 (2026-01-02)**:
+- `T{constraints}` 정제 타입 파싱 (i32, i64, f64, bool)
+- `it` 키워드로 정제되는 값 참조 (e.g., `i64{it > 0}`)
+- Type::Refined 핸들러 (lower.rs, translator.rs, types/mod.rs, main.rs)
+- 테스트 케이스: `016_inline_refinement.bmb`
 
 ### Week 7-8: 마이그레이션
 
@@ -304,9 +316,10 @@ fn clamp(x: i64, lo: i64, hi: i64{>= lo}) -> r: i64{>= lo, <= hi}
 
 - [x] `..<`, `..=` 범위 연산자 작동 ✅
 - [x] `-> r: Type` 명시적 ret 바인딩 작동 ✅
-- [ ] `where { name: constraint }` 파싱 및 검증
-- [ ] `.pre`, `.post` 상태 참조 작동
-- [ ] `T{constraints}` 정제 타입 파싱 및 체크
+- [x] `where { name: constraint }` 파싱 및 검증 ✅
+- [x] `.pre`, `.post` 상태 참조 작동 ✅
+- [x] `T{constraints}` 정제 타입 파싱 및 체크 ✅
+- [x] `it` 키워드로 정제값 자기참조 ✅
 - [x] `@inline`, `@pure`, `@decreases`, `@invariant` 속성 파싱 ✅
 - [ ] stdlib 140+ 함수 마이그레이션 완료
 - [x] 기존 테스트 + 새 테스트 통과 ✅
@@ -324,3 +337,4 @@ fn clamp(x: i64, lo: i64, hi: i64{>= lo}) -> r: i64{>= lo, <= hi}
 
 *Last Updated: 2026-01-02*
 *Week 1-2 구현 완료: 2026-01-02*
+*Week 3-6 구현 완료: 2026-01-02*

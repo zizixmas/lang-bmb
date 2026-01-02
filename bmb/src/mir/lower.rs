@@ -453,6 +453,16 @@ fn lower_expr(expr: &Spanned<Expr>, ctx: &mut LoweringContext) -> Operand {
             // TODO: Full method call support with runtime dispatch
             Operand::Constant(Constant::Int(0))
         }
+
+        // v0.2: State references (handled during contract verification, not MIR)
+        Expr::StateRef { expr, .. } => {
+            // During MIR lowering, we just evaluate the expression
+            // The .pre/.post semantics are handled by the SMT translator
+            lower_expr(expr, ctx)
+        }
+
+        // v0.2: Refinement self-reference (translated to __it__ variable)
+        Expr::It => Operand::Place(Place::new("__it__")),
     }
 }
 
@@ -488,6 +498,8 @@ fn ast_type_to_mir(ty: &Type) -> MirType {
         Type::Ref(_) | Type::RefMut(_) => MirType::I64,
         // v0.5 Phase 6: Arrays are pointers to data
         Type::Array(_, _) => MirType::I64,
+        // v0.2: Refined types use base type
+        Type::Refined { base, .. } => ast_type_to_mir(base),
     }
 }
 
@@ -562,6 +574,7 @@ mod tests {
                 ret_ty: spanned(Type::I64),
                 pre: None,
                 post: None,
+                contracts: vec![],
                 body: spanned(Expr::Binary {
                     left: Box::new(spanned(Expr::Var("a".to_string()))),
                     op: BinOp::Add,
@@ -607,6 +620,7 @@ mod tests {
                 ret_ty: spanned(Type::I64),
                 pre: None,
                 post: None,
+                contracts: vec![],
                 body: spanned(Expr::If {
                     cond: Box::new(spanned(Expr::Binary {
                         left: Box::new(spanned(Expr::Var("a".to_string()))),
@@ -645,6 +659,7 @@ mod tests {
                 ret_ty: spanned(Type::I64),
                 pre: None,
                 post: None,
+                contracts: vec![],
                 body: spanned(Expr::Let {
                     name: "x".to_string(),
                     mutable: false,
@@ -676,6 +691,7 @@ mod tests {
                 ret_ty: spanned(Type::I64),
                 pre: None,
                 post: None,
+                contracts: vec![],
                 body: spanned(Expr::Let {
                     name: "s".to_string(),
                     mutable: false,
@@ -706,6 +722,7 @@ mod tests {
                 ret_ty: spanned(Type::Unit),
                 pre: None,
                 post: None,
+                contracts: vec![],
                 body: spanned(Expr::While {
                     cond: Box::new(spanned(Expr::BoolLit(false))),
                     body: Box::new(spanned(Expr::Unit)),

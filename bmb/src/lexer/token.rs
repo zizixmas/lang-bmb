@@ -62,6 +62,12 @@ pub enum Token {
     Use,
     #[token("mod")]
     Mod,
+    // v0.2: Contract system
+    #[token("where")]
+    Where,
+    // v0.2: Refinement type self-reference
+    #[token("it")]
+    It,
 
     // Type keywords
     #[token("i32")]
@@ -190,6 +196,8 @@ impl std::fmt::Display for Token {
             Token::Pub => write!(f, "pub"),
             Token::Use => write!(f, "use"),
             Token::Mod => write!(f, "mod"),
+            Token::Where => write!(f, "where"),
+            Token::It => write!(f, "it"),
             Token::TyI32 => write!(f, "i32"),
             Token::TyI64 => write!(f, "i64"),
             Token::TyF64 => write!(f, "f64"),

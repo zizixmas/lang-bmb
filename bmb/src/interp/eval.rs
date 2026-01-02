@@ -392,6 +392,22 @@ impl Interpreter {
                     .collect::<InterpResult<Vec<_>>>()?;
                 self.eval_method_call(recv_val, method, arg_vals)
             }
+
+            // v0.2: State references (only valid in contracts, not runtime)
+            Expr::StateRef { .. } => {
+                Err(RuntimeError::type_error(
+                    "contract expression",
+                    "runtime expression (.pre/.post only valid in contracts)"
+                ))
+            }
+
+            // v0.2: Refinement self-reference (only valid in refinement constraints)
+            Expr::It => {
+                Err(RuntimeError::type_error(
+                    "refinement constraint",
+                    "runtime expression ('it' only valid in type refinements)"
+                ))
+            }
         }
     }
 

@@ -87,6 +87,10 @@ pub enum Expr {
     /// Return value reference (for post conditions)
     Ret,
 
+    /// Refinement self-reference (v0.2): for T{constraints}
+    /// Refers to the value being refined
+    It,
+
     // v0.5: Struct and Enum expressions
 
     /// Struct initialization: new StructName { field1: value1, field2: value2 }
@@ -143,6 +147,15 @@ pub enum Expr {
         receiver: Box<Spanned<Expr>>,
         method: String,
         args: Vec<Spanned<Expr>>,
+    },
+
+    // v0.2: State references for contracts
+
+    /// State reference: expr.pre or expr.post (v0.2)
+    /// Used in contracts to reference pre/post-state values
+    StateRef {
+        expr: Box<Spanned<Expr>>,
+        state: StateKind,
     },
 }
 
@@ -254,6 +267,25 @@ pub enum RangeKind {
     /// Inclusive/closed range: start..=end
     /// Represents [start, end]
     Inclusive,
+}
+
+/// State kind for contract state references (v0.2)
+/// Used to reference values before or after function execution
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StateKind {
+    /// Pre-state: value before function body executes
+    Pre,
+    /// Post-state: value after function body executes
+    Post,
+}
+
+impl std::fmt::Display for StateKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StateKind::Pre => write!(f, ".pre"),
+            StateKind::Post => write!(f, ".post"),
+        }
+    }
 }
 
 impl std::fmt::Display for RangeKind {
