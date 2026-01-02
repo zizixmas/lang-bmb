@@ -33,7 +33,7 @@ v0.MAJOR.MINOR
 | v0.3 | Root | 인터프리터 + REPL | ✅ 완료 |
 | v0.4 | Stem | 코드젠 (LLVM) | ✅ 완료 |
 | v0.5 | Branch | 언어 확장 + Bootstrap 시작 | ✅ 완료 |
-| v0.6 | Leaf | 표준 라이브러리 기초 | 🔄 진행중 |
+| v0.6 | Leaf | 표준 라이브러리 기초 (100+개 함수) | ✅ 완료 |
 | v0.7 | Bloom | 도구 기초 (fmt, lsp, test) | 계획 |
 | v0.8 | Fruit | 패키지 매니저 (곳간) | 계획 |
 | v0.9 | Harvest | 생태계 (에디터, 원격 패키지) | 계획 |
@@ -203,9 +203,9 @@ bootstrap/
 
 ---
 
-## v0.6 Leaf (표준 라이브러리 기초)
+## v0.6 Leaf ✅ (표준 라이브러리 기초)
 
-> 목표: 최소 실용 표준 라이브러리 (50개 함수)
+> 목표: 최소 실용 표준 라이브러리 (100+개 함수) - 완료
 
 ### v0.6.0 - Core 기초 (48개) ✅ 완료
 
@@ -227,16 +227,22 @@ bootstrap/
 
 ```
 stdlib/
-├── README.md           # stdlib 문서
+├── README.md           # stdlib 문서 (100+ 함수 문서화)
 ├── core/
 │   ├── num.bmb        # 10개 수치 함수
 │   ├── bool.bmb       # 9개 논리 함수
 │   ├── option.bmb     # 12개 Option 함수
 │   └── result.bmb     # 17개 Result 함수
+├── string/
+│   └── mod.bmb        # 30+개 문자열 함수
+└── array/
+    └── mod.bmb        # 25+개 배열 함수
 tests/stdlib/
 ├── test_num.bmb       # 수치 함수 테스트
 ├── test_option.bmb    # Option 테스트
-└── test_result.bmb    # Result 테스트
+├── test_result.bmb    # Result 테스트
+├── test_string.bmb    # String 함수 테스트
+└── test_array.bmb     # Array 함수 테스트
 ```
 
 ### 제네릭 지원 노트
@@ -250,22 +256,30 @@ tests/stdlib/
 - [ ] 타입 제약 (`where T: Eq`)
 - [ ] 제네릭 인스턴스화 (`Option<i64>`, `Option<String>`)
 
-### v0.6.1 - String 확장 (15개)
+### v0.6.1 - String 확장 (30+개) ✅ 완료
 
-| 함수 | 설명 |
-|------|------|
-| `contains`, `starts_with`, `ends_with` | 검색 |
-| `trim`, `split`, `join` | 조작 |
-| `to_upper`, `to_lower` | 변환 |
-| `parse_int`, `to_string` | 파싱 |
+| 카테고리 | 함수 | 설명 |
+|----------|------|------|
+| 문자 분류 | `char_is_whitespace`, `char_is_digit`, `char_is_lower`, `char_is_upper`, `char_is_alpha`, `char_is_alnum` | ASCII 문자 분류 |
+| 문자 변환 | `char_to_upper`, `char_to_lower`, `digit_to_int`, `int_to_digit` | 대소문자, 숫자 변환 |
+| 문자열 검색 | `contains_char`, `starts_with`, `ends_with`, `index_of_char`, `count_char` | 검색 및 카운트 |
+| 문자열 트림 | `find_trim_start`, `find_trim_end`, `is_blank`, `trim_start_indices`, `trim_end_indices` | 공백 처리 |
+| 정수 파싱 | `parse_uint`, `parse_int`, `is_valid_int` | 문자열→정수 변환 |
+| 문자열 비교 | `string_compare`, `string_eq` | 사전순 비교, 동등성 |
+| 유틸리티 | `reverse_indices`, `split_first_len`, `char_count` | 기타 유틸 |
 
-### v0.6.2 - Collection 기초 (15개)
+### v0.6.2 - Array 유틸리티 (25+개) ✅ 완료
 
-| 함수 | 설명 |
-|------|------|
-| `Vec::new`, `push`, `pop`, `len`, `get`, `iter` | 동적 배열 |
-| `map`, `filter`, `fold` | 이터레이터 메서드 |
-| `HashMap::new`, `insert`, `get` | 해시맵 |
+> Note: Vec/HashMap은 동적 메모리가 필요하여 Rust 빌트인으로 v0.7+에서 구현 예정.
+> 현재는 고정 크기 배열 `[i64; 8]` 유틸리티 제공.
+
+| 카테고리 | 함수 | 설명 |
+|----------|------|------|
+| 검색 | `contains_i64`, `index_of_i64`, `count_i64` | 값 검색 및 카운트 |
+| 집계 | `sum_i64`, `min_i64`, `max_i64`, `avg_i64`, `product_i64` | 합계, 최소, 최대, 평균, 곱 |
+| 서술자 | `all_positive`, `all_non_negative`, `any_positive`, `any_zero`, `is_sorted_asc`, `is_sorted_desc`, `all_equal` | 조건 검사 |
+| 경계 | `is_valid_index`, `clamp_index`, `wrap_index` | 인덱스 검증 |
+| 범위 | `sum_range`, `count_range` | 범위 연산 |
 
 ---
 
@@ -653,7 +667,7 @@ v0.11.x: BMB 재작성 완성 (📈 적당)
 
 ```
 v0.1-0.5: 기반 (파서 + 검증 + 실행 + LLVM + 언어확장) ✅
-v0.6: 표준 라이브러리 기초 (50개)
+v0.6: 표준 라이브러리 기초 (100+개 함수) ✅
 v0.7: 도구 기초 (fmt, lsp, test, action-bmb)
 v0.8: 패키지 기초 (곳간 + Rust fallback)
 v0.9: 생태계 (에디터, 원격 패키지, playground, site, benchmark)

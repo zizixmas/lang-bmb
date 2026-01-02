@@ -1,6 +1,6 @@
 # BMB Standard Library
 
-> v0.6.0 Leaf: Foundation for BMB standard library
+> v0.6 Leaf: Foundation for BMB standard library
 
 ## Design Principles (AI-Native)
 
@@ -10,77 +10,202 @@
 | **Zero Ambiguity** | No implicit conversions or default behaviors |
 | **Verification** | Every constraint is SMT-verifiable |
 | **Explicit Types** | Specialized types until generics are available |
+| **Recursive Style** | Functional patterns suitable for pure evaluation |
 
 ## Structure
 
 ```
 stdlib/
+├── README.md
 ├── core/
-│   ├── num.bmb       # Numeric operations (abs, min, max, clamp)
-│   ├── bool.bmb      # Boolean operations
-│   ├── option.bmb    # Option type (specialized for i64)
-│   └── result.bmb    # Result type (specialized for i64, String)
-├── string/           # String operations (v0.6.1)
-└── collections/      # Collection types (v0.6.2)
+│   ├── num.bmb        # Numeric operations (10 functions)
+│   ├── bool.bmb       # Boolean operations (9 functions)
+│   ├── option.bmb     # Option type (12 functions)
+│   └── result.bmb     # Result type (17 functions)
+├── string/
+│   └── mod.bmb        # String utilities (30+ functions)
+└── array/
+    └── mod.bmb        # Array utilities (25+ functions)
 ```
 
 ## Module Status
 
-| Module | Functions | Status |
-|--------|-----------|--------|
-| core::num | 4 | v0.6.0 |
-| core::bool | 3 | v0.6.0 |
-| core::option | 5 | v0.6.0 |
-| core::result | 5 | v0.6.0 |
-| string | 15 | v0.6.1 |
-| collections | 15 | v0.6.2 |
+| Module | Functions | Version | Description |
+|--------|-----------|---------|-------------|
+| core::num | 10 | v0.6.0 | abs, min, max, clamp, sign, in_range, diff, etc. |
+| core::bool | 9 | v0.6.0 | implies, iff, xor, select, etc. |
+| core::option | 12 | v0.6.0 | Option enum + is_some, unwrap, map, etc. |
+| core::result | 17 | v0.6.0 | Result enum + is_ok, safe_divide, etc. |
+| string | 30+ | v0.6.1 | char classification, search, trim, parse |
+| array | 25+ | v0.6.2 | search, aggregation, predicates, bounds |
 
-## Usage
+**Total: 100+ functions with contracts**
 
+## string Module (v0.6.1)
+
+### Character Classification
 ```bmb
--- Import specific functions
-use core::num::abs;
-use core::option::Option;
+char_is_whitespace(c)   -- space, tab, newline, CR
+char_is_digit(c)        -- 0-9
+char_is_lower(c)        -- a-z
+char_is_upper(c)        -- A-Z
+char_is_alpha(c)        -- a-z or A-Z
+char_is_alnum(c)        -- alphanumeric
+```
 
-fn main() -> i64 =
-    let x = abs(-42);
-    let opt = Option::Some(x);
-    match opt {
-        Option::Some(v) => v,
-        Option::None => 0
-    };
+### Character Conversion
+```bmb
+char_to_upper(c)        -- a->A (unchanged if not lower)
+char_to_lower(c)        -- A->a (unchanged if not upper)
+digit_to_int(c)         -- '0'->0, '9'->9
+int_to_digit(n)         -- 0->'0', 9->'9'
+```
+
+### String Search
+```bmb
+contains_char(s, c)     -- check if char exists
+starts_with(s, prefix)  -- prefix check
+ends_with(s, suffix)    -- suffix check
+index_of_char(s, c)     -- find first occurrence (-1 if not found)
+count_char(s, c)        -- count occurrences
+```
+
+### String Trimming
+```bmb
+find_trim_start(s)      -- first non-whitespace index
+find_trim_end(s)        -- last non-whitespace index + 1
+is_blank(s)             -- empty or only whitespace
+```
+
+### Integer Parsing
+```bmb
+parse_uint(s)           -- parse unsigned integer (-1 on error)
+parse_int(s)            -- parse signed integer
+is_valid_int(s)         -- check if valid integer string
+```
+
+### String Comparison
+```bmb
+string_compare(a, b)    -- lexicographic: -1, 0, 1
+string_eq(a, b)         -- equality check
+```
+
+## array Module (v0.6.2)
+
+> Works with fixed-size arrays `[i64; 8]`. Dynamic Vec requires Rust builtins.
+
+### Search
+```bmb
+contains_i64(arr, len, val)    -- check if value exists
+index_of_i64(arr, len, val)    -- find index (-1 if not found)
+count_i64(arr, len, val)       -- count occurrences
+```
+
+### Aggregation
+```bmb
+sum_i64(arr, len)              -- sum all elements
+min_i64(arr, len)              -- minimum value
+max_i64(arr, len)              -- maximum value
+avg_i64(arr, len)              -- integer average
+product_i64(arr, len)          -- product of all elements
+```
+
+### Predicates
+```bmb
+all_positive(arr, len)         -- all > 0?
+all_non_negative(arr, len)     -- all >= 0?
+any_positive(arr, len)         -- any > 0?
+any_zero(arr, len)             -- any == 0?
+is_sorted_asc(arr, len)        -- ascending order?
+is_sorted_desc(arr, len)       -- descending order?
+all_equal(arr, len)            -- all same value?
+```
+
+### Bounds
+```bmb
+is_valid_index(len, idx)       -- idx in [0, len)?
+clamp_index(len, idx)          -- clamp to valid range
+wrap_index(len, idx)           -- modulo wrap
+```
+
+### Range Operations
+```bmb
+sum_range(arr, start, end)     -- sum [start, end)
+count_range(arr, start, end, val)  -- count in range
+```
+
+## Usage Examples
+
+### String Utilities
+```bmb
+use string::starts_with;
+use string::parse_uint;
+use string::char_is_digit;
+
+fn validate_and_parse(s: String) -> i64 =
+    if starts_with(s, "-") then -1
+    else parse_uint(s);
+```
+
+### Array Operations
+```bmb
+use array::sum_i64;
+use array::is_sorted_asc;
+use array::all_positive;
+
+fn analyze(arr: [i64; 8], len: i64) -> i64
+  pre len > 0 and len <= 8
+= if all_positive(arr, len) and is_sorted_asc(arr, len)
+  then sum_i64(arr, len)
+  else -1;
 ```
 
 ## Generics Note
 
 Current implementation uses type-specialized versions:
-- `Option` = `Option_i64` (holds i64)
-- `Result` = `Result_i64_String` (Ok: i64, Err: String)
+- `Option` = i64 전용
+- `Result` = i64/에러코드 전용
+- `array` = `[i64; 8]` 전용
 
-Full generics (`Option<T>`, `Result<T, E>`) planned for v0.6.1+.
+제네릭 지원 (`Option<T>`, `Vec<T>`, `HashMap<K, V>`) 필요:
+- [ ] 타입 파라미터 문법
+- [ ] 타입 제약 (`where T: Eq`)
+- [ ] 런타임 동적 메모리 (Vec, HashMap)
 
 ## Contract Patterns
 
 ### Preconditions (pre)
 ```bmb
-fn divide(a: i64, b: i64) -> i64
-  pre b != 0
-= a / b;
+fn digit_to_int(c: i64) -> i64
+  pre char_is_digit(c)
+  post ret >= 0 and ret <= 9
+= c - 48;
 ```
 
 ### Postconditions (post)
 ```bmb
-fn abs(x: i64) -> i64
-  post ret >= 0
-  post (x >= 0 and ret == x) or (x < 0 and ret == 0 - x)
-= if x >= 0 then x else 0 - x;
+fn index_of_char(s: String, c: i64) -> i64
+  post ret >= -1 and ret < s.len()
+  post (ret == -1 and not contains_char(s, c)) or
+       (ret >= 0 and s.char_at(ret) == c)
+= ...;
 ```
 
-### Combined Contracts
+### Array Bounds Contracts
 ```bmb
-fn clamp(x: i64, lo: i64, hi: i64) -> i64
-  pre lo <= hi
-  post ret >= lo and ret <= hi
-  post (x < lo and ret == lo) or (x > hi and ret == hi) or ret == x
-= if x < lo then lo else if x > hi then hi else x;
+fn sum_range(arr: [i64; 8], start: i64, end: i64) -> i64
+  pre start >= 0 and end <= 8 and start <= end
+= ...;
 ```
+
+## Limitations
+
+1. **No Dynamic Arrays**: Vec requires Rust builtins for memory allocation
+2. **Fixed Array Size**: Current array functions use `[i64; 8]` fixed size
+3. **No HashMap**: Requires hash functions and dynamic buckets
+4. **String Building**: Limited to `+` concatenation (no StringBuilder)
+5. **No Generics**: All functions are type-specialized
+
+These limitations will be addressed in future versions:
+- v0.7: Rust builtins for Vec, HashMap
+- v0.7+: Generic type support
