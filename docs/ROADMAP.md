@@ -126,6 +126,21 @@ SMT 연동으로 계약 검증 시작
 | 반례 리포터 | ✅ 완료 | 사용자 친화 출력 |
 | 검증 CLI | ✅ 완료 | `bmb verify` 명령어 |
 
+### 계약 문법
+
+| 구문 | 상태 | 설명 |
+|------|------|------|
+| `pre` / `post` | ✅ 완료 | 함수 전/후 조건 |
+| `forall` / `exists` | ✅ 완료 | 전칭/존재 한정사 |
+| `=>` (implication) | ✅ 완료 | 논리적 함축 |
+| `is` pattern | ✅ 완료 | 패턴 매칭 조건 |
+| `..` range | ✅ 완료 | 범위 연산자 |
+| `old(expr)` | ✅ 완료 | post에서 이전 값 참조 |
+| Refinement types | ✅ 완료 | `T{constraint}` 형식 |
+| `@disjoint` | ⏳ 파싱만 | SMT 통합은 v0.3 |
+
+> 📋 전체 계약 체크리스트: [docs/CONTRACT_CHECKLIST.md](CONTRACT_CHECKLIST.md)
+
 ---
 
 ## v0.3 Root ✅ (실행 기반)
@@ -144,6 +159,15 @@ SMT 연동으로 계약 검증 시작
 | 표준 입출력 | ✅ 완료 | print, println, read_int |
 | 내장 함수 | ✅ 완료 | abs, min, max, assert |
 | CLI run/repl | ✅ 완료 | `bmb run`, `bmb repl` |
+
+### 계약 확장 (v0.2에서 지연됨)
+
+| 기능 | 상태 | 설명 |
+|------|------|------|
+| `@invariant` | ✅ 완료 | 루프 불변식 |
+| `@decreases` | ✅ 완료 | 종료 증명 (감소 표현식) |
+| `@disjoint` SMT | ✅ 완료 | 분리 조건 SMT 검증 |
+| `<=>` 동치 | ✅ 완료 | 논리적 동치 연산자 |
 
 ---
 
