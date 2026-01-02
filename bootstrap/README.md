@@ -414,6 +414,85 @@ rather than parsing BMB source strings within the test file.
 8 (total passed)
 ```
 
+## Integration Testing (v0.10.10)
+
+The `runtime/` directory contains integration testing infrastructure for validating generated LLVM IR.
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `runtime.c` | C runtime library with println, abs, min, max functions |
+| `test_add.ll` | Simple LLVM IR test (add function) |
+| `test_max.ll` | Complex LLVM IR test (if-then-else with PHI nodes) |
+| `validate_llvm_ir.sh` | Shell script for IR validation |
+| `build_test.ps1` | PowerShell script for full Windows build |
+
+### Runtime Functions
+
+```c
+// Bootstrap runtime functions (matches llvm_ir.bmb declarations)
+void println(int64_t x);     // Print i64 with newline
+int64_t abs(int64_t x);      // Absolute value
+int64_t min(int64_t a, int64_t b);  // Minimum
+int64_t max(int64_t a, int64_t b);  // Maximum
+```
+
+### Validation Process
+
+```bash
+# Validate LLVM IR syntax and compile to object file
+cd runtime
+bash validate_llvm_ir.sh
+
+# Output:
+# [1/3] Validating LLVM IR syntax...
+#   ✓ LLVM IR syntax valid
+# [2/3] Compiling to object file...
+#   ✓ Object file created (724 bytes)
+# [3/3] Verifying symbols...
+#   ✓ Symbol 'add' found (defined)
+#   ✓ Symbol 'main' found (defined)
+#   ✓ Symbol 'println' found (external reference)
+```
+
+### Full Build (Windows with Visual Studio)
+
+```powershell
+# From Developer PowerShell for VS 2022
+cd runtime
+.\build_test.ps1 -Run
+
+# Creates test_add.exe and runs it
+```
+
+### Test LLVM IR Examples
+
+**test_add.ll** - Basic function call:
+```llvm
+define i64 @add(i64 %a, i64 %b) {
+entry:
+  %_t0 = add i64 %a, %b
+  ret i64 %_t0
+}
+```
+
+**test_max.ll** - Control flow with PHI nodes:
+```llvm
+define i64 @max_manual(i64 %a, i64 %b) {
+entry:
+  %cmp = icmp sgt i64 %a, %b
+  br i1 %cmp, label %then_0, label %else_0
+then_0:
+  br label %merge_0
+else_0:
+  br label %merge_0
+merge_0:
+  %result = phi i64 [ %a, %then_0 ], [ %b, %else_0 ]
+  ret i64 %result
+}
+```
+
 ## Token Encoding
 
 Tokens are encoded as a single i64 value:
@@ -491,5 +570,6 @@ cargo run --release --bin bmb -- run bootstrap/compiler.bmb
 - [x] LLVM IR function generation (v0.10.7) ✅
 - [x] Full compiler pipeline integration (v0.10.8) ✅
 - [x] Unified compiler entry point (v0.10.9) ✅
+- [x] Integration testing with LLVM toolchain (v0.10.10) ✅
 - [ ] Struct/Enum lowering support (v0.11+)
 - [ ] Optimization passes in BMB (v0.11+)

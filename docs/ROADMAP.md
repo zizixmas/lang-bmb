@@ -1048,6 +1048,57 @@ fn gen_runtime_decls() -> String
 - 인터프리터 스택 제한으로 인해 테스트는 pre-computed AST 사용
 - parse_source() 호출은 별도 파일에서만 사용 가능
 
+### v0.10.10 - Integration Testing with LLVM Toolchain ✅ 완료
+
+**구현 내용:**
+- C 런타임 라이브러리 (`runtime/runtime.c`) 확장
+- Bootstrap 런타임 함수: `println`, `abs`, `min`, `max`
+- 테스트 LLVM IR 파일: `test_add.ll`, `test_max.ll`
+- 검증 스크립트: `validate_llvm_ir.sh`
+- Windows 빌드 스크립트: `build_test.ps1`
+- LLVM IR 구문 검증 및 오브젝트 파일 컴파일 확인
+- 심볼 검증: `llvm-nm`으로 함수 심볼 확인
+
+**파일 구조:**
+```
+runtime/
+├── runtime.c           # C 런타임 (bootstrap 함수 포함)
+├── test_add.ll         # 간단한 LLVM IR 테스트 (add 함수)
+├── test_max.ll         # 복잡한 LLVM IR 테스트 (if-then-else, PHI)
+├── validate_llvm_ir.sh # Shell 검증 스크립트
+└── build_test.ps1      # PowerShell 빌드 스크립트
+```
+
+**검증 결과:**
+```bash
+$ bash validate_llvm_ir.sh
+[1/3] Validating LLVM IR syntax...
+  ✓ LLVM IR syntax valid
+[2/3] Compiling to object file...
+  ✓ Object file created (724 bytes)
+[3/3] Verifying symbols...
+  ✓ Symbol 'add' found (defined)
+  ✓ Symbol 'main' found (defined)
+  ✓ Symbol 'println' found (external reference)
+=== All validations passed ===
+```
+
+**test_max.ll 예시 (제어 흐름 + PHI):**
+```llvm
+define i64 @max_manual(i64 %a, i64 %b) {
+entry:
+  %cmp = icmp sgt i64 %a, %b
+  br i1 %cmp, label %then_0, label %else_0
+then_0:
+  br label %merge_0
+else_0:
+  br label %merge_0
+merge_0:
+  %result = phi i64 [ %a, %then_0 ], [ %b, %else_0 ]
+  ret i64 %result
+}
+```
+
 ---
 
 ## v0.11 Dawn (Bootstrap 완성)
@@ -1190,7 +1241,8 @@ v0.10.5 → v0.10.6: LLVM IR 제어 흐름 (📈 적당) ✅
 v0.10.6 → v0.10.7: LLVM IR 함수 생성 (📈 적당) ✅
 v0.10.7 → v0.10.8: Full Pipeline 통합 (📈 적당) ✅
 v0.10.8 → v0.10.9: Unified Compiler Entry Point (📈 적당) ✅
-v0.10.9 → v0.11.x: BMB 재작성 완성 (📈 적당)
+v0.10.9 → v0.10.10: Integration Testing (📈 적당) ✅
+v0.10.10 → v0.11.x: BMB 재작성 완성 (📈 적당)
 ```
 
 ---
@@ -1203,7 +1255,7 @@ v0.6: 표준 라이브러리 기초 (100+개 함수) ✅
 v0.7: 도구 기초 (fmt, lsp, test, action-bmb) ✅
 v0.8: 패키지 기초 (곳간) ✅
 v0.9: 생태계 (에디터, 원격 패키지, playground, site, benchmark) ✅
-v0.10: Bootstrap 진행 (타입체커 ✅, MIR ✅, Lowering ✅, Pipeline ✅, LLVM IR ✅, Compiler ✅) 🔄
+v0.10: Bootstrap 진행 (타입체커 ✅, MIR ✅, Lowering ✅, Pipeline ✅, LLVM IR ✅, Compiler ✅, Integration ✅) 🔄
 v0.11: Bootstrap 완성 (Stage 2, 도구 BMB 재작성)
 v1.0: 안정성 약속 + 검증 완료
 
