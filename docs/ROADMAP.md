@@ -874,7 +874,10 @@ compile_expr("not b")      →  "%_t0 = not %b"
 
 **Note**: gotgan migrate (Rust crate 분석/마이그레이션)는 Rust 전용 도구로 v0.11+ 계획.
 
-### v0.10.4 - MIR → C 코드 생성 ✅ 완료
+### v0.10.4 - MIR → C 코드 생성 ✅ 완료 (레거시)
+
+> ⚠️ **레거시**: C 코드 경로는 LLVM IR 경로로 대체됨 (v0.10.5+)
+> BMB 철학 "최대 성능, C/Rust 초월"에 부합하는 LLVM IR 직접 생성으로 전환
 
 ```
 bootstrap/
@@ -886,27 +889,133 @@ bootstrap/
 ├── mir.bmb         # ✅ 완료 (18KB)
 ├── lowering.bmb    # ✅ 완료 (25KB)
 ├── pipeline.bmb    # ✅ 완료 (25KB)
-└── codegen.bmb     # ✅ 완료 (18KB) ← NEW
+└── codegen.bmb     # ✅ 완료 (18KB) - C 백엔드 (레거시)
 ```
 
-**구현 내용:**
-- MIR 명령어 파싱 및 C 문장 생성
-- 타입 매핑: i64 → int64_t, bool → int, unit → void
-- 이진 연산자: +, -, *, /, %, ==, !=, <, >, <=, >=, and, or
-- 단항 연산자: neg (부정), not (논리 부정)
-- 제어 흐름: return, goto, branch (조건부)
-- 레이블 생성 및 함수 생성
-- 매개변수 변환: "a: i64, b: i64" → "int64_t a, int64_t b"
-- 18개 테스트 통과
+### v0.10.5 - LLVM IR 기초 (타입, 상수, 산술) 🔄 진행중
 
-**C 코드 생성 예시:**
-```c
-// MIR → C
-%_t0 = const I:42      →  int64_t _t0 = 42;
-%_t0 = + %a, %b        →  int64_t _t0 = a + b;
-%_t0 = == %x, %y       →  int64_t _t0 = x == y;
-return %_t0            →  return _t0;
-branch %c, t, e        →  if (c) goto t; else goto e;
+```
+bootstrap/
+└── llvm_ir.bmb     # LLVM IR 텍스트 생성 (신규)
+```
+
+**구현 범위:**
+- LLVM IR 타입 매핑: i64 → i64, i32 → i32, bool → i1, unit → void
+- 상수 생성: 정수, 불리언
+- 산술 연산: add, sub, mul, sdiv, srem
+- 비교 연산: icmp eq/ne/slt/sgt/sle/sge
+- 논리 연산: and, or, xor
+- 단항 연산: sub (neg), xor -1 (not)
+- 15개 테스트 목표
+
+**LLVM IR 생성 예시:**
+```llvm
+; 상수
+%_t0 = add i64 0, 42           ; const I:42
+
+; 산술 연산
+%_t0 = add i64 %a, %b          ; +
+%_t0 = sub i64 %a, %b          ; -
+%_t0 = mul i64 %a, %b          ; *
+%_t0 = sdiv i64 %a, %b         ; /
+%_t0 = srem i64 %a, %b         ; %
+
+; 비교 연산
+%_t0 = icmp eq i64 %a, %b      ; ==
+%_t0 = icmp slt i64 %a, %b     ; <
+```
+
+### v0.10.6 - LLVM IR 제어 흐름 (branch, label, phi)
+
+**구현 범위:**
+- 레이블 생성: `entry:`, `then_0:`, `else_0:`, `merge_0:`
+- 무조건 분기: `br label %target`
+- 조건 분기: `br i1 %cond, label %then, label %else`
+- PHI 노드: `%result = phi i64 [ %a, %then ], [ %b, %else ]`
+- 12개 테스트 목표
+
+**LLVM IR 제어 흐름 예시:**
+```llvm
+entry:
+  %cond = icmp sgt i64 %a, %b
+  br i1 %cond, label %then_0, label %else_0
+then_0:
+  br label %merge_0
+else_0:
+  br label %merge_0
+merge_0:
+  %result = phi i64 [ %a, %then_0 ], [ %b, %else_0 ]
+```
+
+### v0.10.7 - LLVM IR 함수/프로그램 생성
+
+**구현 범위:**
+- 함수 정의: `define i64 @name(i64 %a, i64 %b) { ... }`
+- 함수 호출: `%_t0 = call i64 @foo(i64 %a)`
+- 반환문: `ret i64 %result`, `ret void`
+- 외부 선언: `declare i64 @println(i64)`
+- 프로그램 구조 (다중 함수)
+- 10개 테스트 목표
+
+**LLVM IR 함수 예시:**
+```llvm
+declare i64 @println(i64)
+
+define i64 @add(i64 %a, i64 %b) {
+entry:
+  %_t0 = add i64 %a, %b
+  ret i64 %_t0
+}
+
+define i64 @max(i64 %a, i64 %b) {
+entry:
+  %cond = icmp sgt i64 %a, %b
+  br i1 %cond, label %then_0, label %else_0
+then_0:
+  br label %merge_0
+else_0:
+  br label %merge_0
+merge_0:
+  %result = phi i64 [ %a, %then_0 ], [ %b, %else_0 ]
+  ret i64 %result
+}
+```
+
+### v0.10.8 - Full Compiler Pipeline 통합
+
+**구현 범위:**
+- Source → Lexer → Parser → AST → Lowering → MIR → LLVM IR
+- 완전한 .ll 파일 생성
+- `llc` 도구로 실행 검증
+- End-to-End 컴파일 테스트
+- 10개 테스트 목표
+
+**파이프라인:**
+```
+BMB Source
+    ↓ lexer.bmb
+  Tokens
+    ↓ parser_ast.bmb
+  S-expr AST
+    ↓ lowering.bmb
+  MIR Text
+    ↓ llvm_ir.bmb
+  LLVM IR (.ll)
+    ↓ llc (외부)
+  Native Binary
+```
+
+**검증:**
+```bash
+# BMB 부트스트랩 컴파일러로 LLVM IR 생성
+bmb run bootstrap/compiler.bmb < test.bmb > test.ll
+
+# LLVM 도구로 컴파일
+llc test.ll -o test.s
+gcc test.s -o test
+
+# 실행 검증
+./test
 ```
 
 ---
@@ -1045,8 +1154,12 @@ v0.9.6 → v0.10.0: 타입 체커 BMB (📈 적당) ✅
 v0.10.0 → v0.10.1: MIR 기초 정의 (📈 적당) ✅
 v0.10.1 → v0.10.2: AST→MIR Lowering (📈 적당) ✅
 v0.10.2 → v0.10.3: End-to-End 파이프라인 (📈 적당) ✅
-v0.10.3 → v0.10.4: MIR→C 코드 생성 (📈 적당) ✅
-v0.10.x → v0.11.x: BMB 재작성 완성 (📈 적당)
+v0.10.3 → v0.10.4: MIR→C 코드 생성 (📈 적당) ✅ (레거시)
+v0.10.4 → v0.10.5: LLVM IR 기초 (📈 적당) 🔄
+v0.10.5 → v0.10.6: LLVM IR 제어 흐름 (📈 적당)
+v0.10.6 → v0.10.7: LLVM IR 함수 생성 (📈 적당)
+v0.10.7 → v0.10.8: Full Pipeline 통합 (📈 적당)
+v0.10.8 → v0.11.x: BMB 재작성 완성 (📈 적당)
 ```
 
 ---
@@ -1059,7 +1172,7 @@ v0.6: 표준 라이브러리 기초 (100+개 함수) ✅
 v0.7: 도구 기초 (fmt, lsp, test, action-bmb) ✅
 v0.8: 패키지 기초 (곳간) ✅
 v0.9: 생태계 (에디터, 원격 패키지, playground, site, benchmark) ✅
-v0.10: Bootstrap 진행 (타입체커 ✅, MIR기초 ✅, Lowering ✅, Pipeline ✅) 🔄
+v0.10: Bootstrap 진행 (타입체커 ✅, MIR ✅, Lowering ✅, Pipeline ✅, LLVM IR 🔄) 🔄
 v0.11: Bootstrap 완성 (Stage 2, 도구 BMB 재작성)
 v1.0: 안정성 약속 + 검증 완료
 

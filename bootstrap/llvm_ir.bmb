@@ -1,0 +1,431 @@
+-- BMB LLVM IR Generator written in BMB (v0.10.5: Bootstrap Phase 10)
+-- Generates LLVM IR text from MIR representation
+-- Uses functional/recursive style following bootstrap patterns
+--
+-- DESIGN:
+-- - Input: MIR text format (from lowering.bmb)
+-- - Output: LLVM IR text (.ll format)
+-- - Line separator: | (pipe character)
+--
+-- SCOPE (v0.10.5):
+-- - Type mapping (i64 → i64, i32 → i32, bool → i1, unit → void)
+-- - Constant generation
+-- - Arithmetic: add, sub, mul, sdiv, srem
+-- - Comparison: icmp eq/ne/slt/sgt/sle/sge
+-- - Logical: and, or, xor
+-- - Unary: neg (sub 0), not (xor -1)
+--
+-- LLVM IR FORMAT:
+--   %_t0 = add i64 %a, %b
+--   %_t0 = icmp eq i64 %a, %b
+--   %_t0 = and i64 %a, %b
+
+-- ============================================================================
+-- SECTION 1: String Utilities (no imports in bootstrap)
+-- ============================================================================
+
+fn digit_char(d: i64) -> String =
+    if d == 0 then "0" else if d == 1 then "1" else if d == 2 then "2"
+    else if d == 3 then "3" else if d == 4 then "4" else if d == 5 then "5"
+    else if d == 6 then "6" else if d == 7 then "7" else if d == 8 then "8"
+    else "9";
+
+fn int_to_string(n: i64) -> String =
+    if n < 0 then "-" + int_to_string(0 - n)
+    else if n < 10 then digit_char(n)
+    else int_to_string(n / 10) + digit_char(n - (n / 10) * 10);
+
+fn is_digit(c: i64) -> bool = c >= 48 and c <= 57;
+fn is_alpha(c: i64) -> bool = (c >= 65 and c <= 90) or (c >= 97 and c <= 122);
+fn is_alnum(c: i64) -> bool = is_alpha(c) or is_digit(c) or c == 95;
+
+-- ============================================================================
+-- SECTION 2: String Parsing Helpers
+-- ============================================================================
+
+fn skip_ws(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then pos
+    else if s.char_at(pos) == 32 then skip_ws(s, pos + 1)
+    else pos;
+
+fn find_char(s: String, c: i64, pos: i64) -> i64 =
+    if pos >= s.len() then pos
+    else if s.char_at(pos) == c then pos
+    else find_char(s, c, pos + 1);
+
+fn find_pipe(s: String, pos: i64) -> i64 = find_char(s, 124, pos);
+
+fn starts_with(s: String, prefix: String, pos: i64) -> bool =
+    starts_with_at(s, prefix, pos, 0);
+
+fn starts_with_at(s: String, prefix: String, pos: i64, i: i64) -> bool =
+    if i >= prefix.len() then true
+    else if pos + i >= s.len() then false
+    else if s.char_at(pos + i) != prefix.char_at(i) then false
+    else starts_with_at(s, prefix, pos, i + 1);
+
+fn read_until_ws(s: String, pos: i64) -> String =
+    read_until_ws_acc(s, pos, "");
+
+fn read_until_ws_acc(s: String, pos: i64, acc: String) -> String =
+    if pos >= s.len() then acc
+    else let c = s.char_at(pos);
+        if c == 32 or c == 44 or c == 40 or c == 41 or c == 124 then acc
+        else read_until_ws_acc(s, pos + 1, acc + char_to_string(c));
+
+fn strip_trailing_colon(s: String) -> String =
+    if s.len() == 0 then ""
+    else if s.char_at(s.len() - 1) == 58 then s.slice(0, s.len() - 1)
+    else s;
+
+fn char_to_string(c: i64) -> String =
+    if c == 32 then " " else if c == 33 then "!" else if c == 37 then "%"
+    else if c == 38 then "&" else if c == 40 then "(" else if c == 41 then ")"
+    else if c == 42 then "*" else if c == 43 then "+" else if c == 44 then ","
+    else if c == 45 then "-" else if c == 46 then "." else if c == 47 then "/"
+    else if c == 58 then ":" else if c == 59 then ";" else if c == 60 then "<"
+    else if c == 61 then "=" else if c == 62 then ">" else if c == 91 then "["
+    else if c == 93 then "]" else if c == 95 then "_" else if c == 123 then "{"
+    else if c == 124 then "|" else if c == 125 then "}"
+    else if c >= 48 and c <= 57 then digit_char(c - 48)
+    else if c >= 65 and c <= 90 then char_upper(c)
+    else if c >= 97 and c <= 122 then char_lower(c)
+    else "?";
+
+fn char_upper(c: i64) -> String =
+    if c == 65 then "A" else if c == 66 then "B" else if c == 67 then "C"
+    else if c == 68 then "D" else if c == 69 then "E" else if c == 70 then "F"
+    else if c == 71 then "G" else if c == 72 then "H" else if c == 73 then "I"
+    else if c == 74 then "J" else if c == 75 then "K" else if c == 76 then "L"
+    else if c == 77 then "M" else if c == 78 then "N" else if c == 79 then "O"
+    else if c == 80 then "P" else if c == 81 then "Q" else if c == 82 then "R"
+    else if c == 83 then "S" else if c == 84 then "T" else if c == 85 then "U"
+    else if c == 86 then "V" else if c == 87 then "W" else if c == 88 then "X"
+    else if c == 89 then "Y" else "Z";
+
+fn char_lower(c: i64) -> String =
+    if c == 97 then "a" else if c == 98 then "b" else if c == 99 then "c"
+    else if c == 100 then "d" else if c == 101 then "e" else if c == 102 then "f"
+    else if c == 103 then "g" else if c == 104 then "h" else if c == 105 then "i"
+    else if c == 106 then "j" else if c == 107 then "k" else if c == 108 then "l"
+    else if c == 109 then "m" else if c == 110 then "n" else if c == 111 then "o"
+    else if c == 112 then "p" else if c == 113 then "q" else if c == 114 then "r"
+    else if c == 115 then "s" else if c == 116 then "t" else if c == 117 then "u"
+    else if c == 118 then "v" else if c == 119 then "w" else if c == 120 then "x"
+    else if c == 121 then "y" else "z";
+
+-- ============================================================================
+-- SECTION 3: LLVM IR Type Mapping
+-- ============================================================================
+
+-- Convert BMB type to LLVM IR type
+-- i64 → i64, i32 → i32, bool → i1, unit → void, String → i8*
+fn llvm_type(bmb_type: String) -> String =
+    if bmb_type == "i64" then "i64"
+    else if bmb_type == "i32" then "i32"
+    else if bmb_type == "bool" then "i1"
+    else if bmb_type == "unit" then "void"
+    else if bmb_type == "String" then "i8*"
+    else "i64";  -- default to i64
+
+-- ============================================================================
+-- SECTION 4: LLVM IR Constant Generation
+-- ============================================================================
+
+-- Generate LLVM IR for integer constant
+-- MIR: %_t0 = const I:42
+-- LLVM: %_t0 = add i64 0, 42
+fn gen_const_int(dest: String, value: i64) -> String =
+    dest + " = add i64 0, " + int_to_string(value);
+
+-- Generate LLVM IR for boolean constant
+-- MIR: %_t0 = const B:1
+-- LLVM: %_t0 = add i1 0, 1
+fn gen_const_bool(dest: String, value: i64) -> String =
+    dest + " = add i1 0, " + int_to_string(value);
+
+-- Parse constant value from MIR format: I:42 or B:1
+fn parse_const_type(val: String) -> String =
+    if val.len() < 2 then "unknown"
+    else if val.char_at(0) == 73 then "int"     -- 'I'
+    else if val.char_at(0) == 66 then "bool"    -- 'B'
+    else if val.char_at(0) == 85 then "unit"    -- 'U'
+    else "unknown";
+
+fn parse_const_value(val: String) -> i64 =
+    if val.len() < 3 then 0
+    else parse_int_from(val, 2, 0);
+
+fn parse_int_from(s: String, pos: i64, acc: i64) -> i64 =
+    if pos >= s.len() then acc
+    else let c = s.char_at(pos);
+        if is_digit(c) then parse_int_from(s, pos + 1, acc * 10 + (c - 48))
+        else acc;
+
+-- ============================================================================
+-- SECTION 5: LLVM IR Arithmetic Operations
+-- ============================================================================
+
+-- Binary arithmetic operations
+-- MIR: %_t0 = + %a, %b  →  LLVM: %_t0 = add i64 %a, %b
+-- MIR: %_t0 = - %a, %b  →  LLVM: %_t0 = sub i64 %a, %b
+-- MIR: %_t0 = * %a, %b  →  LLVM: %_t0 = mul i64 %a, %b
+-- MIR: %_t0 = / %a, %b  →  LLVM: %_t0 = sdiv i64 %a, %b
+-- MIR: %_t0 = % %a, %b  →  LLVM: %_t0 = srem i64 %a, %b
+
+fn gen_binop_arith(dest: String, op: String, lhs: String, rhs: String, ty: String) -> String =
+    let llvm_op = mir_to_llvm_arith(op);
+    dest + " = " + llvm_op + " " + ty + " " + lhs + ", " + rhs;
+
+fn mir_to_llvm_arith(op: String) -> String =
+    if op == "+" then "add"
+    else if op == "-" then "sub"
+    else if op == "*" then "mul"
+    else if op == "/" then "sdiv"
+    else if op == "%" then "srem"
+    else "add";  -- default
+
+-- ============================================================================
+-- SECTION 6: LLVM IR Comparison Operations
+-- ============================================================================
+
+-- Comparison operations (result is i1)
+-- MIR: %_t0 = == %a, %b  →  LLVM: %_t0 = icmp eq i64 %a, %b
+-- MIR: %_t0 = != %a, %b  →  LLVM: %_t0 = icmp ne i64 %a, %b
+-- MIR: %_t0 = < %a, %b   →  LLVM: %_t0 = icmp slt i64 %a, %b
+-- MIR: %_t0 = > %a, %b   →  LLVM: %_t0 = icmp sgt i64 %a, %b
+-- MIR: %_t0 = <= %a, %b  →  LLVM: %_t0 = icmp sle i64 %a, %b
+-- MIR: %_t0 = >= %a, %b  →  LLVM: %_t0 = icmp sge i64 %a, %b
+
+fn gen_binop_cmp(dest: String, op: String, lhs: String, rhs: String, ty: String) -> String =
+    let llvm_cmp = mir_to_llvm_cmp(op);
+    dest + " = icmp " + llvm_cmp + " " + ty + " " + lhs + ", " + rhs;
+
+fn mir_to_llvm_cmp(op: String) -> String =
+    if op == "==" then "eq"
+    else if op == "!=" then "ne"
+    else if op == "<" then "slt"
+    else if op == ">" then "sgt"
+    else if op == "<=" then "sle"
+    else if op == ">=" then "sge"
+    else "eq";  -- default
+
+fn is_cmp_op(op: String) -> bool =
+    op == "==" or op == "!=" or op == "<" or op == ">" or op == "<=" or op == ">=";
+
+-- ============================================================================
+-- SECTION 7: LLVM IR Logical Operations
+-- ============================================================================
+
+-- Logical operations (on i1 or i64)
+-- MIR: %_t0 = and %a, %b  →  LLVM: %_t0 = and i1 %a, %b
+-- MIR: %_t0 = or %a, %b   →  LLVM: %_t0 = or i1 %a, %b
+
+fn gen_binop_logic(dest: String, op: String, lhs: String, rhs: String, ty: String) -> String =
+    let llvm_op = mir_to_llvm_logic(op);
+    dest + " = " + llvm_op + " " + ty + " " + lhs + ", " + rhs;
+
+fn mir_to_llvm_logic(op: String) -> String =
+    if op == "and" then "and"
+    else if op == "or" then "or"
+    else "and";  -- default
+
+fn is_logic_op(op: String) -> bool =
+    op == "and" or op == "or";
+
+fn is_arith_op(op: String) -> bool =
+    op == "+" or op == "-" or op == "*" or op == "/" or op == "%";
+
+-- ============================================================================
+-- SECTION 8: LLVM IR Unary Operations
+-- ============================================================================
+
+-- Unary negation
+-- MIR: %_t0 = neg %x  →  LLVM: %_t0 = sub i64 0, %x
+fn gen_unary_neg(dest: String, operand: String, ty: String) -> String =
+    dest + " = sub " + ty + " 0, " + operand;
+
+-- Unary logical not (for booleans)
+-- MIR: %_t0 = not %x  →  LLVM: %_t0 = xor i1 %x, 1
+fn gen_unary_not(dest: String, operand: String) -> String =
+    dest + " = xor i1 " + operand + ", 1";
+
+-- ============================================================================
+-- SECTION 9: MIR Instruction Parsing
+-- ============================================================================
+
+-- Parse MIR instruction line and generate LLVM IR
+-- Format: %dest = op args...
+-- Examples:
+--   %_t0 = const I:42
+--   %_t0 = + %a, %b
+--   %_t0 = == %x, %y
+--   %_t0 = neg %x
+--   %_t0 = not %b
+
+fn gen_instruction(line: String) -> String =
+    let pos0 = skip_ws(line, 0);
+    if pos0 >= line.len() then ""
+    else
+        -- Read destination
+        let dest = read_until_ws(line, pos0);
+        let pos1 = skip_ws(line, pos0 + dest.len());
+        -- Skip '='
+        let pos2 = skip_ws(line, pos1 + 1);
+        -- Read operation
+        let op = read_until_ws(line, pos2);
+        let pos3 = skip_ws(line, pos2 + op.len());
+        -- Dispatch based on operation
+        gen_instr_dispatch(dest, op, line, pos3);
+
+fn gen_instr_dispatch(dest: String, op: String, line: String, pos: i64) -> String =
+    if op == "const" then gen_instr_const(dest, line, pos)
+    else if op == "neg" then gen_instr_neg(dest, line, pos)
+    else if op == "not" then gen_instr_not(dest, line, pos)
+    else if op == "copy" then gen_instr_copy(dest, line, pos)
+    else gen_instr_binop(dest, op, line, pos);
+
+-- const I:42 or const B:1
+fn gen_instr_const(dest: String, line: String, pos: i64) -> String =
+    let val = read_until_ws(line, pos);
+    let ctype = parse_const_type(val);
+    let cval = parse_const_value(val);
+    if ctype == "int" then gen_const_int(dest, cval)
+    else if ctype == "bool" then gen_const_bool(dest, cval)
+    else "; unknown const type";
+
+-- neg %x
+fn gen_instr_neg(dest: String, line: String, pos: i64) -> String =
+    let operand = read_until_ws(line, pos);
+    gen_unary_neg(dest, operand, "i64");
+
+-- not %b
+fn gen_instr_not(dest: String, line: String, pos: i64) -> String =
+    let operand = read_until_ws(line, pos);
+    gen_unary_not(dest, operand);
+
+-- copy %src
+fn gen_instr_copy(dest: String, line: String, pos: i64) -> String =
+    let src = read_until_ws(line, pos);
+    -- In LLVM IR, copy is just an add with 0
+    dest + " = add i64 " + src + ", 0";
+
+-- Binary operations: + %a, %b or == %a, %b or and %a, %b
+fn gen_instr_binop(dest: String, op: String, line: String, pos: i64) -> String =
+    let lhs = read_until_ws(line, pos);
+    let pos2 = find_char(line, 44, pos);  -- find comma
+    let pos3 = skip_ws(line, pos2 + 1);
+    let rhs = read_until_ws(line, pos3);
+    if is_arith_op(op) then gen_binop_arith(dest, op, lhs, rhs, "i64")
+    else if is_cmp_op(op) then gen_binop_cmp(dest, op, lhs, rhs, "i64")
+    else if is_logic_op(op) then gen_binop_logic(dest, op, lhs, rhs, "i1")
+    else "; unknown op: " + op;
+
+-- ============================================================================
+-- SECTION 10: Tests
+-- ============================================================================
+
+fn test_type_mapping() -> i64 =
+    let t1 = if llvm_type("i64") == "i64" then 1 else 0;
+    let t2 = if llvm_type("i32") == "i32" then 1 else 0;
+    let t3 = if llvm_type("bool") == "i1" then 1 else 0;
+    let t4 = if llvm_type("unit") == "void" then 1 else 0;
+    let t5 = if llvm_type("String") == "i8*" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5;
+
+fn test_const_generation() -> i64 =
+    let c1 = gen_const_int("%_t0", 42);
+    let t1 = if c1 == "%_t0 = add i64 0, 42" then 1 else 0;
+    let c2 = gen_const_bool("%_t1", 1);
+    let t2 = if c2 == "%_t1 = add i1 0, 1" then 1 else 0;
+    let c3 = gen_const_int("%x", 0);
+    let t3 = if c3 == "%x = add i64 0, 0" then 1 else 0;
+    t1 + t2 + t3;
+
+fn test_arith_ops() -> i64 =
+    let a1 = gen_binop_arith("%_t0", "+", "%a", "%b", "i64");
+    let t1 = if a1 == "%_t0 = add i64 %a, %b" then 1 else 0;
+    let a2 = gen_binop_arith("%_t1", "-", "%x", "%y", "i64");
+    let t2 = if a2 == "%_t1 = sub i64 %x, %y" then 1 else 0;
+    let a3 = gen_binop_arith("%_t2", "*", "%a", "%b", "i64");
+    let t3 = if a3 == "%_t2 = mul i64 %a, %b" then 1 else 0;
+    let a4 = gen_binop_arith("%_t3", "/", "%a", "%b", "i64");
+    let t4 = if a4 == "%_t3 = sdiv i64 %a, %b" then 1 else 0;
+    let a5 = gen_binop_arith("%_t4", "%", "%a", "%b", "i64");
+    let t5 = if a5 == "%_t4 = srem i64 %a, %b" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5;
+
+fn test_cmp_ops() -> i64 =
+    let c1 = gen_binop_cmp("%_t0", "==", "%a", "%b", "i64");
+    let t1 = if c1 == "%_t0 = icmp eq i64 %a, %b" then 1 else 0;
+    let c2 = gen_binop_cmp("%_t1", "!=", "%a", "%b", "i64");
+    let t2 = if c2 == "%_t1 = icmp ne i64 %a, %b" then 1 else 0;
+    let c3 = gen_binop_cmp("%_t2", "<", "%a", "%b", "i64");
+    let t3 = if c3 == "%_t2 = icmp slt i64 %a, %b" then 1 else 0;
+    let c4 = gen_binop_cmp("%_t3", ">", "%a", "%b", "i64");
+    let t4 = if c4 == "%_t3 = icmp sgt i64 %a, %b" then 1 else 0;
+    t1 + t2 + t3 + t4;
+
+fn test_logic_ops() -> i64 =
+    let l1 = gen_binop_logic("%_t0", "and", "%a", "%b", "i1");
+    let t1 = if l1 == "%_t0 = and i1 %a, %b" then 1 else 0;
+    let l2 = gen_binop_logic("%_t1", "or", "%a", "%b", "i1");
+    let t2 = if l2 == "%_t1 = or i1 %a, %b" then 1 else 0;
+    t1 + t2;
+
+fn test_unary_ops() -> i64 =
+    let u1 = gen_unary_neg("%_t0", "%x", "i64");
+    let t1 = if u1 == "%_t0 = sub i64 0, %x" then 1 else 0;
+    let u2 = gen_unary_not("%_t1", "%b");
+    let t2 = if u2 == "%_t1 = xor i1 %b, 1" then 1 else 0;
+    t1 + t2;
+
+fn test_instruction_parsing() -> i64 =
+    -- Test const instruction
+    let i1 = gen_instruction("%_t0 = const I:42");
+    let t1 = if i1 == "%_t0 = add i64 0, 42" then 1 else 0;
+    -- Test arithmetic instruction
+    let i2 = gen_instruction("%_t0 = + %a, %b");
+    let t2 = if i2 == "%_t0 = add i64 %a, %b" then 1 else 0;
+    -- Test comparison instruction
+    let i3 = gen_instruction("%_t0 = == %x, %y");
+    let t3 = if i3 == "%_t0 = icmp eq i64 %x, %y" then 1 else 0;
+    -- Test neg instruction
+    let i4 = gen_instruction("%_t0 = neg %x");
+    let t4 = if i4 == "%_t0 = sub i64 0, %x" then 1 else 0;
+    -- Test not instruction
+    let i5 = gen_instruction("%_t0 = not %b");
+    let t5 = if i5 == "%_t0 = xor i1 %b, 1" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5;
+
+fn test_parse_const() -> i64 =
+    let t1 = if parse_const_type("I:42") == "int" then 1 else 0;
+    let t2 = if parse_const_type("B:1") == "bool" then 1 else 0;
+    let t3 = if parse_const_value("I:42") == 42 then 1 else 0;
+    let t4 = if parse_const_value("B:1") == 1 then 1 else 0;
+    let t5 = if parse_const_value("I:100") == 100 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5;
+
+fn main() -> i64 =
+    let u0 = println(777);
+    let r1 = test_type_mapping();
+    let u1 = println(r1);
+    let r2 = test_const_generation();
+    let u2 = println(r2);
+    let r3 = test_arith_ops();
+    let u3 = println(r3);
+    let r4 = test_cmp_ops();
+    let u4 = println(r4);
+    let r5 = test_logic_ops();
+    let u5 = println(r5);
+    let r6 = test_unary_ops();
+    let u6 = println(r6);
+    let r7 = test_instruction_parsing();
+    let u7 = println(r7);
+    let r8 = test_parse_const();
+    let u8 = println(r8);
+    let u9 = println(888);
+    let total = r1 + r2 + r3 + r4 + r5 + r6 + r7 + r8;
+    let u10 = println(total);
+    let u11 = println(999);
+    total;

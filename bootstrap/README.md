@@ -240,58 +240,45 @@ compile_expr("not b")   →  "%_t0 = not %b"
 999 (end marker)
 ```
 
-### codegen.bmb (18KB) - v0.10.4
-MIR to C code generation module.
+### llvm_ir.bmb (15KB) - v0.10.5
+MIR to LLVM IR text generation module.
 
 **Features:**
-- Type mapping: i64 → int64_t, bool → int, unit → void
-- MIR instruction parsing and C statement generation
-- Binary operators: +, -, *, /, %, ==, !=, <, >, <=, >=, and, or
-- Unary operators: neg (negation), not (logical not)
-- Control flow: return, goto, branch (conditional)
-- Label generation for basic blocks
-- Function generation with signature and body
-- Parameter conversion: "a: i64, b: i64" → "int64_t a, int64_t b"
+- Type mapping: i64 → i64, i32 → i32, bool → i1, unit → void
+- MIR instruction parsing and LLVM IR generation
+- Arithmetic operators: add, sub, mul, sdiv, srem
+- Comparison operators: icmp eq/ne/slt/sgt/sle/sge
+- Logical operators: and, or, xor
+- Unary operators: neg (sub 0), not (xor 1)
 
-**C Code Generation:**
-```c
-// MIR → C examples
-%_t0 = const I:42      →  int64_t _t0 = 42;
-%_t0 = + %a, %b        →  int64_t _t0 = a + b;
-%_t0 = == %x, %y       →  int64_t _t0 = x == y;
-%_t0 = neg %x          →  int64_t _t0 = -x;
-%_t0 = not %b          →  int _t0 = !b;
-return %_t0            →  return _t0;
-goto entry             →  goto entry;
-branch %c, t, e        →  if (c) goto t; else goto e;
-entry:                 →  entry:;
-```
-
-**Function Generation:**
-```c
-// Input: name="add", params="a: i64, b: i64", ret="i64"
-// Body: "entry:|%_t0 = + %a, %b|return %_t0"
-// Output:
-int64_t add(int64_t a, int64_t b) {
-entry:;
-    int64_t _t0 = a + b;
-    return _t0;
-}
+**LLVM IR Generation:**
+```llvm
+; MIR → LLVM IR examples
+%_t0 = const I:42      →  %_t0 = add i64 0, 42
+%_t0 = + %a, %b        →  %_t0 = add i64 %a, %b
+%_t0 = - %a, %b        →  %_t0 = sub i64 %a, %b
+%_t0 = * %a, %b        →  %_t0 = mul i64 %a, %b
+%_t0 = / %a, %b        →  %_t0 = sdiv i64 %a, %b
+%_t0 = == %x, %y       →  %_t0 = icmp eq i64 %x, %y
+%_t0 = < %x, %y        →  %_t0 = icmp slt i64 %x, %y
+%_t0 = neg %x          →  %_t0 = sub i64 0, %x
+%_t0 = not %b          →  %_t0 = xor i1 %b, 1
+%_t0 = and %a, %b      →  %_t0 = and i1 %a, %b
 ```
 
 **Test output:**
 ```
 777 (start marker)
+5  (type mapping tests)
 3  (constant generation tests)
-4  (binary operation tests)
+5  (arithmetic operation tests)
+4  (comparison operation tests)
+2  (logical operation tests)
 2  (unary operation tests)
-3  (control flow tests)
-1  (branch tests)
-1  (label tests)
-2  (multi-line tests)
-2  (function generation tests)
+5  (instruction parsing tests)
+5  (const parsing tests)
 888 (separator)
-18 (total passed)
+31 (total passed)
 999 (end marker)
 ```
 
@@ -336,7 +323,7 @@ cargo run --release --bin bmb -- check bootstrap/types.bmb
 cargo run --release --bin bmb -- check bootstrap/mir.bmb
 cargo run --release --bin bmb -- check bootstrap/lowering.bmb
 cargo run --release --bin bmb -- check bootstrap/pipeline.bmb
-cargo run --release --bin bmb -- check bootstrap/codegen.bmb
+cargo run --release --bin bmb -- check bootstrap/llvm_ir.bmb
 
 # Run tests
 cargo run --release --bin bmb -- run bootstrap/lexer.bmb
@@ -347,7 +334,7 @@ cargo run --release --bin bmb -- run bootstrap/types.bmb
 cargo run --release --bin bmb -- run bootstrap/mir.bmb
 cargo run --release --bin bmb -- run bootstrap/lowering.bmb
 cargo run --release --bin bmb -- run bootstrap/pipeline.bmb
-cargo run --release --bin bmb -- run bootstrap/codegen.bmb
+cargo run --release --bin bmb -- run bootstrap/llvm_ir.bmb
 ```
 
 ## Limitations
@@ -366,6 +353,9 @@ cargo run --release --bin bmb -- run bootstrap/codegen.bmb
 - [x] MIR foundation (v0.10.1) ✅
 - [x] AST → MIR lowering (v0.10.2) ✅
 - [x] End-to-end pipeline: source → AST → MIR → text output (v0.10.3) ✅
-- [x] MIR → C code generation (v0.10.4) ✅
+- [x] MIR → LLVM IR foundation (v0.10.5) ✅
+- [ ] LLVM IR control flow: branch, label, phi (v0.10.6)
+- [ ] LLVM IR function generation (v0.10.7)
+- [ ] Full compiler pipeline integration (v0.10.8)
 - [ ] Struct/Enum lowering support (v0.11+)
 - [ ] Optimization passes in BMB (v0.11+)
