@@ -81,6 +81,8 @@ enum Command {
         #[arg(long)]
         check: bool,
     },
+    /// Start Language Server Protocol server
+    Lsp,
 }
 
 fn main() {
@@ -102,6 +104,7 @@ fn main() {
         Command::Tokens { file } => tokenize_file(&file),
         Command::Test { file, filter, verbose } => test_file(&file, filter.as_deref(), verbose),
         Command::Fmt { file, check } => fmt_file(&file, check),
+        Command::Lsp => start_lsp(),
     };
 
     if let Err(e) = result {
@@ -743,4 +746,11 @@ fn format_pattern(pattern: &bmb::ast::Pattern) -> String {
             format!("{} {{ {} }}", name, fields_str.join(", "))
         }
     }
+}
+
+fn start_lsp() -> Result<(), Box<dyn std::error::Error>> {
+    // Create tokio runtime for async LSP server
+    let rt = tokio::runtime::Runtime::new()?;
+    rt.block_on(bmb::lsp::run_server());
+    Ok(())
 }

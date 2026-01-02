@@ -34,7 +34,7 @@ v0.MAJOR.MINOR
 | v0.4 | Stem | 코드젠 (LLVM) | ✅ 완료 |
 | v0.5 | Branch | 언어 확장 + Bootstrap 시작 | ✅ 완료 |
 | v0.6 | Leaf | 표준 라이브러리 기초 (100+개 함수) | ✅ 완료 |
-| v0.7 | Bloom | 도구 기초 (fmt, lsp, test) | 🔄 진행중 |
+| v0.7 | Bloom | 도구 기초 (fmt, lsp, test, action-bmb) | ✅ 완료 |
 | v0.8 | Fruit | 패키지 매니저 (곳간) | 계획 |
 | v0.9 | Harvest | 생태계 (에디터, 원격 패키지) | 계획 |
 | v0.10 | Sunrise | Bootstrap 진행 | 계획 |
@@ -283,7 +283,7 @@ tests/stdlib/
 
 ---
 
-## v0.7 Bloom (도구 기초) 🔄 진행중
+## v0.7 Bloom (도구 기초) ✅ 완료
 
 > 목표: 기본 개발 도구 내장 (Gleam 방식)
 
@@ -304,13 +304,26 @@ bmb fmt .            # 디렉토리 전체
 - 코멘트 보존 안됨 (파싱 시 제거)
 - 기본 포맷팅 규칙만 적용
 
-### v0.7.1 - LSP 기초 (계획)
+### v0.7.1 - LSP 기초 ✅ 완료
 
+```bash
+bmb lsp              # LSP 서버 시작 (stdio 통신)
 ```
-지원 기능:
-- textDocument/diagnostic    # 에러/경고 표시
-- textDocument/hover         # 타입 정보 표시
-- textDocument/completion    # 기본 자동완성 (키워드)
+
+**지원 기능**:
+- [x] `textDocument/diagnostic` - 렉서/파서/타입 체커 에러 표시
+- [x] `textDocument/hover` - 키워드, 내장 함수, 사용자 정의 심볼 타입 정보
+- [x] `textDocument/completion` - 키워드 (30+), 내장 함수, 사용자 정의 함수/구조체/열거형
+
+**구현 세부**:
+- tower-lsp 기반 비동기 LSP 서버
+- 실시간 문서 분석 및 진단 발행
+- 스니펫 지원 자동완성
+
+**산출물**:
+```
+bmb/src/lsp/
+└── mod.rs           # LSP Backend (300+ lines)
 ```
 
 ### v0.7.2 - 테스트 러너 ✅ 완료

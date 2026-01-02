@@ -8,6 +8,7 @@ pub mod codegen;
 pub mod error;
 pub mod interp;
 pub mod lexer;
+pub mod lsp;
 pub mod mir;
 pub mod parser;
 pub mod repl;
