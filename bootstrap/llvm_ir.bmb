@@ -1,4 +1,4 @@
--- BMB LLVM IR Generator written in BMB (v0.10.5: Bootstrap Phase 10)
+-- BMB LLVM IR Generator written in BMB (v0.10.7: Bootstrap Phase 10)
 -- Generates LLVM IR text from MIR representation
 -- Uses functional/recursive style following bootstrap patterns
 --
@@ -7,18 +7,22 @@
 -- - Output: LLVM IR text (.ll format)
 -- - Line separator: | (pipe character)
 --
--- SCOPE (v0.10.5):
+-- SCOPE (v0.10.5-v0.10.7):
 -- - Type mapping (i64 → i64, i32 → i32, bool → i1, unit → void)
 -- - Constant generation
 -- - Arithmetic: add, sub, mul, sdiv, srem
 -- - Comparison: icmp eq/ne/slt/sgt/sle/sge
 -- - Logical: and, or, xor
 -- - Unary: neg (sub 0), not (xor -1)
+-- - Control flow: br, label, phi, ret (v0.10.6)
+-- - Function generation: define, call, params (v0.10.7)
 --
 -- LLVM IR FORMAT:
---   %_t0 = add i64 %a, %b
---   %_t0 = icmp eq i64 %a, %b
---   %_t0 = and i64 %a, %b
+--   define i64 @add(i64 %a, i64 %b) {
+--   entry:
+--     %_t0 = add i64 %a, %b
+--     ret i64 %_t0
+--   }
 
 -- ============================================================================
 -- SECTION 1: String Utilities (no imports in bootstrap)
@@ -416,7 +420,204 @@ fn gen_label_line(line: String) -> String =
     gen_label(name);
 
 -- ============================================================================
--- SECTION 11: Tests
+-- SECTION 11: LLVM IR Function Generation (v0.10.7)
+-- ============================================================================
+
+-- Generate function header
+-- define i64 @add(i64 %a, i64 %b) {
+fn gen_fn_header(name: String, ret_type: String, params: String) -> String =
+    "define " + llvm_type(ret_type) + " @" + name + "(" + params + ") {";
+
+-- Generate function footer
+fn gen_fn_footer() -> String =
+    "}";
+
+-- Generate single parameter
+-- i64 %a
+fn gen_param(param_type: String, param_name: String) -> String =
+    llvm_type(param_type) + " %" + param_name;
+
+-- Generate function call
+-- %result = call i64 @func(i64 %arg1, i64 %arg2)
+fn gen_call(dest: String, ret_type: String, func_name: String, args: String) -> String =
+    dest + " = call " + llvm_type(ret_type) + " @" + func_name + "(" + args + ")";
+
+-- Generate void function call (no return value)
+fn gen_call_void(func_name: String, args: String) -> String =
+    "call void @" + func_name + "(" + args + ")";
+
+-- Generate call argument
+-- i64 %arg
+fn gen_call_arg(arg_type: String, arg_value: String) -> String =
+    llvm_type(arg_type) + " " + arg_value;
+
+-- Parse MIR function header
+-- fn add(a: i64, b: i64) -> i64 {
+-- Returns: "name|ret_type|params" (using | to avoid conflict with type colons)
+fn parse_mir_fn_header(line: String) -> String =
+    let pos0 = skip_ws(line, 0);
+    -- Skip "fn "
+    let pos1 = pos0 + 3;
+    -- Read function name
+    let name = read_until_char(line, pos1, 40);  -- '('
+    let pos2 = pos1 + name.len() + 1;  -- skip '('
+    -- Read parameters until ')'
+    let params_end = find_char(line, 41, pos2);  -- ')'
+    let params_str = line.slice(pos2, params_end);
+    -- Find return type after "->"
+    let arrow_pos = find_arrow(line, params_end);
+    let pos3 = arrow_pos + 2;
+    let pos4 = skip_ws(line, pos3);
+    let ret_type = read_until_ws(line, pos4);
+    name + "|" + ret_type + "|" + params_str;
+
+fn read_until_char(s: String, pos: i64, c: i64) -> String =
+    read_until_char_acc(s, pos, c, "");
+
+fn read_until_char_acc(s: String, pos: i64, c: i64, acc: String) -> String =
+    if pos >= s.len() then acc
+    else if s.char_at(pos) == c then acc
+    else read_until_char_acc(s, pos + 1, c, acc + char_to_string(s.char_at(pos)));
+
+fn find_arrow(s: String, pos: i64) -> i64 =
+    if pos + 1 >= s.len() then s.len()
+    else if s.char_at(pos) == 45 and s.char_at(pos + 1) == 62 then pos  -- '->'
+    else find_arrow(s, pos + 1);
+
+-- Convert MIR parameter list to LLVM IR format
+-- "a: i64, b: i64" -> "i64 %a, i64 %b"
+fn convert_params(params_str: String) -> String =
+    if params_str.len() == 0 then ""
+    else convert_params_acc(params_str, 0, "");
+
+fn convert_params_acc(s: String, pos: i64, acc: String) -> String =
+    if pos >= s.len() then acc
+    else
+        let pos1 = skip_ws(s, pos);
+        if pos1 >= s.len() then acc
+        else
+            let param_name = read_until_char(s, pos1, 58);  -- ':'
+            let pos2 = skip_ws(s, pos1 + param_name.len() + 1);
+            let param_type = read_until_ws(s, pos2);
+            let new_param = gen_param(param_type, param_name);
+            let next_pos = find_char(s, 44, pos2);  -- ','
+            if next_pos >= s.len() then
+                if acc == "" then new_param else acc + ", " + new_param
+            else
+                let new_acc = if acc == "" then new_param else acc + ", " + new_param;
+                convert_params_acc(s, next_pos + 1, new_acc);
+
+-- Parse MIR call instruction
+-- %_t0 = call foo(%a, %b)
+-- Returns: "dest|func|args" (using | as delimiter)
+fn parse_mir_call(line: String) -> String =
+    let pos0 = skip_ws(line, 0);
+    let dest = read_until_ws(line, pos0);
+    let pos1 = find_char(line, 61, pos0);  -- '='
+    let pos2 = skip_ws(line, pos1 + 1);
+    -- Skip "call "
+    let pos3 = pos2 + 5;
+    let func_name = read_until_char(line, pos3, 40);  -- '('
+    let pos4 = pos3 + func_name.len() + 1;
+    let args_end = find_char(line, 41, pos4);  -- ')'
+    let args_str = line.slice(pos4, args_end);
+    dest + "|" + func_name + "|" + args_str;
+
+-- Convert MIR call args to LLVM IR format
+-- "%a, %b" -> "i64 %a, i64 %b"
+fn convert_call_args(args_str: String) -> String =
+    if args_str.len() == 0 then ""
+    else convert_call_args_acc(args_str, 0, "");
+
+fn convert_call_args_acc(s: String, pos: i64, acc: String) -> String =
+    if pos >= s.len() then acc
+    else
+        let pos1 = skip_ws(s, pos);
+        if pos1 >= s.len() then acc
+        else
+            let arg = read_until_ws(s, pos1);
+            let new_arg = gen_call_arg("i64", arg);
+            let next_pos = find_char(s, 44, pos1);  -- ','
+            if next_pos >= s.len() then
+                if acc == "" then new_arg else acc + ", " + new_arg
+            else
+                let new_acc = if acc == "" then new_arg else acc + ", " + new_arg;
+                convert_call_args_acc(s, next_pos + 1, new_acc);
+
+-- Generate LLVM IR call instruction from MIR
+fn gen_instr_call(line: String) -> String =
+    let parsed = parse_mir_call(line);
+    let dest = extract_field(parsed, 0);
+    let func = extract_field(parsed, 1);
+    let args = extract_field(parsed, 2);
+    let llvm_args = convert_call_args(args);
+    gen_call(dest, "i64", func, llvm_args);
+
+-- Extract field from pipe-separated string (| as delimiter)
+fn extract_field(s: String, index: i64) -> String =
+    extract_field_acc(s, 0, index, 0, "");
+
+fn extract_field_acc(s: String, pos: i64, target: i64, current: i64, acc: String) -> String =
+    if pos >= s.len() then
+        if current == target then acc else ""
+    else if s.char_at(pos) == 124 then  -- '|' (pipe character)
+        if current == target then acc
+        else extract_field_acc(s, pos + 1, target, current + 1, "")
+    else
+        if current == target then
+            extract_field_acc(s, pos + 1, target, current, acc + char_to_string(s.char_at(pos)))
+        else
+            extract_field_acc(s, pos + 1, target, current, acc);
+
+-- Generate complete function from MIR
+-- Input: MIR function text with | separators
+-- fn add(a: i64, b: i64) -> i64 {|entry:|  %_t0 = + %a, %b|  return %_t0|}
+fn gen_function(mir: String) -> String =
+    gen_function_lines(mir, 0, "");
+
+fn gen_function_lines(mir: String, pos: i64, acc: String) -> String =
+    if pos >= mir.len() then acc
+    else
+        let line_end = find_pipe(mir, pos);
+        let line = mir.slice(pos, line_end);
+        let llvm_line = gen_mir_line(line);
+        let new_acc = if acc == "" then llvm_line else acc + "|" + llvm_line;
+        if line_end >= mir.len() then new_acc
+        else gen_function_lines(mir, line_end + 1, new_acc);
+
+-- Dispatch for any MIR line
+fn gen_mir_line(line: String) -> String =
+    let pos = skip_ws(line, 0);
+    if pos >= line.len() then ""
+    else
+        let word = read_until_ws(line, pos);
+        if word == "fn" then gen_mir_fn_header(line)
+        else if word == "}" then gen_fn_footer()
+        else if is_label_line(line) then gen_label_line(line)
+        else if is_terminator_line(line) then gen_terminator(line)
+        else if is_call_line(line) then gen_instr_call(line)
+        else gen_instruction(line);
+
+-- Check if line is a call instruction
+fn is_call_line(line: String) -> bool =
+    has_call_keyword(line, 0);
+
+fn has_call_keyword(s: String, pos: i64) -> bool =
+    if pos + 4 >= s.len() then false
+    else if starts_with(s, "call", pos) then true
+    else has_call_keyword(s, pos + 1);
+
+-- Generate LLVM function header from MIR header
+fn gen_mir_fn_header(line: String) -> String =
+    let parsed = parse_mir_fn_header(line);
+    let name = extract_field(parsed, 0);
+    let ret_type = extract_field(parsed, 1);
+    let params_str = extract_field(parsed, 2);
+    let llvm_params = convert_params(params_str);
+    gen_fn_header(name, ret_type, llvm_params);
+
+-- ============================================================================
+-- SECTION 12: Tests
 -- ============================================================================
 
 fn test_type_mapping() -> i64 =
@@ -552,6 +753,80 @@ fn test_line_detection() -> i64 =
     let t7 = if not is_terminator_line("%_t0 = add i64 %a, %b") then 1 else 0;
     t1 + t2 + t3 + t4 + t5 + t6 + t7;
 
+-- v0.10.7 Function Generation Tests
+fn test_fn_header() -> i64 =
+    let h1 = gen_fn_header("add", "i64", "i64 %a, i64 %b");
+    let t1 = if h1 == "define i64 @add(i64 %a, i64 %b) {" then 1 else 0;
+    let h2 = gen_fn_header("main", "i64", "");
+    let t2 = if h2 == "define i64 @main() {" then 1 else 0;
+    let h3 = gen_fn_header("foo", "bool", "i1 %x");
+    let t3 = if h3 == "define i1 @foo(i1 %x) {" then 1 else 0;
+    t1 + t2 + t3;
+
+fn test_param_gen() -> i64 =
+    let p1 = gen_param("i64", "x");
+    let t1 = if p1 == "i64 %x" then 1 else 0;
+    let p2 = gen_param("bool", "flag");
+    let t2 = if p2 == "i1 %flag" then 1 else 0;
+    let p3 = gen_param("i32", "n");
+    let t3 = if p3 == "i32 %n" then 1 else 0;
+    t1 + t2 + t3;
+
+fn test_call_gen() -> i64 =
+    let c1 = gen_call("%_t0", "i64", "add", "i64 %a, i64 %b");
+    let t1 = if c1 == "%_t0 = call i64 @add(i64 %a, i64 %b)" then 1 else 0;
+    let c2 = gen_call_void("println", "i64 %x");
+    let t2 = if c2 == "call void @println(i64 %x)" then 1 else 0;
+    let c3 = gen_call("%r", "i64", "foo", "");
+    let t3 = if c3 == "%r = call i64 @foo()" then 1 else 0;
+    t1 + t2 + t3;
+
+fn test_param_convert() -> i64 =
+    let p1 = convert_params("a: i64");
+    let t1 = if p1 == "i64 %a" then 1 else 0;
+    let p2 = convert_params("x: i64, y: i64");
+    let t2 = if p2 == "i64 %x, i64 %y" then 1 else 0;
+    let p3 = convert_params("");
+    let t3 = if p3 == "" then 1 else 0;
+    t1 + t2 + t3;
+
+fn test_extract_field() -> i64 =
+    let s = "add|i64|a: i64, b: i64";
+    let t1 = if extract_field(s, 0) == "add" then 1 else 0;
+    let t2 = if extract_field(s, 1) == "i64" then 1 else 0;
+    let t3 = if extract_field(s, 2) == "a: i64, b: i64" then 1 else 0;
+    t1 + t2 + t3;
+
+fn test_call_args_convert() -> i64 =
+    let a1 = convert_call_args("%a");
+    let t1 = if a1 == "i64 %a" then 1 else 0;
+    let a2 = convert_call_args("%a, %b");
+    let t2 = if a2 == "i64 %a, i64 %b" then 1 else 0;
+    let a3 = convert_call_args("");
+    let t3 = if a3 == "" then 1 else 0;
+    t1 + t2 + t3;
+
+fn test_fn_generation() -> i64 =
+    -- Simple add function: fn add(a: i64, b: i64) -> i64 {|entry:|  %_t0 = + %a, %b|  return %_t0|}
+    let mir1 = "fn add(a: i64, b: i64) -> i64 {";
+    let llvm1 = gen_mir_line(mir1);
+    let t1 = if llvm1 == "define i64 @add(i64 %a, i64 %b) {" then 1 else 0;
+    -- Test }
+    let mir2 = "}";
+    let llvm2 = gen_mir_line(mir2);
+    let t2 = if llvm2 == "}" then 1 else 0;
+    -- Test instruction
+    let mir3 = "  %_t0 = + %a, %b";
+    let llvm3 = gen_mir_line(mir3);
+    let t3 = if llvm3 == "%_t0 = add i64 %a, %b" then 1 else 0;
+    t1 + t2 + t3;
+
+fn test_call_line_detection() -> i64 =
+    let t1 = if is_call_line("%_t0 = call foo(%a)") then 1 else 0;
+    let t2 = if is_call_line("  %r = call bar(%x, %y)") then 1 else 0;
+    let t3 = if not is_call_line("%_t0 = + %a, %b") then 1 else 0;
+    t1 + t2 + t3;
+
 fn main() -> i64 =
     let u0 = println(777);
     let r1 = test_type_mapping();
@@ -583,8 +858,25 @@ fn main() -> i64 =
     let u13 = println(r13);
     let r14 = test_line_detection();
     let u14 = println(r14);
-    let u15 = println(888);
-    let total = r1 + r2 + r3 + r4 + r5 + r6 + r7 + r8 + r9 + r10 + r11 + r12 + r13 + r14;
-    let u16 = println(total);
-    let u17 = println(999);
+    -- v0.10.7 function generation tests
+    let r15 = test_fn_header();
+    let u15 = println(r15);
+    let r16 = test_param_gen();
+    let u16 = println(r16);
+    let r17 = test_call_gen();
+    let u17 = println(r17);
+    let r18 = test_param_convert();
+    let u18 = println(r18);
+    let r19 = test_extract_field();
+    let u19 = println(r19);
+    let r20 = test_call_args_convert();
+    let u20 = println(r20);
+    let r21 = test_fn_generation();
+    let u21 = println(r21);
+    let r22 = test_call_line_detection();
+    let u22 = println(r22);
+    let u23 = println(888);
+    let total = r1 + r2 + r3 + r4 + r5 + r6 + r7 + r8 + r9 + r10 + r11 + r12 + r13 + r14 + r15 + r16 + r17 + r18 + r19 + r20 + r21 + r22;
+    let u24 = println(total);
+    let u25 = println(999);
     total;
