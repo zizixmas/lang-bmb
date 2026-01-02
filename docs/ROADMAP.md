@@ -341,14 +341,36 @@ bmb test -v           # 상세 출력
 | 복합 | `assert_all2`, `assert_all3`, `assert_any2`, `assert_any3`, `assert_xor`, `assert_implies` | 논리 조합 |
 | 결과 | `count_passed`, `count_failed`, `all_passed`, `any_failed` | 테스트 결과 집계 |
 
-### v0.7.3 - action-bmb 시작
+### v0.7.3 - action-bmb ✅ 완료
 
+```bash
+# 사용법
+- uses: lang-bmb/action-bmb@v1
+  with:
+    version: '0.7.3'    # 버전 지정 (기본: latest)
+    command: 'check .'  # 설치 후 실행할 명령 (선택)
+    cache: 'true'       # 캐싱 활성화 (기본: true)
 ```
-action-bmb/
-├── action.yml        # GitHub Action 정의
-├── src/              # Action 로직 (Shell/Rust)
-└── examples/         # 사용 예제
+
+**산출물**:
 ```
+ecosystem/action-bmb/
+├── action.yml           # GitHub Action 정의 (composite)
+├── README.md            # 사용 설명서
+├── scripts/
+│   └── install.sh       # 로컬 설치 스크립트
+└── examples/
+    ├── basic.yml        # 기본 CI 워크플로우
+    ├── verify.yml       # 계약 검증 워크플로우
+    └── full-ci.yml      # 종합 CI/CD 워크플로우
+```
+
+**기능**:
+- [x] 크로스 플랫폼 지원 (Linux, macOS, Windows)
+- [x] 자동 캐싱으로 빠른 재실행
+- [x] 버전 고정 지원
+- [x] 설치 후 명령 실행 옵션
+- [x] Z3 연동 가이드 (계약 검증용)
 
 ---
 
