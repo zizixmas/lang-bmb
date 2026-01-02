@@ -240,8 +240,8 @@ compile_expr("not b")   →  "%_t0 = not %b"
 999 (end marker)
 ```
 
-### llvm_ir.bmb (15KB) - v0.10.5
-MIR to LLVM IR text generation module.
+### llvm_ir.bmb (20KB) - v0.10.6
+MIR to LLVM IR text generation module with control flow support.
 
 **Features:**
 - Type mapping: i64 → i64, i32 → i32, bool → i1, unit → void
@@ -250,6 +250,12 @@ MIR to LLVM IR text generation module.
 - Comparison operators: icmp eq/ne/slt/sgt/sle/sge
 - Logical operators: and, or, xor
 - Unary operators: neg (sub 0), not (xor 1)
+- **Control flow (v0.10.6):**
+  - Labels: `entry:`, `then_0:`, `else_0:`
+  - Unconditional branch: `br label %target`
+  - Conditional branch: `br i1 %cond, label %then, label %else`
+  - Return: `ret i64 %value`, `ret void`
+  - PHI nodes: `%result = phi i64 [ %a, %then ], [ %b, %else ]`
 
 **LLVM IR Generation:**
 ```llvm
@@ -264,6 +270,13 @@ MIR to LLVM IR text generation module.
 %_t0 = neg %x          →  %_t0 = sub i64 0, %x
 %_t0 = not %b          →  %_t0 = xor i1 %b, 1
 %_t0 = and %a, %b      →  %_t0 = and i1 %a, %b
+
+; Control flow (v0.10.6)
+entry:                 →  entry:
+br label %done         →  br label %done
+br i1 %c, label %t, label %e
+ret i64 %x             →  ret i64 %x
+%r = phi i64 [ %a, %then ], [ %b, %else ]
 ```
 
 **Test output:**
@@ -277,8 +290,14 @@ MIR to LLVM IR text generation module.
 2  (unary operation tests)
 5  (instruction parsing tests)
 5  (const parsing tests)
+3  (label tests)
+3  (branch tests)
+2  (return tests)
+2  (phi tests)
+3  (terminator tests)
+7  (line detection tests)
 888 (separator)
-31 (total passed)
+51 (total passed)
 999 (end marker)
 ```
 
@@ -354,7 +373,7 @@ cargo run --release --bin bmb -- run bootstrap/llvm_ir.bmb
 - [x] AST → MIR lowering (v0.10.2) ✅
 - [x] End-to-end pipeline: source → AST → MIR → text output (v0.10.3) ✅
 - [x] MIR → LLVM IR foundation (v0.10.5) ✅
-- [ ] LLVM IR control flow: branch, label, phi (v0.10.6)
+- [x] LLVM IR control flow: branch, label, phi (v0.10.6) ✅
 - [ ] LLVM IR function generation (v0.10.7)
 - [ ] Full compiler pipeline integration (v0.10.8)
 - [ ] Struct/Enum lowering support (v0.11+)

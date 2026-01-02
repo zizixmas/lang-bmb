@@ -322,7 +322,101 @@ fn gen_instr_binop(dest: String, op: String, line: String, pos: i64) -> String =
     else "; unknown op: " + op;
 
 -- ============================================================================
--- SECTION 10: Tests
+-- SECTION 10: LLVM IR Control Flow (v0.10.6)
+-- ============================================================================
+
+-- Label generation
+-- entry:
+fn gen_label(name: String) -> String =
+    name + ":";
+
+-- Unconditional branch
+-- br label %target
+fn gen_br(target: String) -> String =
+    "br label %" + target;
+
+-- Conditional branch
+-- br i1 %cond, label %then, label %else
+fn gen_br_cond(cond: String, then_label: String, else_label: String) -> String =
+    "br i1 " + cond + ", label %" + then_label + ", label %" + else_label;
+
+-- Return statement
+-- ret i64 %value  or  ret void
+fn gen_ret(ty: String, value: String) -> String =
+    if ty == "void" then "ret void"
+    else "ret " + ty + " " + value;
+
+-- PHI node
+-- %result = phi i64 [ %a, %then ], [ %b, %else ]
+fn gen_phi(dest: String, ty: String, val1: String, label1: String, val2: String, label2: String) -> String =
+    dest + " = phi " + ty + " [ " + val1 + ", %" + label1 + " ], [ " + val2 + ", %" + label2 + " ]";
+
+-- Generate terminator from MIR format
+-- MIR: return %_t0  →  LLVM: ret i64 %_t0
+-- MIR: goto entry   →  LLVM: br label %entry
+-- MIR: branch %c, then_0, else_0  →  LLVM: br i1 %c, label %then_0, label %else_0
+fn gen_terminator(line: String) -> String =
+    let pos0 = skip_ws(line, 0);
+    let word = read_until_ws(line, pos0);
+    if word == "return" then gen_term_return(line, pos0 + 7)
+    else if word == "goto" then gen_term_goto(line, pos0 + 5)
+    else if word == "branch" then gen_term_branch(line, pos0 + 7)
+    else "; unknown terminator: " + word;
+
+fn gen_term_return(line: String, pos: i64) -> String =
+    let pos1 = skip_ws(line, pos);
+    let value = read_until_ws(line, pos1);
+    gen_ret("i64", value);
+
+fn gen_term_goto(line: String, pos: i64) -> String =
+    let pos1 = skip_ws(line, pos);
+    let target = read_until_ws(line, pos1);
+    gen_br(target);
+
+fn gen_term_branch(line: String, pos: i64) -> String =
+    let pos1 = skip_ws(line, pos);
+    let cond = read_until_ws(line, pos1);
+    let pos2 = find_char(line, 44, pos1);  -- comma
+    let pos3 = skip_ws(line, pos2 + 1);
+    let then_label = read_until_ws(line, pos3);
+    let pos4 = find_char(line, 44, pos3);
+    let pos5 = skip_ws(line, pos4 + 1);
+    let else_label = read_until_ws(line, pos5);
+    gen_br_cond(cond, then_label, else_label);
+
+-- Check if line is a label (ends with colon, no '=')
+fn is_label_line(line: String) -> bool =
+    let pos = skip_ws(line, 0);
+    let word = read_until_ws(line, pos);
+    has_trailing_colon(word) and not has_equals(line);
+
+fn has_trailing_colon(s: String) -> bool =
+    if s.len() == 0 then false
+    else s.char_at(s.len() - 1) == 58;
+
+fn has_equals(s: String) -> bool =
+    has_equals_acc(s, 0);
+
+fn has_equals_acc(s: String, pos: i64) -> bool =
+    if pos >= s.len() then false
+    else if s.char_at(pos) == 61 then true
+    else has_equals_acc(s, pos + 1);
+
+-- Check if line is a terminator
+fn is_terminator_line(line: String) -> bool =
+    let pos = skip_ws(line, 0);
+    let word = read_until_ws(line, pos);
+    word == "return" or word == "goto" or word == "branch";
+
+-- Generate LLVM IR for a label line
+fn gen_label_line(line: String) -> String =
+    let pos = skip_ws(line, 0);
+    let word = read_until_ws(line, pos);
+    let name = strip_trailing_colon(word);
+    gen_label(name);
+
+-- ============================================================================
+-- SECTION 11: Tests
 -- ============================================================================
 
 fn test_type_mapping() -> i64 =
@@ -406,6 +500,58 @@ fn test_parse_const() -> i64 =
     let t5 = if parse_const_value("I:100") == 100 then 1 else 0;
     t1 + t2 + t3 + t4 + t5;
 
+-- v0.10.6 Control Flow Tests
+fn test_labels() -> i64 =
+    let l1 = gen_label("entry");
+    let t1 = if l1 == "entry:" then 1 else 0;
+    let l2 = gen_label("then_0");
+    let t2 = if l2 == "then_0:" then 1 else 0;
+    let l3 = gen_label("merge_0");
+    let t3 = if l3 == "merge_0:" then 1 else 0;
+    t1 + t2 + t3;
+
+fn test_branches() -> i64 =
+    let b1 = gen_br("entry");
+    let t1 = if b1 == "br label %entry" then 1 else 0;
+    let b2 = gen_br("merge_0");
+    let t2 = if b2 == "br label %merge_0" then 1 else 0;
+    let b3 = gen_br_cond("%cond", "then_0", "else_0");
+    let t3 = if b3 == "br i1 %cond, label %then_0, label %else_0" then 1 else 0;
+    t1 + t2 + t3;
+
+fn test_returns() -> i64 =
+    let r1 = gen_ret("i64", "%_t0");
+    let t1 = if r1 == "ret i64 %_t0" then 1 else 0;
+    let r2 = gen_ret("void", "");
+    let t2 = if r2 == "ret void" then 1 else 0;
+    t1 + t2;
+
+fn test_phi() -> i64 =
+    let p1 = gen_phi("%result", "i64", "%a", "then_0", "%b", "else_0");
+    let t1 = if p1 == "%result = phi i64 [ %a, %then_0 ], [ %b, %else_0 ]" then 1 else 0;
+    let p2 = gen_phi("%_t0", "i1", "%x", "left", "%y", "right");
+    let t2 = if p2 == "%_t0 = phi i1 [ %x, %left ], [ %y, %right ]" then 1 else 0;
+    t1 + t2;
+
+fn test_terminators() -> i64 =
+    let t1_in = gen_terminator("return %_t0");
+    let t1 = if t1_in == "ret i64 %_t0" then 1 else 0;
+    let t2_in = gen_terminator("goto entry");
+    let t2 = if t2_in == "br label %entry" then 1 else 0;
+    let t3_in = gen_terminator("branch %c, then_0, else_0");
+    let t3 = if t3_in == "br i1 %c, label %then_0, label %else_0" then 1 else 0;
+    t1 + t2 + t3;
+
+fn test_line_detection() -> i64 =
+    let t1 = if is_label_line("entry:") then 1 else 0;
+    let t2 = if is_label_line("then_0:") then 1 else 0;
+    let t3 = if not is_label_line("%_t0 = add i64 %a, %b") then 1 else 0;
+    let t4 = if is_terminator_line("return %_t0") then 1 else 0;
+    let t5 = if is_terminator_line("goto entry") then 1 else 0;
+    let t6 = if is_terminator_line("branch %c, t, e") then 1 else 0;
+    let t7 = if not is_terminator_line("%_t0 = add i64 %a, %b") then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6 + t7;
+
 fn main() -> i64 =
     let u0 = println(777);
     let r1 = test_type_mapping();
@@ -424,8 +570,21 @@ fn main() -> i64 =
     let u7 = println(r7);
     let r8 = test_parse_const();
     let u8 = println(r8);
-    let u9 = println(888);
-    let total = r1 + r2 + r3 + r4 + r5 + r6 + r7 + r8;
-    let u10 = println(total);
-    let u11 = println(999);
+    -- v0.10.6 control flow tests
+    let r9 = test_labels();
+    let u9 = println(r9);
+    let r10 = test_branches();
+    let u10 = println(r10);
+    let r11 = test_returns();
+    let u11 = println(r11);
+    let r12 = test_phi();
+    let u12 = println(r12);
+    let r13 = test_terminators();
+    let u13 = println(r13);
+    let r14 = test_line_detection();
+    let u14 = println(r14);
+    let u15 = println(888);
+    let total = r1 + r2 + r3 + r4 + r5 + r6 + r7 + r8 + r9 + r10 + r11 + r12 + r13 + r14;
+    let u16 = println(total);
+    let u17 = println(999);
     total;
