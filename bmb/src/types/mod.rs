@@ -432,8 +432,8 @@ impl TypeChecker {
                 let expr_ty = self.infer(&expr.node, expr.span)?;
                 let index_ty = self.infer(&index.node, index.span)?;
 
-                // Index must be an integer
-                match &index_ty {
+                // Index must be an integer (v0.2: handle refined types)
+                match index_ty.base_type() {
                     Type::I32 | Type::I64 => {}
                     _ => return Err(CompileError::type_error(format!("Array index must be integer, got: {}", index_ty), index.span)),
                 }
@@ -630,12 +630,17 @@ impl TypeChecker {
     }
 
     /// Check binary operation types
+    /// v0.2: Uses base_type() to handle refined types correctly
     fn check_binary_op(&self, op: BinOp, left: &Type, right: &Type, span: Span) -> Result<Type> {
+        // v0.2: Extract base types for refined types
+        let left_base = left.base_type();
+        let right_base = right.base_type();
+
         match op {
             BinOp::Add => {
-                self.unify(left, right, span)?;
-                match left {
-                    Type::I32 | Type::I64 | Type::F64 => Ok(left.clone()),
+                self.unify(left_base, right_base, span)?;
+                match left_base {
+                    Type::I32 | Type::I64 | Type::F64 => Ok(left_base.clone()),
                     Type::String => Ok(Type::String), // String concatenation
                     _ => Err(CompileError::type_error(
                         format!("+ operator requires numeric or String type, got {left}"),
@@ -645,9 +650,9 @@ impl TypeChecker {
             }
 
             BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod => {
-                self.unify(left, right, span)?;
-                match left {
-                    Type::I32 | Type::I64 | Type::F64 => Ok(left.clone()),
+                self.unify(left_base, right_base, span)?;
+                match left_base {
+                    Type::I32 | Type::I64 | Type::F64 => Ok(left_base.clone()),
                     _ => Err(CompileError::type_error(
                         format!("arithmetic operator requires numeric type, got {left}"),
                         span,
@@ -656,8 +661,8 @@ impl TypeChecker {
             }
 
             BinOp::Eq | BinOp::Ne => {
-                self.unify(left, right, span)?;
-                match left {
+                self.unify(left_base, right_base, span)?;
+                match left_base {
                     Type::I32 | Type::I64 | Type::F64 | Type::Bool | Type::String => Ok(Type::Bool),
                     _ => Err(CompileError::type_error(
                         format!("equality operator requires comparable type, got {left}"),
@@ -667,8 +672,8 @@ impl TypeChecker {
             }
 
             BinOp::Lt | BinOp::Gt | BinOp::Le | BinOp::Ge => {
-                self.unify(left, right, span)?;
-                match left {
+                self.unify(left_base, right_base, span)?;
+                match left_base {
                     Type::I32 | Type::I64 | Type::F64 => Ok(Type::Bool),
                     _ => Err(CompileError::type_error(
                         format!("comparison operator requires numeric type, got {left}"),
@@ -678,25 +683,29 @@ impl TypeChecker {
             }
 
             BinOp::And | BinOp::Or => {
-                self.unify(&Type::Bool, left, span)?;
-                self.unify(&Type::Bool, right, span)?;
+                self.unify(&Type::Bool, left_base, span)?;
+                self.unify(&Type::Bool, right_base, span)?;
                 Ok(Type::Bool)
             }
         }
     }
 
     /// Check unary operation types
+    /// v0.2: Uses base_type() to handle refined types correctly
     fn check_unary_op(&self, op: UnOp, ty: &Type, span: Span) -> Result<Type> {
+        // v0.2: Extract base type for refined types
+        let ty_base = ty.base_type();
+
         match op {
-            UnOp::Neg => match ty {
-                Type::I32 | Type::I64 | Type::F64 => Ok(ty.clone()),
+            UnOp::Neg => match ty_base {
+                Type::I32 | Type::I64 | Type::F64 => Ok(ty_base.clone()),
                 _ => Err(CompileError::type_error(
                     format!("negation requires numeric type, got {ty}"),
                     span,
                 )),
             },
             UnOp::Not => {
-                self.unify(&Type::Bool, ty, span)?;
+                self.unify(&Type::Bool, ty_base, span)?;
                 Ok(Type::Bool)
             }
         }

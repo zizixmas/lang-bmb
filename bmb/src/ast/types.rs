@@ -82,6 +82,31 @@ impl PartialEq for Type {
 
 impl Eq for Type {}
 
+impl Type {
+    /// Get the base type for refined types, or self for non-refined types.
+    /// This is useful for type checking arithmetic/comparison operations.
+    /// e.g., i64{it > 0}.base_type() returns &Type::I64
+    pub fn base_type(&self) -> &Type {
+        match self {
+            Type::Refined { base, .. } => base.base_type(),
+            _ => self,
+        }
+    }
+
+    /// Check if this type is numeric (i32, i64, f64) including refined numeric types
+    pub fn is_numeric(&self) -> bool {
+        matches!(self.base_type(), Type::I32 | Type::I64 | Type::F64)
+    }
+
+    /// Check if this type is comparable (numeric, bool, string) including refined types
+    pub fn is_comparable(&self) -> bool {
+        matches!(
+            self.base_type(),
+            Type::I32 | Type::I64 | Type::F64 | Type::Bool | Type::String
+        )
+    }
+}
+
 impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
