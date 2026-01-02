@@ -617,7 +617,89 @@ fn gen_mir_fn_header(line: String) -> String =
     gen_fn_header(name, ret_type, llvm_params);
 
 -- ============================================================================
--- SECTION 12: Tests
+-- SECTION 12: Full Pipeline Integration (v0.10.8)
+-- MIR text → LLVM IR text conversion for complete functions
+-- ============================================================================
+
+-- Process a complete MIR program (multiple functions separated by ||)
+fn gen_program(mir: String) -> String =
+    gen_program_acc(mir, 0, "");
+
+fn gen_program_acc(mir: String, pos: i64, acc: String) -> String =
+    if pos >= mir.len() then acc
+    else
+        let fn_end = find_double_pipe(mir, pos);
+        let fn_mir = mir.slice(pos, fn_end);
+        let fn_llvm = gen_function(fn_mir);
+        let new_acc = if acc == "" then fn_llvm else acc + "||" + fn_llvm;
+        if fn_end + 2 >= mir.len() then new_acc
+        else gen_program_acc(mir, fn_end + 2, new_acc);
+
+fn find_double_pipe(s: String, pos: i64) -> i64 =
+    if pos + 1 >= s.len() then s.len()
+    else if s.char_at(pos) == 124 and s.char_at(pos + 1) == 124 then pos
+    else find_double_pipe(s, pos + 1);
+
+-- Generate LLVM module header with target specification
+-- Note: LLVM target triple would use quotes, but BMB cannot have quotes in strings
+-- In real output, pipes would be newlines
+fn gen_module_header() -> String =
+    "; ModuleID = bmb_bootstrap|target triple = x86_64-unknown-linux-gnu";
+
+-- Generate external function declarations (for runtime support)
+fn gen_extern_println() -> String =
+    "declare void @println(i64)";
+
+fn gen_extern_abs() -> String =
+    "declare i64 @abs(i64)";
+
+fn gen_extern_min() -> String =
+    "declare i64 @min(i64, i64)";
+
+fn gen_extern_max() -> String =
+    "declare i64 @max(i64, i64)";
+
+-- Generate all runtime declarations
+fn gen_runtime_decls() -> String =
+    gen_extern_println() + "|" + gen_extern_abs() + "|" + gen_extern_min() + "|" + gen_extern_max();
+
+-- Example: Complete add function from MIR to LLVM IR
+-- MIR input:
+--   fn add(a: i64, b: i64) -> i64 {|entry:|  %_t0 = + %a, %b|  return %_t0|}
+-- LLVM output:
+--   define i64 @add(i64 %a, i64 %b) {|entry:|  %_t0 = add i64 %a, %b|  ret i64 %_t0|}
+fn example_add_mir() -> String =
+    "fn add(a: i64, b: i64) -> i64 {|entry:|  %_t0 = + %a, %b|  return %_t0|}";
+
+fn example_add_llvm() -> String =
+    gen_function(example_add_mir());
+
+-- Example: max function with conditional
+-- MIR input:
+--   fn max(a: i64, b: i64) -> i64 {|entry:|  %_t0 = > %a, %b|  branch %_t0, then_0, else_0|then_0:|  goto merge_0|else_0:|  goto merge_0|merge_0:|  return %_t0|}
+fn example_max_mir() -> String =
+    "fn max(a: i64, b: i64) -> i64 {|entry:|  %_t0 = > %a, %b|  branch %_t0, then_0, else_0|then_0:|  goto merge_0|else_0:|  goto merge_0|merge_0:|  return %_t0|}";
+
+fn example_max_llvm() -> String =
+    gen_function(example_max_mir());
+
+-- Validate LLVM IR output: check for expected patterns
+fn has_define(s: String) -> bool =
+    has_pattern(s, "define", 0);
+
+fn has_entry_label(s: String) -> bool =
+    has_pattern(s, "entry:", 0);
+
+fn has_ret(s: String) -> bool =
+    has_pattern(s, "ret", 0);
+
+fn has_pattern(s: String, pat: String, pos: i64) -> bool =
+    if pos + pat.len() > s.len() then false
+    else if starts_with(s, pat, pos) then true
+    else has_pattern(s, pat, pos + 1);
+
+-- ============================================================================
+-- SECTION 13: Tests
 -- ============================================================================
 
 fn test_type_mapping() -> i64 =
@@ -827,6 +909,52 @@ fn test_call_line_detection() -> i64 =
     let t3 = if not is_call_line("%_t0 = + %a, %b") then 1 else 0;
     t1 + t2 + t3;
 
+-- v0.10.8 Pipeline Integration Tests
+fn test_module_header() -> i64 =
+    let h = gen_module_header();
+    let t1 = if has_pattern(h, "ModuleID", 0) then 1 else 0;
+    let t2 = if has_pattern(h, "target triple", 0) then 1 else 0;
+    t1 + t2;
+
+fn test_extern_decls() -> i64 =
+    let d1 = gen_extern_println();
+    let t1 = if d1 == "declare void @println(i64)" then 1 else 0;
+    let d2 = gen_extern_abs();
+    let t2 = if d2 == "declare i64 @abs(i64)" then 1 else 0;
+    let d3 = gen_extern_min();
+    let t3 = if d3 == "declare i64 @min(i64, i64)" then 1 else 0;
+    t1 + t2 + t3;
+
+fn test_full_add_function() -> i64 =
+    let llvm = example_add_llvm();
+    let t1 = if has_define(llvm) then 1 else 0;
+    let t2 = if has_entry_label(llvm) then 1 else 0;
+    let t3 = if has_ret(llvm) then 1 else 0;
+    let t4 = if has_pattern(llvm, "add i64", 0) then 1 else 0;
+    t1 + t2 + t3 + t4;
+
+fn test_full_max_function() -> i64 =
+    let llvm = example_max_llvm();
+    let t1 = if has_define(llvm) then 1 else 0;
+    let t2 = if has_pattern(llvm, "icmp sgt", 0) then 1 else 0;
+    let t3 = if has_pattern(llvm, "br i1", 0) then 1 else 0;
+    let t4 = if has_pattern(llvm, "br label", 0) then 1 else 0;
+    t1 + t2 + t3 + t4;
+
+fn test_double_pipe() -> i64 =
+    let s = "fn a() -> i64 {}||fn b() -> i64 {}";
+    -- Position: fn a() -> i64 {} = 16 chars, || starts at 16
+    let t1 = if find_double_pipe(s, 0) == 16 then 1 else 0;
+    let s2 = "no double pipe";
+    let t2 = if find_double_pipe(s2, 0) == s2.len() then 1 else 0;
+    t1 + t2;
+
+fn test_has_pattern() -> i64 =
+    let t1 = if has_pattern("hello world", "world", 0) then 1 else 0;
+    let t2 = if has_pattern("hello world", "foo", 0) == false then 1 else 0;
+    let t3 = if has_pattern("define i64 @add", "define", 0) then 1 else 0;
+    t1 + t2 + t3;
+
 fn main() -> i64 =
     let u0 = println(777);
     let r1 = test_type_mapping();
@@ -875,8 +1003,21 @@ fn main() -> i64 =
     let u21 = println(r21);
     let r22 = test_call_line_detection();
     let u22 = println(r22);
-    let u23 = println(888);
-    let total = r1 + r2 + r3 + r4 + r5 + r6 + r7 + r8 + r9 + r10 + r11 + r12 + r13 + r14 + r15 + r16 + r17 + r18 + r19 + r20 + r21 + r22;
-    let u24 = println(total);
-    let u25 = println(999);
+    -- v0.10.8 pipeline integration tests
+    let r23 = test_module_header();
+    let u23 = println(r23);
+    let r24 = test_extern_decls();
+    let u24 = println(r24);
+    let r25 = test_full_add_function();
+    let u25 = println(r25);
+    let r26 = test_full_max_function();
+    let u26 = println(r26);
+    let r27 = test_double_pipe();
+    let u27 = println(r27);
+    let r28 = test_has_pattern();
+    let u28 = println(r28);
+    let u29 = println(888);
+    let total = r1 + r2 + r3 + r4 + r5 + r6 + r7 + r8 + r9 + r10 + r11 + r12 + r13 + r14 + r15 + r16 + r17 + r18 + r19 + r20 + r21 + r22 + r23 + r24 + r25 + r26 + r27 + r28;
+    let u30 = println(total);
+    let u31 = println(999);
     total;

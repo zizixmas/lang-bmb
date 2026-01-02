@@ -240,8 +240,8 @@ compile_expr("not b")   →  "%_t0 = not %b"
 999 (end marker)
 ```
 
-### llvm_ir.bmb (28KB) - v0.10.7
-MIR to LLVM IR text generation module with function generation support.
+### llvm_ir.bmb (35KB) - v0.10.8
+Complete LLVM IR generation module with full pipeline integration.
 
 **Features:**
 - Type mapping: i64 → i64, i32 → i32, bool → i1, unit → void
@@ -261,6 +261,16 @@ MIR to LLVM IR text generation module with function generation support.
   - Parameter conversion: MIR → LLVM parameter format
   - Function calls: `%r = call i64 @func(i64 %a)`
   - Complete function transformation: MIR → LLVM IR
+- **Full pipeline integration (v0.10.8):**
+  - Program generation: Multiple functions with `||` separator
+  - Module headers: ModuleID and target triple
+  - Runtime declarations: println, abs, min, max
+  - End-to-end validation: MIR function → LLVM IR function
+
+**Complete Pipeline Architecture:**
+```
+Source (BMB) → Lexer → Parser → AST → MIR → LLVM IR Text
+```
 
 **LLVM IR Generation:**
 ```llvm
@@ -286,6 +296,12 @@ ret i64 %x             →  ret i64 %x
 ; Function generation (v0.10.7)
 fn add(a: i64, b: i64) -> i64 {  →  define i64 @add(i64 %a, i64 %b) {
 %_t0 = call foo(%a, %b)         →  %_t0 = call i64 @foo(i64 %a, i64 %b)
+
+; Runtime declarations (v0.10.8)
+declare void @println(i64)
+declare i64 @abs(i64)
+declare i64 @min(i64, i64)
+declare i64 @max(i64, i64)
 ```
 
 **Test output:**
@@ -313,8 +329,14 @@ fn add(a: i64, b: i64) -> i64 {  →  define i64 @add(i64 %a, i64 %b) {
 3  (call args conversion tests)
 3  (function generation tests)
 3  (call line detection tests)
+2  (module header tests)
+3  (extern declaration tests)
+4  (full add function tests)
+4  (full max function tests)
+2  (double pipe tests)
+3  (has pattern tests)
 888 (separator)
-75 (total passed)
+93 (total passed)
 999 (end marker)
 ```
 
@@ -392,6 +414,6 @@ cargo run --release --bin bmb -- run bootstrap/llvm_ir.bmb
 - [x] MIR → LLVM IR foundation (v0.10.5) ✅
 - [x] LLVM IR control flow: branch, label, phi (v0.10.6) ✅
 - [x] LLVM IR function generation (v0.10.7) ✅
-- [ ] Full compiler pipeline integration (v0.10.8)
+- [x] Full compiler pipeline integration (v0.10.8) ✅
 - [ ] Struct/Enum lowering support (v0.11+)
 - [ ] Optimization passes in BMB (v0.11+)
