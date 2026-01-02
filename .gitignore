@@ -5,6 +5,8 @@ local-docs/
 CLAUDE.md
 *.local
 /tools/
+.claude/
+nul
 
 # Rust/Cargo
 /target/
