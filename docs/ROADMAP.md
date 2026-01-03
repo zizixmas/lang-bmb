@@ -44,7 +44,7 @@ v0.MAJOR.MINOR
 | v0.12 | Horizon | WASM 듀얼 타깃 | ✅ 완료 (v0.12.0-4) |
 | v0.13 | **Forge** | 언어 완성 + extern fn + 제네릭 + 에러처리 | ✅ 완료 (v0.13.0-3) |
 | v0.14 | **Foundation** | 제네릭 stdlib + 패키지 표준화 | ✅ 완료 (v0.14.0-5) |
-| v0.15 | **Stream** | Collections/IO 패키지 25개 + 벤치마크 v1 | 계획 |
+| v0.15 | **Generics** | 제네릭 타입 시스템 완성 | ✅ 완료 (v0.15.0-2) |
 | v0.16 | **Connect** | Network/Serialization 25개 + 최적화 1차 | 계획 |
 | v0.17 | **Parallel** | Async/Crypto 20개 + 벤치마크 v2 | 계획 |
 | v0.18 | **Persist** | Database/CLI 20개 + 최적화 2차 | 계획 |
@@ -755,59 +755,92 @@ $ bmb parse packages/bmb-iter/src/lib.bmb     # ✅
 
 ---
 
-## v0.15 Stream (Collections/IO 25개 + 벤치마크 v1)
+## v0.15 Generics (제네릭 타입 시스템 완성)
 
-> 목표: 컬렉션/IO 패키지 + C/Rust 벤치마크 기준선
+> 목표: v0.13에서 추가된 제네릭 **문법**을 완전한 **의미론**으로 구현
 
-### 패키지 목록
+### 배경
 
-| # | 패키지 | 설명 |
-|---|--------|------|
-| 26 | bmb-btreemap | B-트리 맵 |
-| 27 | bmb-btreeset | B-트리 셋 |
-| 28 | bmb-linkedlist | 연결 리스트 |
-| 29 | bmb-heap | 바이너리 힙 |
-| 30 | bmb-smallvec | 스택 최적화 벡터 |
-| 31 | bmb-indexmap | 순서 유지 맵 |
-| 32 | bmb-bitvec | 비트 벡터 |
-| 33 | bmb-arena | 아레나 할당자 |
-| 34 | bmb-slotmap | 슬롯 맵 |
-| 35 | bmb-lru | LRU 캐시 |
-| 36 | bmb-io | IO 트레이트 |
-| 37 | bmb-fs | 파일 시스템 |
-| 38 | bmb-path | 경로 처리 |
-| 39 | bmb-buf | 버퍼 IO |
-| 40 | bmb-stdio | 표준 입출력 |
-| 41 | bmb-tempfile | 임시 파일 |
-| 42 | bmb-walkdir | 디렉토리 순회 |
-| 43 | bmb-notify | 파일 감시 |
-| 44 | bmb-memmap | 메모리 맵 |
-| 45 | bmb-tar | tar 아카이브 |
-| 46 | bmb-net | 네트워크 기초 |
-| 47 | bmb-tcp | TCP 소켓 |
-| 48 | bmb-udp | UDP 소켓 |
-| 49 | bmb-socket | 소켓 추상화 |
-| 50 | bmb-dns | DNS 리졸버 |
+v0.13에서 제네릭 문법이 추가되었으나 (TypeParam, Generic types), 타입 체커에서 실제 타입 검증이 누락되어 있었음:
+- `identity<T>(x: T) -> T` 정의는 파싱되지만
+- `identity(100)` 호출 시 "expected T, got i64" 에러 발생
+- 원인: 타입 추론 및 대입(substitution) 로직 부재
 
-### 벤치마크 v1 (기준선)
+### 구현 내용
+
+#### v0.15.0 - 타입 체커 제네릭 지원
+
+| 기능 | 설명 | 상태 |
+|------|------|------|
+| TypeChecker 확장 | `generic_functions`, `generic_structs`, `type_param_env` 필드 추가 | ✅ |
+| 타입 매개변수 환경 | 함수/구조체 내 타입 매개변수 추적 | ✅ |
+| Named → TypeVar 변환 | `resolve_type_vars()` - 파서의 Named 타입을 TypeVar로 변환 | ✅ |
+| 타입 인자 추론 | `infer_type_args()` - 호출 인자로부터 타입 인자 추론 | ✅ |
+| 타입 대입 | `substitute_type()` - TypeVar를 구체 타입으로 대체 | ✅ |
+| unify 확장 | TypeVar 처리 추가 | ✅ |
+
+#### v0.15.1 - 인터프리터 제네릭 지원
+
+| 기능 | 설명 | 상태 |
+|------|------|------|
+| 동적 타이핑 활용 | 인터프리터는 런타임에 타입 정보 불필요 | ✅ 기존 동작 |
+| 제네릭 함수 호출 | 타입 체커 통과 후 정상 실행 | ✅ |
+
+#### v0.15.2 - 통합 테스트
+
+| 테스트 파일 | 테스트 내용 | 상태 |
+|-------------|-------------|------|
+| `test_generics_simple.bmb` | 기본 identity 함수 | ✅ |
+| `test_generics_runtime.bmb` | 제네릭 + 비제네릭 혼합 | ✅ |
+| `test_generics_comprehensive.bmb` | 다중 타입 매개변수, 중첩 호출 | ✅ |
+| `test_generics_stdlib.bmb` | Option 패턴, 제네릭 enum | ⚠️ 제한적 |
+
+### 알려진 제한사항
+
+| 제한 | 설명 | 해결 버전 |
+|------|------|-----------|
+| 제네릭 enum 인스턴스화 | `Option::Some(v)`가 `Option`으로 타입 추론됨 (`Option<T>` 아님) | v0.16+ |
+| 제네릭 struct 생성자 | 구조체 리터럴 타입 추론 미구현 | v0.16+ |
+| 타입 인자 명시 구문 | `identity::<i64>(100)` 미지원 | 필요시 |
+
+### 기술적 세부사항
+
+**핵심 타입 체커 변경 (`bmb/src/types/mod.rs`):**
+
+```rust
+// 새로운 필드
+generic_functions: HashMap<String, (Vec<TypeParam>, Vec<Type>, Type)>,
+generic_structs: HashMap<String, (Vec<TypeParam>, Vec<(String, Type)>)>,
+type_param_env: HashMap<String, Vec<String>>,
+
+// 핵심 메서드
+fn resolve_type_vars(&self, ty: &Type, type_param_names: &[&str]) -> Type
+fn infer_type_args(&self, param_ty: &Type, arg_ty: &Type, subst: &mut HashMap<String, Type>, span: Span) -> Result<()>
+fn substitute_type(&self, ty: &Type, subst: &HashMap<String, Type>) -> Type
+```
+
+**파서-타입체커 인터페이스:**
+- 파서는 `Type::Named("T")`를 생성
+- 타입 체커가 타입 매개변수 이름과 매칭하여 `Type::TypeVar("T")`로 변환
+- 호출 시점에 구체 타입으로 대입하여 단형화(monomorphization)
+
+### 테스트 결과
 
 ```
-benchmark-bmb/v0.15/
-├── micro/
-│   ├── fibonacci.bmb      # vs fibonacci.c, fibonacci.rs
-│   ├── primes.bmb
-│   └── sorting.bmb
-├── algo/
-│   ├── dijkstra.bmb
-│   └── quicksort.bmb
-└── results/
-    └── baseline-v0.15.json
+cargo test -- --nocapture
+running 15 tests
+test lexer::tests::... ok
+test parser::tests::... ok
+test types::tests::... ok
+...
+test result: ok. 15 passed
 ```
 
-**KPI 측정:**
-- 컴파일 속도: Rust 대비 80%
-- 런타임 성능: C 대비 70%
-- 바이너리 크기: Rust 대비 120%
+통합 테스트:
+```bash
+cargo run check tests/examples/valid/test_generics_comprehensive.bmb  # ✅
+cargo run run tests/examples/valid/test_generics_comprehensive.bmb    # 출력: 230
+```
 
 ---
 

@@ -9,14 +9,23 @@ use crate::error::{CompileError, Result};
 pub struct TypeChecker {
     /// Variable environment
     env: HashMap<String, Type>,
-    /// Function signatures
+    /// Function signatures (non-generic)
     functions: HashMap<String, (Vec<Type>, Type)>,
+    /// Generic function signatures: name -> (type_params, param_types, return_type)
+    /// v0.15: Support for generic functions like fn identity<T>(x: T) -> T
+    generic_functions: HashMap<String, (Vec<TypeParam>, Vec<Type>, Type)>,
+    /// Generic struct definitions: name -> (type_params, fields)
+    /// v0.15: Support for generic structs like struct Container<T> { value: T }
+    generic_structs: HashMap<String, (Vec<TypeParam>, Vec<(String, Type)>)>,
     /// Struct definitions: name -> field types
     structs: HashMap<String, Vec<(String, Type)>>,
     /// Enum definitions: name -> variant info (variant_name, field types)
     enums: HashMap<String, Vec<(String, Vec<Type>)>>,
     /// Current function return type (for `ret` keyword)
     current_ret_ty: Option<Type>,
+    /// Current type parameter environment (for checking generic function bodies)
+    /// v0.15: Maps type parameter names to their bounds
+    type_param_env: HashMap<String, Vec<String>>,
 }
 
 impl TypeChecker {
@@ -42,9 +51,12 @@ impl TypeChecker {
         Self {
             env: HashMap::new(),
             functions,
+            generic_functions: HashMap::new(),
+            generic_structs: HashMap::new(),
             structs: HashMap::new(),
             enums: HashMap::new(),
             current_ret_ty: None,
+            type_param_env: HashMap::new(),
         }
     }
 
@@ -57,7 +69,15 @@ impl TypeChecker {
                     let fields: Vec<_> = s.fields.iter()
                         .map(|f| (f.name.node.clone(), f.ty.node.clone()))
                         .collect();
-                    self.structs.insert(s.name.node.clone(), fields);
+                    // v0.15: Handle generic structs
+                    if s.type_params.is_empty() {
+                        self.structs.insert(s.name.node.clone(), fields);
+                    } else {
+                        self.generic_structs.insert(
+                            s.name.node.clone(),
+                            (s.type_params.clone(), fields)
+                        );
+                    }
                 }
                 Item::EnumDef(e) => {
                     let variants: Vec<_> = e.variants.iter()
@@ -75,9 +95,23 @@ impl TypeChecker {
         for item in &program.items {
             match item {
                 Item::FnDef(f) => {
-                    let param_tys: Vec<_> = f.params.iter().map(|p| p.ty.node.clone()).collect();
-                    self.functions
-                        .insert(f.name.node.clone(), (param_tys, f.ret_ty.node.clone()));
+                    // v0.15: Handle generic functions separately
+                    if f.type_params.is_empty() {
+                        let param_tys: Vec<_> = f.params.iter().map(|p| p.ty.node.clone()).collect();
+                        self.functions
+                            .insert(f.name.node.clone(), (param_tys, f.ret_ty.node.clone()));
+                    } else {
+                        // Convert Named types that match type params to TypeVar
+                        let type_param_names: Vec<_> = f.type_params.iter().map(|tp| tp.name.as_str()).collect();
+                        let param_tys: Vec<_> = f.params.iter()
+                            .map(|p| self.resolve_type_vars(&p.ty.node, &type_param_names))
+                            .collect();
+                        let ret_ty = self.resolve_type_vars(&f.ret_ty.node, &type_param_names);
+                        self.generic_functions.insert(
+                            f.name.node.clone(),
+                            (f.type_params.clone(), param_tys, ret_ty)
+                        );
+                    }
                 }
                 // v0.13.0: Register extern function signatures
                 Item::ExternFn(e) => {
@@ -104,12 +138,32 @@ impl TypeChecker {
     fn check_fn(&mut self, f: &FnDef) -> Result<()> {
         // Clear environment and add parameters
         self.env.clear();
+        self.type_param_env.clear();
+
+        // v0.15: Register type parameters for generic functions
+        let type_param_names: Vec<_> = f.type_params.iter().map(|tp| tp.name.as_str()).collect();
+        for tp in &f.type_params {
+            self.type_param_env.insert(tp.name.clone(), tp.bounds.clone());
+        }
+
+        // v0.15: Convert Named types that match type params to TypeVar for env
         for param in &f.params {
-            self.env.insert(param.name.node.clone(), param.ty.node.clone());
+            let resolved_ty = if f.type_params.is_empty() {
+                param.ty.node.clone()
+            } else {
+                self.resolve_type_vars(&param.ty.node, &type_param_names)
+            };
+            self.env.insert(param.name.node.clone(), resolved_ty);
         }
 
         // Set current return type for `ret` keyword
-        self.current_ret_ty = Some(f.ret_ty.node.clone());
+        // v0.15: Resolve type vars in return type too
+        let resolved_ret_ty = if f.type_params.is_empty() {
+            f.ret_ty.node.clone()
+        } else {
+            self.resolve_type_vars(&f.ret_ty.node, &type_param_names)
+        };
+        self.current_ret_ty = Some(resolved_ret_ty.clone());
 
         // Check pre condition (must be bool)
         if let Some(pre) = &f.pre {
@@ -125,9 +179,11 @@ impl TypeChecker {
 
         // Check body
         let body_ty = self.infer(&f.body.node, f.body.span)?;
-        self.unify(&f.ret_ty.node, &body_ty, f.body.span)?;
+        // v0.15: Use resolved return type for generic functions
+        self.unify(&resolved_ret_ty, &body_ty, f.body.span)?;
 
         self.current_ret_ty = None;
+        self.type_param_env.clear();
         Ok(())
     }
 
@@ -259,27 +315,64 @@ impl TypeChecker {
             }
 
             Expr::Call { func, args } => {
-                let (param_tys, ret_ty) = self.functions.get(func).cloned().ok_or_else(|| {
-                    CompileError::type_error(format!("undefined function: {func}"), span)
-                })?;
+                // v0.15: First try non-generic functions
+                if let Some((param_tys, ret_ty)) = self.functions.get(func).cloned() {
+                    if args.len() != param_tys.len() {
+                        return Err(CompileError::type_error(
+                            format!(
+                                "expected {} arguments, got {}",
+                                param_tys.len(),
+                                args.len()
+                            ),
+                            span,
+                        ));
+                    }
 
-                if args.len() != param_tys.len() {
-                    return Err(CompileError::type_error(
-                        format!(
-                            "expected {} arguments, got {}",
-                            param_tys.len(),
-                            args.len()
-                        ),
-                        span,
-                    ));
+                    for (arg, param_ty) in args.iter().zip(param_tys.iter()) {
+                        let arg_ty = self.infer(&arg.node, arg.span)?;
+                        self.unify(&param_ty, &arg_ty, arg.span)?;
+                    }
+
+                    return Ok(ret_ty);
                 }
 
-                for (arg, param_ty) in args.iter().zip(param_tys.iter()) {
-                    let arg_ty = self.infer(&arg.node, arg.span)?;
-                    self.unify(param_ty, &arg_ty, arg.span)?;
+                // v0.15: Try generic functions
+                if let Some((type_params, param_tys, ret_ty)) = self.generic_functions.get(func).cloned() {
+                    if args.len() != param_tys.len() {
+                        return Err(CompileError::type_error(
+                            format!(
+                                "expected {} arguments, got {}",
+                                param_tys.len(),
+                                args.len()
+                            ),
+                            span,
+                        ));
+                    }
+
+                    // Infer type arguments from actual arguments
+                    let mut type_subst: HashMap<String, Type> = HashMap::new();
+
+                    for (arg, param_ty) in args.iter().zip(param_tys.iter()) {
+                        let arg_ty = self.infer(&arg.node, arg.span)?;
+                        self.infer_type_args(&param_ty, &arg_ty, &mut type_subst, arg.span)?;
+                    }
+
+                    // Check that all type parameters are inferred
+                    for tp in &type_params {
+                        if !type_subst.contains_key(&tp.name) {
+                            return Err(CompileError::type_error(
+                                format!("could not infer type for type parameter {}", tp.name),
+                                span,
+                            ));
+                        }
+                    }
+
+                    // Substitute type parameters in return type
+                    let instantiated_ret_ty = self.substitute_type(&ret_ty, &type_subst);
+                    return Ok(instantiated_ret_ty);
                 }
 
-                Ok(ret_ty)
+                Err(CompileError::type_error(format!("undefined function: {func}"), span))
             }
 
             Expr::Block(exprs) => {
@@ -732,7 +825,30 @@ impl TypeChecker {
     }
 
     /// Unify two types
+    /// v0.15: Updated to handle TypeVar in generic function body checking
     fn unify(&self, expected: &Type, actual: &Type, span: Span) -> Result<()> {
+        // v0.15: TypeVar in function body context matches any type
+        // When type checking a generic function body, TypeVar acts as a placeholder
+        if let Type::TypeVar(name) = expected {
+            if self.type_param_env.contains_key(name) {
+                // TypeVar is bound in current generic context - accept any type
+                return Ok(());
+            }
+        }
+        if let Type::TypeVar(name) = actual {
+            if self.type_param_env.contains_key(name) {
+                // TypeVar is bound in current generic context - accept any type
+                return Ok(());
+            }
+        }
+
+        // Both are TypeVar with same name
+        if let (Type::TypeVar(a), Type::TypeVar(b)) = (expected, actual) {
+            if a == b {
+                return Ok(());
+            }
+        }
+
         if expected == actual {
             Ok(())
         } else {
@@ -740,6 +856,192 @@ impl TypeChecker {
                 format!("expected {expected}, got {actual}"),
                 span,
             ))
+        }
+    }
+
+    /// v0.15: Infer type arguments by matching parameter types with argument types
+    /// Populates type_subst with inferred type parameter -> concrete type mappings
+    fn infer_type_args(
+        &self,
+        param_ty: &Type,
+        arg_ty: &Type,
+        type_subst: &mut HashMap<String, Type>,
+        span: Span,
+    ) -> Result<()> {
+        match param_ty {
+            Type::TypeVar(name) => {
+                // Found a type variable - infer its concrete type from the argument
+                if let Some(existing) = type_subst.get(name) {
+                    // Already inferred - check consistency
+                    if existing != arg_ty {
+                        return Err(CompileError::type_error(
+                            format!(
+                                "conflicting type inference for {}: {} vs {}",
+                                name, existing, arg_ty
+                            ),
+                            span,
+                        ));
+                    }
+                } else {
+                    type_subst.insert(name.clone(), arg_ty.clone());
+                }
+                Ok(())
+            }
+            Type::Ref(inner) => {
+                if let Type::Ref(arg_inner) = arg_ty {
+                    self.infer_type_args(inner, arg_inner, type_subst, span)
+                } else {
+                    Err(CompileError::type_error(
+                        format!("expected reference type, got {}", arg_ty),
+                        span,
+                    ))
+                }
+            }
+            Type::RefMut(inner) => {
+                if let Type::RefMut(arg_inner) = arg_ty {
+                    self.infer_type_args(inner, arg_inner, type_subst, span)
+                } else {
+                    Err(CompileError::type_error(
+                        format!("expected mutable reference type, got {}", arg_ty),
+                        span,
+                    ))
+                }
+            }
+            Type::Array(elem, size) => {
+                if let Type::Array(arg_elem, arg_size) = arg_ty {
+                    if size != arg_size {
+                        return Err(CompileError::type_error(
+                            format!("array size mismatch: expected {}, got {}", size, arg_size),
+                            span,
+                        ));
+                    }
+                    self.infer_type_args(elem, arg_elem, type_subst, span)
+                } else {
+                    Err(CompileError::type_error(
+                        format!("expected array type, got {}", arg_ty),
+                        span,
+                    ))
+                }
+            }
+            Type::Generic { name, type_args } => {
+                if let Type::Generic { name: arg_name, type_args: arg_type_args } = arg_ty {
+                    if name != arg_name {
+                        return Err(CompileError::type_error(
+                            format!("generic type mismatch: expected {}, got {}", name, arg_name),
+                            span,
+                        ));
+                    }
+                    if type_args.len() != arg_type_args.len() {
+                        return Err(CompileError::type_error(
+                            format!("generic type argument count mismatch"),
+                            span,
+                        ));
+                    }
+                    for (param_arg, actual_arg) in type_args.iter().zip(arg_type_args.iter()) {
+                        self.infer_type_args(param_arg, actual_arg, type_subst, span)?;
+                    }
+                    Ok(())
+                } else {
+                    Err(CompileError::type_error(
+                        format!("expected generic type {}, got {}", name, arg_ty),
+                        span,
+                    ))
+                }
+            }
+            // For concrete types, just check equality
+            _ => {
+                if param_ty == arg_ty {
+                    Ok(())
+                } else {
+                    Err(CompileError::type_error(
+                        format!("type mismatch: expected {}, got {}", param_ty, arg_ty),
+                        span,
+                    ))
+                }
+            }
+        }
+    }
+
+    /// v0.15: Convert Named types to TypeVar when they match type parameters
+    /// This is needed because the parser treats type parameter references as Named types
+    fn resolve_type_vars(&self, ty: &Type, type_param_names: &[&str]) -> Type {
+        match ty {
+            Type::Named(name) => {
+                if type_param_names.contains(&name.as_str()) {
+                    Type::TypeVar(name.clone())
+                } else {
+                    ty.clone()
+                }
+            }
+            Type::Ref(inner) => {
+                Type::Ref(Box::new(self.resolve_type_vars(inner, type_param_names)))
+            }
+            Type::RefMut(inner) => {
+                Type::RefMut(Box::new(self.resolve_type_vars(inner, type_param_names)))
+            }
+            Type::Array(elem, size) => {
+                Type::Array(Box::new(self.resolve_type_vars(elem, type_param_names)), *size)
+            }
+            Type::Range(elem) => {
+                Type::Range(Box::new(self.resolve_type_vars(elem, type_param_names)))
+            }
+            Type::Generic { name, type_args } => {
+                let resolved_args: Vec<_> = type_args
+                    .iter()
+                    .map(|arg| Box::new(self.resolve_type_vars(arg, type_param_names)))
+                    .collect();
+                Type::Generic {
+                    name: name.clone(),
+                    type_args: resolved_args,
+                }
+            }
+            Type::Refined { base, constraints } => {
+                Type::Refined {
+                    base: Box::new(self.resolve_type_vars(base, type_param_names)),
+                    constraints: constraints.clone(),
+                }
+            }
+            // Other types remain unchanged
+            _ => ty.clone(),
+        }
+    }
+
+    /// v0.15: Substitute type variables with concrete types
+    fn substitute_type(&self, ty: &Type, type_subst: &HashMap<String, Type>) -> Type {
+        match ty {
+            Type::TypeVar(name) => {
+                type_subst.get(name).cloned().unwrap_or_else(|| ty.clone())
+            }
+            Type::Ref(inner) => {
+                Type::Ref(Box::new(self.substitute_type(inner, type_subst)))
+            }
+            Type::RefMut(inner) => {
+                Type::RefMut(Box::new(self.substitute_type(inner, type_subst)))
+            }
+            Type::Array(elem, size) => {
+                Type::Array(Box::new(self.substitute_type(elem, type_subst)), *size)
+            }
+            Type::Range(elem) => {
+                Type::Range(Box::new(self.substitute_type(elem, type_subst)))
+            }
+            Type::Generic { name, type_args } => {
+                let substituted_args: Vec<_> = type_args
+                    .iter()
+                    .map(|arg| Box::new(self.substitute_type(arg, type_subst)))
+                    .collect();
+                Type::Generic {
+                    name: name.clone(),
+                    type_args: substituted_args,
+                }
+            }
+            Type::Refined { base, constraints } => {
+                Type::Refined {
+                    base: Box::new(self.substitute_type(base, type_subst)),
+                    constraints: constraints.clone(),
+                }
+            }
+            // Concrete types remain unchanged
+            _ => ty.clone(),
         }
     }
 }
