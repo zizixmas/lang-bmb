@@ -25,6 +25,12 @@ enum Command {
         /// Emit LLVM IR instead of executable
         #[arg(long)]
         emit_ir: bool,
+        /// Emit WASM text format (.wat)
+        #[arg(long)]
+        emit_wasm: bool,
+        /// WASM target environment (wasi, browser, standalone)
+        #[arg(long, default_value = "wasi")]
+        wasm_target: String,
         /// Verbose output
         #[arg(short, long)]
         verbose: bool,
@@ -94,8 +100,10 @@ fn main() {
             output,
             release,
             emit_ir,
+            emit_wasm,
+            wasm_target,
             verbose,
-        } => build_file(&file, output, release, emit_ir, verbose),
+        } => build_file(&file, output, release, emit_ir, emit_wasm, &wasm_target, verbose),
         Command::Run { file } => run_file(&file),
         Command::Repl => start_repl(),
         Command::Check { file } => check_file(&file),
@@ -118,8 +126,15 @@ fn build_file(
     output: Option<PathBuf>,
     release: bool,
     emit_ir: bool,
+    emit_wasm: bool,
+    wasm_target: &str,
     verbose: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // If emitting WASM, use the WASM code generator
+    if emit_wasm {
+        return build_wasm(path, output, wasm_target, verbose);
+    }
+
     use bmb::build::{BuildConfig, OptLevel};
 
     let mut config = BuildConfig::new(path.clone())
@@ -138,6 +153,67 @@ fn build_file(
 
     if !emit_ir && verbose {
         println!("Build complete: {}", config.output.display());
+    }
+
+    Ok(())
+}
+
+fn build_wasm(
+    path: &PathBuf,
+    output: Option<PathBuf>,
+    wasm_target: &str,
+    verbose: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use bmb::codegen::{WasmCodeGen, WasmTarget};
+
+    let source = std::fs::read_to_string(path)?;
+    let filename = path.display().to_string();
+
+    if verbose {
+        println!("Compiling {} to WASM...", filename);
+    }
+
+    // Tokenize
+    let tokens = bmb::lexer::tokenize(&source)?;
+
+    // Parse
+    let ast = bmb::parser::parse(&filename, &source, tokens)?;
+
+    // Type check
+    let mut checker = bmb::types::TypeChecker::new();
+    checker.check_program(&ast)?;
+
+    // Lower to MIR
+    let mir = bmb::mir::lower_program(&ast);
+
+    // Parse WASM target
+    let target = match wasm_target {
+        "wasi" => WasmTarget::Wasi,
+        "browser" => WasmTarget::Browser,
+        "standalone" => WasmTarget::Standalone,
+        _ => {
+            eprintln!("Warning: Unknown WASM target '{}', using 'wasi'", wasm_target);
+            WasmTarget::Wasi
+        }
+    };
+
+    // Generate WASM text
+    let codegen = WasmCodeGen::with_target(target);
+    let wat = codegen.generate(&mir)?;
+
+    // Determine output path
+    let output_path = output.unwrap_or_else(|| {
+        path.with_extension("wat")
+    });
+
+    // Write output
+    std::fs::write(&output_path, &wat)?;
+
+    println!("Generated: {}", output_path.display());
+
+    if verbose {
+        println!("  Target: {:?}", target);
+        println!("  Size: {} bytes", wat.len());
     }
 
     Ok(())
