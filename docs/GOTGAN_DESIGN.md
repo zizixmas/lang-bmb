@@ -477,3 +477,67 @@ impl Runtime for WasmRuntime {
 - [MIR 설계](./MIR_DESIGN.md)
 - [계약 시스템](./CONTRACTS.md)
 - [LLVM 백엔드](./LLVM_BACKEND.md)
+
+---
+
+## D. 구현 현황 (v0.11.4-6)
+
+> 2025년 1월 기준 Rust 구현 상태
+
+### 구현 완료
+
+| 기능 | 파일 | 설명 |
+|------|------|------|
+| **BMBX 번들 생성** | `bmbx.rs` | `gotgan bundle` 명령어 |
+| **contracts.json** | `bmbx.rs` | 함수/타입 계약 추출 |
+| **symbols.json** | `bmbx.rs` | AI 탐색용 심볼 인덱스 |
+| **types.json** | `bmbx.rs` | 타입 시그니처 추출 |
+| **AI 힌트 추론** | `bmbx.rs` | 함수명에서 설명/태그 자동 추론 |
+| **계약 탐색** | `bmbx.rs` | `gotgan explore --contracts` |
+| **심볼 탐색** | `bmbx.rs` | `gotgan explore --symbols` |
+| **JSON 출력** | `bmbx.rs` | `gotgan explore --json` |
+| **필터링** | `bmbx.rs` | `gotgan explore --filter` |
+| **호환성 검사** | `bmbx.rs` | `gotgan compat` 명령어 |
+| **계약 변경 감지** | `bmbx.rs` | Breaking/Compatible 분류 |
+
+### 사용법
+
+```bash
+# BMBX 번들 생성
+gotgan bundle
+
+# 심볼 탐색
+gotgan explore --symbols
+
+# 계약 확인
+gotgan explore --contracts
+
+# AI용 JSON 출력
+gotgan explore --json
+
+# 패턴 필터링
+gotgan explore --filter "parse"
+
+# 버전 간 호환성 검사
+gotgan compat --old v1.0/contracts.json --new v2.0/contracts.json
+```
+
+### 계약 호환성 규칙
+
+| 변경 유형 | Breaking? | 설명 |
+|-----------|-----------|------|
+| pre 제거 | ❌ No | 더 관대해짐 (더 많은 입력 허용) |
+| pre 추가 | ⚠️ Yes | 더 제한적 (기존 호출 실패 가능) |
+| post 추가 | ❌ No | 더 많은 보장 |
+| post 제거 | ⚠️ Yes | 보장 감소 (의존 코드 실패 가능) |
+| 함수 제거 | ⚠️ Yes | 기존 코드 컴파일 실패 |
+| 함수 추가 | ❌ No | 기존 코드 영향 없음 |
+
+### 미구현 (계획)
+
+| 기능 | 상태 | 비고 |
+|------|------|------|
+| `--single-file` | 미구현 | 단일 .bmbx 압축 번들 |
+| 자연어 검색 | 미구현 | `gotgan search --ai` |
+| 계약 기반 검색 | 미구현 | `gotgan search --contract` |
+| 레지스트리 연동 | 미구현 | registry.bmb-lang.org |

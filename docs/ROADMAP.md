@@ -38,7 +38,7 @@ v0.MAJOR.MINOR
 | v0.8 | Fruit | 패키지 매니저 (곳간) | ✅ 완료 |
 | v0.9 | Harvest | 생태계 (에디터, 원격 패키지) | ✅ 완료 |
 | v0.10 | Sunrise | Bootstrap + 컴포넌트 패키지화 | ✅ 완료 |
-| v0.11 | Dawn | AI-Native gotgan + Bootstrap 완성 | 계획 |
+| v0.11 | Dawn | AI-Native gotgan + Bootstrap 완성 | 🔄 진행중 (v0.11.4-6 ✅) |
 | v0.12 | Horizon | WASM 듀얼 타깃 | 계획 |
 | v0.13 | Summit | 생태계 완성 (MCP, 레지스트리) | 계획 |
 | v1.0-RC | Golden | 부트스트래핑 완료 + 검증 | 계획 |
@@ -1346,7 +1346,7 @@ diff bmb-stage2 bmb-stage3  # 동일해야 함
 | async | 20+ | 비동기 |
 | math | 30+ | 수학 함수 |
 
-### v0.11.4 - BMBX 번들 포맷 구현
+### v0.11.4 - BMBX 번들 포맷 구현 ✅
 
 **AI-Native Package Bundle:**
 ```
@@ -1359,32 +1359,57 @@ package.bmbx
 └── bin/               # 컴파일된 바이너리 (multi-target)
 ```
 
-### v0.11.5 - 계약 기반 의존성 검사
+**구현 (Rust):**
+- `gotgan bundle` 명령어 - contracts.json, symbols.json, types.json 생성
+- `gotgan explore` 명령어 - 심볼/계약 탐색 및 JSON 출력
+- ContractsJson, SymbolsJson, TypesJson 스키마 정의
+- AI 힌트 자동 추론 (use_when, semantic_tags)
+
+### v0.11.5 - 계약 기반 의존성 검사 ✅
 
 ```toml
 [dependencies]
 math = { version = "^1.0", contracts = ["divide.pre: b != 0"] }
 ```
 
-**기능:**
-- 계약 호환성 자동 검사
-- 계약 약화/강화 감지
-- 비호환 변경 경고
+**기능 (구현됨):**
+- ✅ 계약 호환성 자동 검사 (`gotgan compat`)
+- ✅ 계약 약화/강화 감지 (ContractChange enum)
+- ✅ 비호환 변경 경고 (Breaking changes: AddedPre, RemovedPost)
+- ✅ 호환 변경 허용 (RemovedPre, AddedPost)
 
-### v0.11.6 - AI 패키지 탐색
+**계약 변경 규칙:**
+| 변경 | 타입 | 설명 |
+|------|------|------|
+| pre 제거 | ✅ 허용 | 더 관대해짐 |
+| pre 추가 | ⚠️ Breaking | 더 제한적 |
+| post 추가 | ✅ 허용 | 더 많은 보장 |
+| post 제거 | ⚠️ Breaking | 보장 감소 |
+
+### v0.11.6 - AI 패키지 탐색 ✅
 
 ```bash
-# 자연어 검색
-$ gotgan search --ai "정수를 문자열로 변환"
-
-# 계약 기반 검색
-$ gotgan search --contract "pre: x > 0"
-
 # 심볼 탐색
-$ gotgan explore math --symbols
+$ gotgan explore --symbols
+
+# 계약 확인
+$ gotgan explore --contracts
+
+# JSON 출력 (AI 파싱용)
+$ gotgan explore --json
+
+# 필터링
+$ gotgan explore --filter "parse" --contracts
 ```
 
-### v0.11.7 - 단일 파일 번들
+**구현됨:**
+- `gotgan explore` - 심볼 인덱스 출력
+- `--contracts` - 계약 정보 출력
+- `--types` - 타입 정보 출력
+- `--json` - JSON 형식 출력 (AI 파싱용)
+- `--filter` - 이름 패턴 필터링
+
+### v0.11.7 - 단일 파일 번들 (계획)
 
 ```bash
 # 모든 의존성을 하나의 .bmb로 번들
@@ -1393,6 +1418,8 @@ $ gotgan bundle --single-file
 # 계약 보존 번들
 $ gotgan bundle --preserve-contracts
 ```
+
+**Note:** `--single-file` 옵션은 아직 구현되지 않음. 기본 bundle 명령어는 구현됨.
 
 ---
 
