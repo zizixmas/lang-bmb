@@ -142,9 +142,19 @@ UsePath: Vec<Spanned<String>> = {
     },
 };
 
-// Struct definition
+// Struct definition (v0.12.3: with optional attributes)
 StructDef: StructDef = {
+    // With attributes: @cfg(...) struct Name { ... }
+    <l:@L> <attrs:Attr+> <vis:Visibility> "struct" <name:Ident> "{" <fields:StructFields> "}" <r:@R> => StructDef {
+        attributes: attrs,
+        visibility: vis,
+        name,
+        fields,
+        span: Span::new(l, r),
+    },
+    // Without attributes
     <l:@L> <vis:Visibility> "struct" <name:Ident> "{" <fields:StructFields> "}" <r:@R> => StructDef {
+        attributes: vec![],
         visibility: vis,
         name,
         fields,
@@ -167,9 +177,19 @@ StructField: StructField = {
     <name:Ident> ":" <ty:SpannedType> => StructField { name, ty },
 };
 
-// Enum definition
+// Enum definition (v0.12.3: with optional attributes)
 EnumDef: EnumDef = {
+    // With attributes: @cfg(...) enum Name { ... }
+    <l:@L> <attrs:Attr+> <vis:Visibility> "enum" <name:Ident> "{" <variants:EnumVariants> "}" <r:@R> => EnumDef {
+        attributes: attrs,
+        visibility: vis,
+        name,
+        variants,
+        span: Span::new(l, r),
+    },
+    // Without attributes
     <l:@L> <vis:Visibility> "enum" <name:Ident> "{" <variants:EnumVariants> "}" <r:@R> => EnumDef {
+        attributes: vec![],
         visibility: vis,
         name,
         variants,

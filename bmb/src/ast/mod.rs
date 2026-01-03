@@ -53,6 +53,8 @@ pub struct UseStmt {
 /// Struct definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StructDef {
+    /// Attributes (v0.12.3): @cfg, @derive, etc.
+    pub attributes: Vec<Attribute>,
     pub visibility: Visibility,
     pub name: Spanned<String>,
     pub fields: Vec<StructField>,
@@ -69,6 +71,8 @@ pub struct StructField {
 /// Enum definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EnumDef {
+    /// Attributes (v0.12.3): @cfg, @derive, etc.
+    pub attributes: Vec<Attribute>,
     pub visibility: Visibility,
     pub name: Spanned<String>,
     pub variants: Vec<EnumVariant>,

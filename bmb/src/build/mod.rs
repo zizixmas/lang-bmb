@@ -12,6 +12,7 @@ use std::process::Command;
 
 use thiserror::Error;
 
+use crate::cfg::{CfgEvaluator, Target};
 use crate::codegen::{CodeGen, CodeGenError};
 use crate::mir::lower_program;
 use crate::parser::parse;
@@ -33,6 +34,8 @@ pub struct BuildConfig {
     pub emit_ir: bool,
     /// Verbose output
     pub verbose: bool,
+    /// Compilation target (v0.12.3)
+    pub target: Target,
 }
 
 impl BuildConfig {
@@ -46,7 +49,14 @@ impl BuildConfig {
             output_type: OutputType::Executable,
             emit_ir: false,
             verbose: false,
+            target: Target::Native,
         }
+    }
+
+    /// Set compilation target (v0.12.3)
+    pub fn target(mut self, target: Target) -> Self {
+        self.target = target;
+        self
     }
 
     /// Set output path
@@ -140,7 +150,16 @@ pub fn build(config: &BuildConfig) -> BuildResult<()> {
         .map_err(|e| BuildError::Parse(e.message().to_string()))?;
 
     if config.verbose {
-        println!("  Parsed {} functions", program.items.len());
+        println!("  Parsed {} items", program.items.len());
+    }
+
+    // v0.12.3: Filter items by @cfg attributes
+    let cfg_eval = CfgEvaluator::new(config.target);
+    let program = cfg_eval.filter_program(&program);
+
+    if config.verbose {
+        println!("  After @cfg filtering: {} items (target: {})",
+                 program.items.len(), config.target.as_str());
     }
 
     // Type check

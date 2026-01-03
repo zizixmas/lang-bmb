@@ -41,7 +41,7 @@ v0.MAJOR.MINOR
 | v0.9 | Harvest | 생태계 (에디터, 원격 패키지) | ✅ 완료 |
 | v0.10 | Sunrise | Bootstrap + 컴포넌트 패키지화 | ✅ 완료 |
 | v0.11 | Dawn | AI-Native gotgan + Bootstrap | 🔄 진행중 (v0.11.4-7 ✅) |
-| v0.12 | Horizon | WASM 듀얼 타깃 | 🔄 진행중 (v0.12.0-2 ✅) |
+| v0.12 | Horizon | WASM 듀얼 타깃 | ✅ 완료 (v0.12.0-4) |
 | v0.13 | **Forge** | 언어 완성 + extern fn + 매크로 | 계획 |
 | v0.14 | **Foundation** | Core 패키지 25개 + gotgan 등록 | 계획 |
 | v0.15 | **Stream** | Collections/IO 패키지 25개 + 벤치마크 v1 | 계획 |
@@ -392,23 +392,39 @@ $ bmb build add.bmb --emit-wasm --wasm-target=wasi
 (func $assert (param $cond i32))  ;; unreachable
 ```
 
-### v0.12.3 - 조건부 컴파일 (계획)
+### v0.12.3 - 조건부 컴파일 ✅
 
 ```bmb
-@cfg(target = "wasm32")
-fn print(s: String) = js_console_log(s);
+-- target == 비교 연산자 사용 (= 아닌 ==)
+@cfg(target == "wasm32")
+fn wasm_print(s: i64) = wasm_console_log(s);
 
-@cfg(target = "native")
-fn print(s: String) = libc_puts(s);
+@cfg(target == "native")
+fn native_print(s: i64) = libc_puts(s);
 ```
 
-### v0.12.4 - 듀얼 타깃 빌드 (계획)
+**구현:**
+- `cfg` 모듈: `CfgEvaluator`, `Target` enum
+- AST 필터링: 타입 체크 전 @cfg 평가
+- 지원 타깃: `native`, `wasm32`, `wasm64`
+
+### v0.12.4 - 듀얼 타깃 빌드 ✅
 
 ```bash
-$ gotgan build --all-targets
-→ target/x86_64-linux/release/app
-→ target/wasm32/release/app.wasm
+$ bmb build app.bmb --all-targets --verbose
+=== Native Build ===
+  Parsed 4 items
+  After @cfg filtering: 3 items (target: native)
+=== WASM Build ===
+  Parsed 4 items
+  After @cfg filtering: 3 items (target: wasm32)
+=== All targets built successfully! ===
 ```
+
+**구현:**
+- `--all-targets` CLI 플래그
+- 네이티브 + WASM 동시 빌드
+- 타깃별 @cfg 필터링
 
 ---
 

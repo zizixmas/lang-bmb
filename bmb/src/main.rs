@@ -31,6 +31,9 @@ enum Command {
         /// WASM target environment (wasi, browser, standalone)
         #[arg(long, default_value = "wasi")]
         wasm_target: String,
+        /// Build for all targets (native + WASM) - v0.12.4
+        #[arg(long)]
+        all_targets: bool,
         /// Verbose output
         #[arg(short, long)]
         verbose: bool,
@@ -102,8 +105,9 @@ fn main() {
             emit_ir,
             emit_wasm,
             wasm_target,
+            all_targets,
             verbose,
-        } => build_file(&file, output, release, emit_ir, emit_wasm, &wasm_target, verbose),
+        } => build_file(&file, output, release, emit_ir, emit_wasm, &wasm_target, all_targets, verbose),
         Command::Run { file } => run_file(&file),
         Command::Repl => start_repl(),
         Command::Check { file } => check_file(&file),
@@ -128,13 +132,49 @@ fn build_file(
     emit_ir: bool,
     emit_wasm: bool,
     wasm_target: &str,
+    all_targets: bool,
     verbose: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // v0.12.4: Build for all targets (native + WASM)
+    if all_targets {
+        if verbose {
+            println!("Building for all targets...");
+        }
+
+        // Build native first
+        if verbose {
+            println!("\n=== Native Build ===");
+        }
+        build_native(path, output.clone(), release, emit_ir, verbose)?;
+
+        // Then build WASM
+        if verbose {
+            println!("\n=== WASM Build ===");
+        }
+        build_wasm(path, None, wasm_target, verbose)?;
+
+        if verbose {
+            println!("\n=== All targets built successfully! ===");
+        }
+        return Ok(());
+    }
+
     // If emitting WASM, use the WASM code generator
     if emit_wasm {
         return build_wasm(path, output, wasm_target, verbose);
     }
 
+    // Default: build native
+    build_native(path, output, release, emit_ir, verbose)
+}
+
+fn build_native(
+    path: &PathBuf,
+    output: Option<PathBuf>,
+    release: bool,
+    emit_ir: bool,
+    verbose: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     use bmb::build::{BuildConfig, OptLevel};
 
     let mut config = BuildConfig::new(path.clone())
@@ -164,6 +204,7 @@ fn build_wasm(
     wasm_target: &str,
     verbose: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    use bmb::cfg::{CfgEvaluator, Target};
     use bmb::codegen::{WasmCodeGen, WasmTarget};
 
     let source = std::fs::read_to_string(path)?;
@@ -178,6 +219,18 @@ fn build_wasm(
 
     // Parse
     let ast = bmb::parser::parse(&filename, &source, tokens)?;
+
+    if verbose {
+        println!("  Parsed {} items", ast.items.len());
+    }
+
+    // v0.12.3: Filter items by @cfg attributes for WASM target
+    let cfg_eval = CfgEvaluator::new(Target::Wasm32);
+    let ast = cfg_eval.filter_program(&ast);
+
+    if verbose {
+        println!("  After @cfg filtering: {} items (target: wasm32)", ast.items.len());
+    }
 
     // Type check
     let mut checker = bmb::types::TypeChecker::new();
