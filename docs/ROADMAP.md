@@ -46,7 +46,7 @@ v0.MAJOR.MINOR
 | v0.14 | **Foundation** | 제네릭 stdlib + 패키지 표준화 | ✅ 완료 (v0.14.0-5) |
 | v0.15 | **Generics** | 제네릭 타입 시스템 완성 | ✅ 완료 (v0.15.0-2) |
 | v0.16 | **Consolidate** | 제네릭 enum/struct 타입 체커 완성 | ✅ 완료 (v0.16.0-3) |
-| v0.17 | **Parallel** | Async/Crypto 20개 + 벤치마크 v2 | 계획 |
+| v0.17 | **Module** | 모듈 시스템 + 패키지 간 타입 참조 | ✅ 완료 (v0.17.0-3) |
 | v0.18 | **Persist** | Database/CLI 20개 + 최적화 2차 | 계획 |
 | v0.19 | **Mirror** | Self-Hosting (BMB 자기 컴파일) | 계획 |
 | v0.20 | **Showcase** | 주요 앱 시나리오 샘플 10개 | 계획 |
@@ -980,64 +980,131 @@ if let Type::TypeVar(_) = actual { return Ok(()); }
 | 타입 인자 명시 | `func::<i64>()` 구문 미지원 | 필요시 |
 | 트레이트 바운드 | `<T: Clone>` 미지원 | v0.18+ |
 
-### 다음 단계 (v0.17+)
+### 다음 단계 → v0.17 Module ✅
 
-| 영역 | 내용 | 의존성 |
-|------|------|--------|
-| 모듈 시스템 | import/use로 패키지 간 타입 참조 | 없음 |
-| 트레이트 시스템 | 타입 바운드, impl 블록 | 모듈 시스템 |
-| 네트워크 패키지 | bmb-http 등 | 모듈 + Option/Result |
+| 영역 | 내용 | 상태 |
+|------|------|------|
+| 모듈 시스템 | import/use로 패키지 간 타입 참조 | ✅ v0.17 완료 |
+| 트레이트 시스템 | 타입 바운드, impl 블록 | v0.18+ 계획 |
+| 네트워크 패키지 | bmb-http 등 | 트레이트 시스템 이후 |
 
 ---
 
-## v0.17 Parallel (Async/Crypto 20개 + 벤치마크 v2)
+## v0.17 Module (모듈 시스템 + 패키지 간 타입 참조) ✅
 
-> 목표: 비동기/암호화 패키지 + 최적화 검증
+> 목표: 패키지 간 타입 참조 가능하게 모듈 시스템 통합
 
-### 패키지 목록
+### 배경
 
-| # | 패키지 | 설명 |
-|---|--------|------|
-| 76 | bmb-async | 비동기 런타임 |
-| 77 | bmb-future | Future 트레이트 |
-| 78 | bmb-task | 태스크 스포닝 |
-| 79 | bmb-channel | 비동기 채널 |
-| 80 | bmb-select | select 매크로 |
-| 81 | bmb-timeout | 타임아웃 |
-| 82 | bmb-stream | Stream 트레이트 |
-| 83 | bmb-sink | Sink 트레이트 |
-| 84 | bmb-timer | 비동기 타이머 |
-| 85 | bmb-executor | 실행기 |
-| 86 | bmb-crypto | 암호화 기초 |
-| 87 | bmb-sha | SHA 해시 |
-| 88 | bmb-md5 | MD5 해시 |
-| 89 | bmb-aes | AES 암호화 |
-| 90 | bmb-rsa | RSA |
-| 91 | bmb-ecdsa | ECDSA |
-| 92 | bmb-hmac | HMAC |
-| 93 | bmb-pbkdf2 | PBKDF2 |
-| 94 | bmb-argon2 | Argon2 |
-| 95 | bmb-rand | 난수 생성 |
+v0.16에서 제네릭 enum/struct 타입 체크가 완성되었으나, 패키지 간 타입 참조에서 문제 발견:
+- `bmb-result`가 `bmb-option::Option`을 사용
+- `bmb-iter`가 `bmb-option::Option`을 반환
+- 타입 체커에서 "undefined enum: Option" 에러 발생
+- 원인: TypeChecker가 `Item::Use(_)` 문을 무시
 
-### 벤치마크 v2
+### 설계 원칙 적용
 
+| 원칙 | 적용 |
+|------|------|
+| **비판적 분석** | 원래 v0.17 계획(20개 Async/Crypto 패키지) 검토 → 모듈 시스템 없이 불가능 |
+| **점진적 진행** | 모듈 시스템 → 패키지 확장 순서 유지 |
+| **기초 우선** | Option import 없이 Result/Iterator 개발 불가 |
+
+### v0.17.0 - TypeChecker import 연동 ✅
+
+```rust
+/// v0.17: Register public items from an imported module
+pub fn register_module(&mut self, module: &Module) {
+    for item in &module.program.items {
+        match item {
+            // Register public struct definitions
+            Item::StructDef(s) if s.visibility == Visibility::Public => {
+                // generic_structs 또는 structs에 등록
+            }
+            // Register public enum definitions
+            Item::EnumDef(e) if e.visibility == Visibility::Public => {
+                // generic_enums 또는 enums에 등록
+            }
+            // Register public function signatures
+            Item::FnDef(f) if f.visibility == Visibility::Public => {
+                // generic_functions 또는 functions에 등록
+            }
+            _ => {}
+        }
+    }
+}
 ```
-benchmark-bmb/v0.17/
-├── async/
-│   ├── spawn-million.bmb    # 100만 태스크 생성
-│   ├── channel-throughput.bmb
-│   └── http-concurrent.bmb
-├── crypto/
-│   ├── sha256-throughput.bmb
-│   └── aes-encrypt.bmb
-└── results/
-    ├── v0.15-baseline.json
-    └── v0.17-optimized.json
+
+### v0.17.1 - CLI multi-file 지원 ✅
+
+```bash
+# -I 플래그로 include 경로 지정
+$ bmb check packages/bmb-result/src/lib.bmb -I packages
+✓ packages/bmb-result/src/lib.bmb type checks successfully
 ```
 
-**KPI 검증:**
-- 컴파일 속도: Rust 대비 90% ✓
-- 런타임 성능: C 대비 85% ✓
+**구현:**
+- `-I` / `--include` CLI 플래그 추가
+- `check_file_with_includes()` 함수 구현
+- Use 문에서 패키지 경로 추출
+
+### v0.17.2 - 패키지 경로 해석 ✅
+
+```rust
+// 언더스코어 → 하이픈 변환
+// use bmb_option::Option → packages/bmb-option/src/lib.bmb
+let pkg_dir_name = module_name.replace('_', "-");
+let module_path = include_path.join(&pkg_dir_name).join("src").join("lib.bmb");
+```
+
+### v0.17.3 - v0.14 패키지 타입 체크 ✅
+
+| 패키지 | 상태 | 명령어 |
+|--------|------|--------|
+| bmb-option | ✅ | `bmb check packages/bmb-option/src/lib.bmb` |
+| bmb-traits | ✅ | `bmb check packages/bmb-traits/src/lib.bmb` |
+| bmb-core | ✅ | `bmb check packages/bmb-core/src/lib.bmb` |
+| bmb-result | ✅ | `bmb check packages/bmb-result/src/lib.bmb -I packages` |
+| bmb-iter | ✅ | `bmb check packages/bmb-iter/src/lib.bmb -I packages` |
+
+### 패키지 업데이트
+
+```bmb
+-- packages/bmb-result/src/lib.bmb (v0.17.0)
+-- v0.17: Import Option for Result-Option conversions
+use bmb_option::Option;
+
+-- packages/bmb-iter/src/lib.bmb (v0.17.0)
+-- v0.17: Import Option for iterator return types
+use bmb_option::Option;
+```
+
+### 기술적 세부사항
+
+**핵심 변경 파일:**
+
+| 파일 | 변경 내용 |
+|------|-----------|
+| `bmb/src/types/mod.rs` | `register_module()` 메서드 추가 |
+| `bmb/src/main.rs` | `-I` 플래그 + `check_file_with_includes()` |
+| `packages/bmb-result/src/lib.bmb` | `use bmb_option::Option;` 추가 |
+| `packages/bmb-iter/src/lib.bmb` | `use bmb_option::Option;` 추가 |
+
+### 알려진 제한사항
+
+| 제한 | 설명 | 해결 버전 |
+|------|------|-----------|
+| 수동 -I 플래그 | Gotgan.toml 의존성 자동 해석 미지원 | v0.18+ |
+| 단일 레벨 import | 중첩 모듈 경로 미지원 | 필요시 |
+| 순환 의존성 | 순환 import 감지 미구현 | v0.18+ |
+
+### 다음 단계 (v0.18+)
+
+| 영역 | 내용 | 의존성 |
+|------|------|--------|
+| gotgan 통합 | Gotgan.toml에서 의존성 자동 로드 | 없음 |
+| 트레이트 시스템 | 타입 바운드, impl 블록 | 모듈 시스템 ✅ |
+| Async/Crypto 패키지 | 원래 v0.17 계획 패키지들 | 트레이트 시스템 |
 
 ---
 

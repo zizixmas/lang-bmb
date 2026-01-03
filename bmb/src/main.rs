@@ -49,6 +49,9 @@ enum Command {
     Check {
         /// Source file to check
         file: PathBuf,
+        /// v0.17: Additional include paths for module resolution
+        #[arg(short = 'I', long = "include", value_name = "PATH")]
+        include_paths: Vec<PathBuf>,
     },
     /// Verify contracts (pre/post conditions) using SMT solver
     Verify {
@@ -110,7 +113,7 @@ fn main() {
         } => build_file(&file, output, release, emit_ir, emit_wasm, &wasm_target, all_targets, verbose),
         Command::Run { file } => run_file(&file),
         Command::Repl => start_repl(),
-        Command::Check { file } => check_file(&file),
+        Command::Check { file, include_paths } => check_file_with_includes(&file, &include_paths),
         Command::Verify { file, z3_path, timeout } => verify_file(&file, &z3_path, timeout),
         Command::Parse { file } => parse_file(&file),
         Command::Tokens { file } => tokenize_file(&file),
@@ -305,7 +308,8 @@ fn start_repl() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn check_file(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+/// v0.17: Check file with additional include paths for module resolution
+fn check_file_with_includes(path: &PathBuf, include_paths: &[PathBuf]) -> Result<(), Box<dyn std::error::Error>> {
     let source = std::fs::read_to_string(path)?;
     let filename = path.display().to_string();
 
@@ -315,8 +319,52 @@ fn check_file(path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     // Parse
     let ast = bmb::parser::parse(&filename, &source, tokens)?;
 
-    // Type check
+    // v0.17: Create type checker and register imported modules
     let mut checker = bmb::types::TypeChecker::new();
+
+    // Resolve use statements and register imported modules
+    let base_dir = path.parent().unwrap_or(std::path::Path::new("."));
+    let mut resolver = bmb::resolver::Resolver::new(base_dir);
+
+    // Also try include paths for module resolution
+    for include_path in include_paths {
+        // Try loading modules from include paths
+        for item in &ast.items {
+            if let bmb::ast::Item::Use(use_stmt) = item {
+                if !use_stmt.path.is_empty() {
+                    let module_name = &use_stmt.path[0].node;
+                    // Convert underscore to hyphen for package names (bmb_option -> bmb-option)
+                    let pkg_dir_name = module_name.replace('_', "-");
+                    let module_path = include_path.join(&pkg_dir_name).join("src").join("lib.bmb");
+                    if module_path.exists() {
+                        // Load using the original filename convention
+                        let lib_source = std::fs::read_to_string(&module_path)?;
+                        let lib_tokens = bmb::lexer::tokenize(&lib_source)?;
+                        let lib_ast = bmb::parser::parse(&module_path.display().to_string(), &lib_source, lib_tokens)?;
+                        // Create a temporary module to register
+                        let module = bmb::resolver::Module {
+                            name: module_name.clone(),
+                            path: module_path.clone(),
+                            program: lib_ast,
+                            exports: std::collections::HashMap::new(), // Not needed for type registration
+                        };
+                        checker.register_module(&module);
+                    }
+                }
+            }
+        }
+    }
+
+    // Also resolve from the file's own directory
+    if let Ok(imports) = resolver.resolve_uses(&ast) {
+        for (_, (module_name, _)) in imports.all_imports() {
+            if let Some(module) = resolver.get_module(module_name) {
+                checker.register_module(module);
+            }
+        }
+    }
+
+    // Type check
     checker.check_program(&ast)?;
 
     println!("✓ {} type checks successfully", filename);

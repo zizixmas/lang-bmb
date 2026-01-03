@@ -1,4 +1,4 @@
--- BMB Result Library v0.14.0
+-- BMB Result Library v0.17.0
 -- 제네릭 Result<T, E> 타입 - 에러 처리
 --
 -- AI-Native Design:
@@ -6,6 +6,9 @@
 -- - 계약으로 에러 조건 명시
 -- - ? 연산자와 try 블록 지원 (v0.13.2+)
 -- - 제네릭으로 모든 타입 지원
+
+-- v0.17: Import Option for Result-Option conversions
+use bmb_option::Option;
 
 -- ============================================
 -- Result<T, E> 제네릭 열거형

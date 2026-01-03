@@ -1,4 +1,4 @@
--- BMB Iterator Library v0.14.0
+-- BMB Iterator Library v0.17.0
 -- 이터레이터 트레이트 및 콤비네이터
 --
 -- AI-Native Design:
@@ -8,6 +8,9 @@
 --
 -- Note: BMB는 아직 trait 키워드를 지원하지 않음
 -- 이터레이터 패턴을 구조체 + 함수로 구현
+
+-- v0.17: Import Option for iterator return types
+use bmb_option::Option;
 
 -- ============================================
 -- Range 이터레이터 (i64 범위)

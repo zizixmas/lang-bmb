@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use crate::ast::*;
 use crate::error::{CompileError, Result};
+use crate::resolver::Module;
 
 /// Type checker
 pub struct TypeChecker {
@@ -61,6 +62,66 @@ impl TypeChecker {
             enums: HashMap::new(),
             current_ret_ty: None,
             type_param_env: HashMap::new(),
+        }
+    }
+
+    /// v0.17: Register public items from an imported module
+    /// This allows the type checker to recognize types/functions from other modules
+    pub fn register_module(&mut self, module: &Module) {
+        for item in &module.program.items {
+            match item {
+                // Register public struct definitions
+                Item::StructDef(s) if s.visibility == Visibility::Public => {
+                    let fields: Vec<_> = s.fields.iter()
+                        .map(|f| (f.name.node.clone(), f.ty.node.clone()))
+                        .collect();
+                    if s.type_params.is_empty() {
+                        self.structs.insert(s.name.node.clone(), fields);
+                    } else {
+                        self.generic_structs.insert(
+                            s.name.node.clone(),
+                            (s.type_params.clone(), fields)
+                        );
+                    }
+                }
+                // Register public enum definitions
+                Item::EnumDef(e) if e.visibility == Visibility::Public => {
+                    let variants: Vec<_> = e.variants.iter()
+                        .map(|v| (v.name.node.clone(), v.fields.iter().map(|f| f.node.clone()).collect()))
+                        .collect();
+                    if e.type_params.is_empty() {
+                        self.enums.insert(e.name.node.clone(), variants);
+                    } else {
+                        self.generic_enums.insert(
+                            e.name.node.clone(),
+                            (e.type_params.clone(), variants)
+                        );
+                    }
+                }
+                // Register public function signatures
+                Item::FnDef(f) if f.visibility == Visibility::Public => {
+                    if f.type_params.is_empty() {
+                        let param_tys: Vec<_> = f.params.iter().map(|p| p.ty.node.clone()).collect();
+                        self.functions.insert(f.name.node.clone(), (param_tys, f.ret_ty.node.clone()));
+                    } else {
+                        let type_param_names: Vec<_> = f.type_params.iter().map(|tp| tp.name.as_str()).collect();
+                        let param_tys: Vec<_> = f.params.iter()
+                            .map(|p| self.resolve_type_vars(&p.ty.node, &type_param_names))
+                            .collect();
+                        let ret_ty = self.resolve_type_vars(&f.ret_ty.node, &type_param_names);
+                        self.generic_functions.insert(
+                            f.name.node.clone(),
+                            (f.type_params.clone(), param_tys, ret_ty)
+                        );
+                    }
+                }
+                // Register public extern function signatures
+                Item::ExternFn(e) if e.visibility == Visibility::Public => {
+                    let param_tys: Vec<_> = e.params.iter().map(|p| p.ty.node.clone()).collect();
+                    self.functions.insert(e.name.node.clone(), (param_tys, e.ret_ty.node.clone()));
+                }
+                _ => {}
+            }
         }
     }
 
