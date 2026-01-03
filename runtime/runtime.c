@@ -47,15 +47,47 @@ void bmb_panic(const char* msg) {
 // ===================================================
 // Bootstrap Runtime Functions
 // These match the declarations in bootstrap/llvm_ir.bmb
+// Using bmb_ prefix to avoid conflicts with stdlib/Windows
 // ===================================================
+
+// Undefine Windows macros that conflict with our function names
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
 
 // println(i64) - Print i64 with newline (bootstrap version)
 void println(int64_t x) {
     printf("%lld\n", (long long)x);
 }
 
-// abs(i64) - Absolute value (shadows stdlib abs for i64)
-int64_t abs(int64_t x) {
+// print(i64) - Print i64 without newline
+void print(int64_t x) {
+    printf("%lld", (long long)x);
+}
+
+// read_int() - Read i64 from stdin
+int64_t read_int(void) {
+    int64_t x;
+    if (scanf("%lld", (long long*)&x) != 1) {
+        fprintf(stderr, "Error: failed to read integer\n");
+        exit(1);
+    }
+    return x;
+}
+
+// assert(i1) - Assert condition is true
+void assert(int cond) {
+    if (!cond) {
+        fprintf(stderr, "Assertion failed\n");
+        exit(1);
+    }
+}
+
+// abs(i64) - Absolute value
+int64_t bmb_abs(int64_t x) {
     return x < 0 ? -x : x;
 }
 

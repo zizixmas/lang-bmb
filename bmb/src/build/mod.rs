@@ -203,11 +203,207 @@ pub fn build(config: &BuildConfig) -> BuildResult<()> {
 
     #[cfg(not(feature = "llvm"))]
     {
-        let codegen = CodeGen::new();
-        let obj_path = config.output.with_extension("o");
-        codegen.compile(&mir, &obj_path)?;
+        use crate::codegen::TextCodeGen;
+        use std::process::Command;
+
+        // Use text-based LLVM IR generation + clang
+        let codegen = TextCodeGen::new();
+        let ir = codegen.generate(&mir).map_err(|e| BuildError::CodeGen(
+            CodeGenError::LlvmNotAvailable, // Use existing error type
+        ))?;
+
+        let ir_path = config.output.with_extension("ll");
+        std::fs::write(&ir_path, &ir)?;
+
+        if config.verbose {
+            println!("  Generated LLVM IR: {}", ir_path.display());
+        }
+
+        if config.emit_ir {
+            return Ok(());
+        }
+
+        // Find clang
+        let clang = find_clang().map_err(|e| BuildError::Linker(e))?;
+
+        // Find runtime
+        let runtime_path = find_runtime_c().map_err(|e| BuildError::Linker(e))?;
+
+        if config.verbose {
+            println!("  Using clang: {}", clang);
+            println!("  Using runtime: {}", runtime_path.display());
+        }
+
+        // Compile IR to object file
+        let obj_path = config.output.with_extension(if cfg!(windows) { "obj" } else { "o" });
+        let mut cmd = Command::new(&clang);
+        cmd.args(["-c", ir_path.to_str().unwrap(), "-o", obj_path.to_str().unwrap()]);
+
+        let output_result = cmd.output()?;
+        if !output_result.status.success() {
+            let stderr = String::from_utf8_lossy(&output_result.stderr);
+            return Err(BuildError::Linker(format!("clang compile failed: {}", stderr)));
+        }
+
+        if config.verbose {
+            println!("  Compiled to object file: {}", obj_path.display());
+        }
+
+        // Compile runtime
+        let runtime_obj = config.output.with_file_name("runtime").with_extension(if cfg!(windows) { "obj" } else { "o" });
+        let mut cmd = Command::new(&clang);
+        cmd.args(["-c", runtime_path.to_str().unwrap(), "-o", runtime_obj.to_str().unwrap()]);
+
+        // Add Windows SDK include paths if on Windows
+        #[cfg(target_os = "windows")]
+        {
+            if let Some(include_paths) = find_windows_sdk_includes() {
+                for path in include_paths {
+                    cmd.arg("-I").arg(path);
+                }
+            }
+        }
+
+        let output_result = cmd.output()?;
+        if !output_result.status.success() {
+            let stderr = String::from_utf8_lossy(&output_result.stderr);
+            return Err(BuildError::Linker(format!("runtime compile failed: {}", stderr)));
+        }
+
+        // Link using lld-link on Windows (more reliable than clang auto-detection)
+        #[cfg(target_os = "windows")]
+        {
+            let mut cmd = Command::new("lld-link");
+            cmd.args([
+                obj_path.to_str().unwrap(),
+                runtime_obj.to_str().unwrap(),
+                &format!("/OUT:{}", config.output.to_str().unwrap()),
+                "/SUBSYSTEM:CONSOLE",
+                "/ENTRY:mainCRTStartup",
+            ]);
+
+            // Add Windows SDK and MSVC library paths
+            if let Some(lib_paths) = find_windows_lib_paths() {
+                for path in lib_paths {
+                    cmd.arg(format!("/LIBPATH:{}", path));
+                }
+            }
+
+            // Link required libraries
+            cmd.args([
+                "libcmt.lib",      // C runtime
+                "libucrt.lib",     // Universal CRT
+                "kernel32.lib",    // Windows kernel
+                "legacy_stdio_definitions.lib",  // printf and friends
+            ]);
+
+            if config.verbose {
+                println!("  Linking with lld-link...");
+            }
+
+            let output_result = cmd.output()?;
+            if !output_result.status.success() {
+                let stderr = String::from_utf8_lossy(&output_result.stderr);
+                return Err(BuildError::Linker(format!("link failed: {}", stderr)));
+            }
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            let mut cmd = Command::new(&clang);
+            cmd.args([
+                obj_path.to_str().unwrap(),
+                runtime_obj.to_str().unwrap(),
+                "-o",
+                config.output.to_str().unwrap(),
+            ]);
+
+            let output_result = cmd.output()?;
+            if !output_result.status.success() {
+                let stderr = String::from_utf8_lossy(&output_result.stderr);
+                return Err(BuildError::Linker(format!("link failed: {}", stderr)));
+            }
+        }
+
+        // Cleanup intermediate files
+        let _ = std::fs::remove_file(&ir_path);
+        let _ = std::fs::remove_file(&obj_path);
+        let _ = std::fs::remove_file(&runtime_obj);
+
+        if config.verbose {
+            println!("  Created executable: {}", config.output.display());
+        }
+
         Ok(())
     }
+}
+
+/// Find clang compiler
+fn find_clang() -> Result<String, String> {
+    use std::process::Command;
+
+    // Check common locations
+    let candidates = if cfg!(target_os = "windows") {
+        vec![
+            "clang",
+            "C:\\Program Files\\LLVM\\bin\\clang.exe",
+            "C:\\msys64\\mingw64\\bin\\clang.exe",
+        ]
+    } else {
+        vec!["clang", "clang-18", "clang-17", "clang-16", "clang-15"]
+    };
+
+    for candidate in candidates {
+        if Command::new(candidate).arg("--version").output().is_ok() {
+            return Ok(candidate.to_string());
+        }
+    }
+
+    Err("clang not found. Please install LLVM/clang.".to_string())
+}
+
+/// Find runtime.c source file
+fn find_runtime_c() -> Result<std::path::PathBuf, String> {
+    use std::path::PathBuf;
+
+    // Check BMB_RUNTIME_PATH environment variable
+    if let Ok(path) = std::env::var("BMB_RUNTIME_PATH") {
+        let p = PathBuf::from(path);
+        if p.exists() {
+            return Ok(p);
+        }
+    }
+
+    // Check relative to executable
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            // target/release/ -> runtime/
+            if let Some(grandparent) = parent.parent() {
+                if let Some(project_root) = grandparent.parent() {
+                    let runtime = project_root.join("runtime").join("runtime.c");
+                    if runtime.exists() {
+                        return Ok(runtime);
+                    }
+                }
+            }
+        }
+    }
+
+    // Check current working directory patterns
+    let patterns = [
+        "runtime/runtime.c",
+        "../runtime/runtime.c",
+        "../../runtime/runtime.c",
+    ];
+
+    for pattern in patterns {
+        let p = PathBuf::from(pattern);
+        if p.exists() {
+            return Ok(p);
+        }
+    }
+
+    Err("runtime.c not found. Set BMB_RUNTIME_PATH environment variable.".to_string())
 }
 
 /// Link object file to executable
@@ -342,4 +538,171 @@ fn find_linker() -> BuildResult<String> {
 
     // Default to cc
     Ok("cc".to_string())
+}
+
+/// Find Windows SDK and MSVC include paths
+#[cfg(target_os = "windows")]
+fn find_windows_sdk_includes() -> Option<Vec<String>> {
+    use std::path::Path;
+
+    let mut paths = Vec::new();
+
+    // Find Windows SDK
+    let sdk_base = Path::new(r"C:\Program Files (x86)\Windows Kits\10\Include");
+    if sdk_base.exists() {
+        let sdk_versions: Vec<_> = std::fs::read_dir(sdk_base)
+            .ok()?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+            .filter_map(|e| e.file_name().into_string().ok())
+            .filter(|name| name.starts_with("10.0."))
+            .collect();
+
+        if let Some(latest_version) = sdk_versions.iter().max() {
+            let sdk_include = sdk_base.join(latest_version);
+
+            // UCRT headers (stdio.h, etc.)
+            let ucrt_path = sdk_include.join("ucrt");
+            if ucrt_path.exists() {
+                paths.push(ucrt_path.to_string_lossy().to_string());
+            }
+
+            // shared headers
+            let shared_path = sdk_include.join("shared");
+            if shared_path.exists() {
+                paths.push(shared_path.to_string_lossy().to_string());
+            }
+
+            // um headers
+            let um_path = sdk_include.join("um");
+            if um_path.exists() {
+                paths.push(um_path.to_string_lossy().to_string());
+            }
+        }
+    }
+
+    // Find MSVC include path (for vcruntime.h)
+    let msvc_base = Path::new(r"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC");
+    if msvc_base.exists() {
+        if let Ok(entries) = std::fs::read_dir(msvc_base) {
+            let msvc_versions: Vec<_> = entries
+                .filter_map(|e| e.ok())
+                .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+                .filter_map(|e| e.file_name().into_string().ok())
+                .collect();
+
+            if let Some(latest_version) = msvc_versions.iter().max() {
+                let msvc_include = msvc_base.join(latest_version).join("include");
+                if msvc_include.exists() {
+                    paths.push(msvc_include.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+
+    // Also try VS 2022 BuildTools location
+    let msvc_bt_base = Path::new(r"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC");
+    if msvc_bt_base.exists() {
+        if let Ok(entries) = std::fs::read_dir(msvc_bt_base) {
+            let msvc_versions: Vec<_> = entries
+                .filter_map(|e| e.ok())
+                .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+                .filter_map(|e| e.file_name().into_string().ok())
+                .collect();
+
+            if let Some(latest_version) = msvc_versions.iter().max() {
+                let msvc_include = msvc_bt_base.join(latest_version).join("include");
+                if msvc_include.exists() {
+                    paths.push(msvc_include.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+
+    if paths.is_empty() {
+        None
+    } else {
+        Some(paths)
+    }
+}
+
+/// Find Windows SDK and MSVC library paths for linking
+#[cfg(target_os = "windows")]
+fn find_windows_lib_paths() -> Option<Vec<String>> {
+    use std::path::Path;
+
+    let mut paths = Vec::new();
+
+    // Find Windows SDK lib path
+    let sdk_base = Path::new(r"C:\Program Files (x86)\Windows Kits\10\Lib");
+    if sdk_base.exists() {
+        if let Ok(entries) = std::fs::read_dir(sdk_base) {
+            let sdk_versions: Vec<_> = entries
+                .filter_map(|e| e.ok())
+                .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+                .filter_map(|e| e.file_name().into_string().ok())
+                .filter(|name| name.starts_with("10.0."))
+                .collect();
+
+            if let Some(latest_version) = sdk_versions.iter().max() {
+                let sdk_lib = sdk_base.join(latest_version);
+
+                // UCRT libraries
+                let ucrt_lib = sdk_lib.join("ucrt").join("x64");
+                if ucrt_lib.exists() {
+                    paths.push(ucrt_lib.to_string_lossy().to_string());
+                }
+
+                // um libraries (kernel32, etc.)
+                let um_lib = sdk_lib.join("um").join("x64");
+                if um_lib.exists() {
+                    paths.push(um_lib.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+
+    // Find MSVC lib path
+    let msvc_base = Path::new(r"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC");
+    if msvc_base.exists() {
+        if let Ok(entries) = std::fs::read_dir(msvc_base) {
+            let msvc_versions: Vec<_> = entries
+                .filter_map(|e| e.ok())
+                .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+                .filter_map(|e| e.file_name().into_string().ok())
+                .collect();
+
+            if let Some(latest_version) = msvc_versions.iter().max() {
+                let msvc_lib = msvc_base.join(latest_version).join("lib").join("x64");
+                if msvc_lib.exists() {
+                    paths.push(msvc_lib.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+
+    // Also try VS 2022 BuildTools location
+    let msvc_bt_base = Path::new(r"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC");
+    if msvc_bt_base.exists() {
+        if let Ok(entries) = std::fs::read_dir(msvc_bt_base) {
+            let msvc_versions: Vec<_> = entries
+                .filter_map(|e| e.ok())
+                .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+                .filter_map(|e| e.file_name().into_string().ok())
+                .collect();
+
+            if let Some(latest_version) = msvc_versions.iter().max() {
+                let msvc_lib = msvc_bt_base.join(latest_version).join("lib").join("x64");
+                if msvc_lib.exists() {
+                    paths.push(msvc_lib.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+
+    if paths.is_empty() {
+        None
+    } else {
+        Some(paths)
+    }
 }

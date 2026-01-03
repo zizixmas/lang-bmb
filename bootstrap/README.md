@@ -673,5 +673,6 @@ cargo run --release --bin bmb -- run bootstrap/compiler.bmb
 - [x] Unified compiler entry point (v0.10.9) ✅
 - [x] Integration testing with LLVM toolchain (v0.10.10) ✅
 - [x] End-to-end program compilation validation (v0.10.11) ✅
+- [x] Native executable compilation: Text LLVM IR → clang/lld-link (v0.10.12) ✅
 - [ ] Struct/Enum lowering support (v0.11+)
 - [ ] Optimization passes in BMB (v0.11+)

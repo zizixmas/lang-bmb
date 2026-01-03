@@ -74,6 +74,11 @@ pub enum MirInst {
         func: String,
         args: Vec<Operand>,
     },
+    /// PHI node for SSA: %dest = phi [(value1, label1), (value2, label2), ...]
+    Phi {
+        dest: Place,
+        values: Vec<(Operand, String)>, // (value, source_block_label)
+    },
 }
 
 /// Block terminator (control flow)
@@ -254,6 +259,11 @@ impl LoweringContext {
     pub fn start_block(&mut self, label: String) {
         self.current_label = label;
         self.current_instructions = Vec::new();
+    }
+
+    /// Get the current block label
+    pub fn current_block_label(&self) -> &str {
+        &self.current_label
     }
 
     /// Get type of an operand

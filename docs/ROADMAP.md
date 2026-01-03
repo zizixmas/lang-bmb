@@ -1158,6 +1158,72 @@ merge_0:
 }
 ```
 
+### v0.10.12 - Text-based LLVM IR Backend ✅ 완료
+
+**구현 내용:**
+- MIR → LLVM IR 텍스트 생성기: `bmb/src/codegen/llvm_text.rs`
+- PHI 노드 지원: SSA 형식 준수를 위한 MIR 확장
+- Windows 빌드 파이프라인: UCRT/MSVC 헤더 탐지, lld-link 통합
+- 외부 clang 의존: inkwell/LLVM C API 없이 .ll → .exe 컴파일
+
+**핵심 특징:**
+```rust
+// TextCodeGen - LLVM IR 텍스트 생성
+pub struct TextCodeGen {
+    target_triple: String,
+}
+
+impl TextCodeGen {
+    pub fn generate(&self, program: &MirProgram) -> TextCodeGenResult<String>
+    // MIR → LLVM IR 문자열 변환
+}
+```
+
+**빌드 파이프라인:**
+```
+BMB Source → AST → MIR → LLVM IR (.ll) → clang → Object (.obj) → lld-link → Executable
+```
+
+**PHI 노드 예시 (생성된 LLVM IR):**
+```llvm
+define i64 @fib(i64 %n) {
+entry:
+  %_t0 = icmp sle i64 %n, 1
+  br i1 %_t0, label %then_0, label %else_0
+then_0:
+  br label %merge_0
+else_0:
+  %_t1 = sub i64 %n, 1
+  %_t2 = call i64 @fib(i64 %_t1)
+  %_t3 = sub i64 %n, 2
+  %_t4 = call i64 @fib(i64 %_t3)
+  %_t5 = add i64 %_t2, %_t4
+  br label %merge_0
+merge_0:
+  %result = phi i64 [ %n, %then_0 ], [ %_t5, %else_0 ]
+  ret i64 %result
+}
+```
+
+**검증 결과:**
+```powershell
+# fibonacci.bmb 컴파일 및 실행
+PS> cargo run --release -- build examples/bootstrap_test/fibonacci.bmb
+PS> .\examples\bootstrap_test\fibonacci.exe
+55
+
+# factorial.bmb 컴파일 및 실행
+PS> cargo run --release -- build examples/bootstrap_test/factorial.bmb
+PS> .\examples\bootstrap_test\factorial.exe
+120
+```
+
+**Windows 툴체인 통합:**
+- UCRT 헤더 경로 자동 탐지
+- MSVC 헤더/라이브러리 경로 자동 탐지
+- lld-link 직접 호출 (MSVC 링커 우회)
+- runtime.c 함수 충돌 해결 (`abs` → `bmb_abs`)
+
 ---
 
 ## v0.11 Dawn (Bootstrap 완성)
@@ -1302,7 +1368,8 @@ v0.10.7 → v0.10.8: Full Pipeline 통합 (📈 적당) ✅
 v0.10.8 → v0.10.9: Unified Compiler Entry Point (📈 적당) ✅
 v0.10.9 → v0.10.10: Integration Testing (📈 적당) ✅
 v0.10.10 → v0.10.11: End-to-End Validation (📈 적당) ✅
-v0.10.11 → v0.11.x: BMB 재작성 완성 (📈 적당)
+v0.10.11 → v0.10.12: Text-based LLVM IR Backend (📈 적당) ✅
+v0.10.12 → v0.11.x: BMB 재작성 완성 (📈 적당)
 ```
 
 ---
@@ -1315,7 +1382,7 @@ v0.6: 표준 라이브러리 기초 (100+개 함수) ✅
 v0.7: 도구 기초 (fmt, lsp, test, action-bmb) ✅
 v0.8: 패키지 기초 (곳간) ✅
 v0.9: 생태계 (에디터, 원격 패키지, playground, site, benchmark) ✅
-v0.10: Bootstrap 진행 (타입체커 ✅, MIR ✅, Lowering ✅, Pipeline ✅, LLVM IR ✅, Compiler ✅, Integration ✅, E2E Validation ✅) 🔄
+v0.10: Bootstrap 진행 (타입체커 ✅, MIR ✅, Lowering ✅, Pipeline ✅, LLVM IR ✅, Compiler ✅, Integration ✅, E2E Validation ✅, Text LLVM IR ✅) 🔄
 v0.11: Bootstrap 완성 (Stage 2, 도구 BMB 재작성)
 v1.0: 안정성 약속 + 검증 완료
 

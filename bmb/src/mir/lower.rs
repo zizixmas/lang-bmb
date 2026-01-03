@@ -125,7 +125,7 @@ fn lower_expr(expr: &Spanned<Expr>, ctx: &mut LoweringContext) -> Operand {
             let else_label = ctx.fresh_label("else");
             let merge_label = ctx.fresh_label("merge");
 
-            // Result place for the if expression
+            // Result place for the if expression (will be assigned via PHI)
             let result = ctx.fresh_temp();
 
             // Branch based on condition
@@ -135,28 +135,29 @@ fn lower_expr(expr: &Spanned<Expr>, ctx: &mut LoweringContext) -> Operand {
                 else_label: else_label.clone(),
             });
 
-            // Then block
-            ctx.start_block(then_label);
+            // Then block - generate result but don't copy
+            ctx.start_block(then_label.clone());
             let then_result = lower_expr(then_branch, ctx);
-            let then_src = operand_to_place(then_result, ctx);
-            ctx.push_inst(MirInst::Copy {
-                dest: result.clone(),
-                src: then_src,
-            });
+            // Remember the actual label where the value was generated
+            // (in case lowering created additional blocks)
+            let then_exit_label = ctx.current_block_label().to_string();
             ctx.finish_block(Terminator::Goto(merge_label.clone()));
 
-            // Else block
-            ctx.start_block(else_label);
+            // Else block - generate result but don't copy
+            ctx.start_block(else_label.clone());
             let else_result = lower_expr(else_branch, ctx);
-            let else_src = operand_to_place(else_result, ctx);
-            ctx.push_inst(MirInst::Copy {
-                dest: result.clone(),
-                src: else_src,
-            });
+            let else_exit_label = ctx.current_block_label().to_string();
             ctx.finish_block(Terminator::Goto(merge_label.clone()));
 
-            // Merge block
+            // Merge block with PHI node
             ctx.start_block(merge_label);
+            ctx.push_inst(MirInst::Phi {
+                dest: result.clone(),
+                values: vec![
+                    (then_result, then_exit_label),
+                    (else_result, else_exit_label),
+                ],
+            });
 
             Operand::Place(result)
         }
@@ -261,16 +262,25 @@ fn lower_expr(expr: &Spanned<Expr>, ctx: &mut LoweringContext) -> Operand {
             // Lower arguments
             let arg_ops: Vec<Operand> = args.iter().map(|arg| lower_expr(arg, ctx)).collect();
 
-            // For now, assume all calls return i64 (we'd need type info for better handling)
-            let dest = ctx.fresh_temp();
+            // Check if this is a void function (runtime functions that return void)
+            let is_void_func = matches!(func.as_str(), "println" | "print" | "assert");
 
-            ctx.push_inst(MirInst::Call {
-                dest: Some(dest.clone()),
-                func: func.clone(),
-                args: arg_ops,
-            });
-
-            Operand::Place(dest)
+            if is_void_func {
+                ctx.push_inst(MirInst::Call {
+                    dest: None,
+                    func: func.clone(),
+                    args: arg_ops,
+                });
+                Operand::Constant(Constant::Unit)
+            } else {
+                let dest = ctx.fresh_temp();
+                ctx.push_inst(MirInst::Call {
+                    dest: Some(dest.clone()),
+                    func: func.clone(),
+                    args: arg_ops,
+                });
+                Operand::Place(dest)
+            }
         }
 
         Expr::Block(exprs) => {
