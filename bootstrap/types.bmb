@@ -20,6 +20,7 @@
 -- - v0.10.0: Basic type checking (literals, binops, if, let, calls)
 -- - v0.22.2: Add struct/enum named types, field access, match checking
 -- - v0.30.3: Add type parameter scope tracking (generic foundations)
+-- - v0.30.4: Add type name resolution (primitives, type params, named types)
 --
 -- LIMITATIONS:
 -- - Fixed max 64 variables in scope
@@ -420,6 +421,64 @@ fn tparam_find_char(s: String, c: i64, pos: i64) -> i64 =
     else tparam_find_char(s, c, pos + 1);
 
 -- ============================================================================
+-- v0.30.4: Type Name Resolution
+-- ============================================================================
+-- Resolves a type name string to a type code
+-- Handles: primitive types, type parameters, and named types
+--
+-- Usage: resolve_type_name(tparam_env, "i64") -> type_i64()
+--        resolve_type_name("T,U", "T") -> type_param(0)
+--        resolve_type_name("", "Point") -> type_named(lookup)
+
+-- Check if name is a primitive type
+fn is_primitive_type(name: String) -> bool =
+    name == "i32" or name == "i64" or name == "f64" or
+    name == "bool" or name == "String" or name == "unit";
+
+-- Get type code for a primitive type name
+fn primitive_type(name: String) -> i64 =
+    if name == "i32" then type_i32()
+    else if name == "i64" then type_i64()
+    else if name == "f64" then type_f64()
+    else if name == "bool" then type_bool()
+    else if name == "String" then type_string()
+    else if name == "unit" then type_unit()
+    else type_error();
+
+-- Check if name looks like a type parameter (single uppercase letter)
+-- Type parameters: A-Z (single character, uppercase)
+fn is_type_param_name(name: String) -> bool =
+    if name.len() != 1 then false
+    else
+        let c = name.char_at(0);
+        c >= 65 and c <= 90;  -- 'A'=65, 'Z'=90
+
+-- Resolve a type name to a type code
+-- Priority: 1) Primitives 2) Type parameters 3) Named types (struct/enum)
+fn resolve_type_name(tenv: String, name: String) -> i64 =
+    if is_primitive_type(name) then primitive_type(name)
+    else if tparam_in_scope(tenv, name) then tparam_resolve(tenv, name)
+    else if is_type_param_name(name) then
+        -- Single uppercase letter but not in scope = error
+        type_error()
+    else
+        -- Assume it's a named type (struct/enum)
+        -- For now, just create a type_named with a simple hash
+        type_named(name_hash(name));
+
+-- Simple hash for named types (placeholder)
+fn name_hash(name: String) -> i64 =
+    if name.len() == 0 then 0
+    else name_hash_acc(name, 0, 0);
+
+fn name_hash_acc(name: String, pos: i64, acc: i64) -> i64 =
+    if pos >= name.len() then acc
+    else
+        let c = name.char_at(pos);
+        let new_acc = (acc * 31 + c) - ((acc * 31 + c) / 1000) * 1000;
+        name_hash_acc(name, pos + 1, new_acc);
+
+-- ============================================================================
 -- Integer to String Helper
 -- ============================================================================
 fn int_to_string_helper(n: i64, acc: String) -> String =
@@ -744,6 +803,60 @@ fn test_type_param_resolve() -> i64 =
 
     r1 + r2 + r3 + r4;
 
+-- ============================================================================
+-- v0.30.4: Type Name Resolution Tests
+-- ============================================================================
+
+fn test_primitive_type() -> i64 =
+    -- is_primitive_type tests
+    let r1 = if is_primitive_type("i64") then 1 else 0;
+    let r2 = if is_primitive_type("bool") then 1 else 0;
+    let r3 = if not is_primitive_type("T") then 1 else 0;
+    let r4 = if not is_primitive_type("Point") then 1 else 0;
+
+    -- primitive_type tests
+    let r5 = if primitive_type("i64") == type_i64() then 1 else 0;
+    let r6 = if primitive_type("bool") == type_bool() then 1 else 0;
+    let r7 = if is_error(primitive_type("unknown")) then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5 + r6 + r7;
+
+fn test_type_param_name() -> i64 =
+    -- Single uppercase letter = type param
+    let r1 = if is_type_param_name("T") then 1 else 0;
+    let r2 = if is_type_param_name("U") then 1 else 0;
+    let r3 = if is_type_param_name("A") then 1 else 0;
+    let r4 = if is_type_param_name("Z") then 1 else 0;
+
+    -- Not type param names
+    let r5 = if not is_type_param_name("i64") then 1 else 0;
+    let r6 = if not is_type_param_name("Point") then 1 else 0;
+    let r7 = if not is_type_param_name("a") then 1 else 0;  -- lowercase
+    let r8 = if not is_type_param_name("") then 1 else 0;   -- empty
+
+    r1 + r2 + r3 + r4 + r5 + r6 + r7 + r8;
+
+fn test_resolve_type_name() -> i64 =
+    let tenv = "T,U";
+
+    -- Resolve primitives
+    let r1 = if resolve_type_name(tenv, "i64") == type_i64() then 1 else 0;
+    let r2 = if resolve_type_name(tenv, "bool") == type_bool() then 1 else 0;
+
+    -- Resolve type params in scope
+    let r3 = if resolve_type_name(tenv, "T") == type_param(0) then 1 else 0;
+    let r4 = if resolve_type_name(tenv, "U") == type_param(1) then 1 else 0;
+
+    -- Type param not in scope = error
+    let r5 = if is_error(resolve_type_name(tenv, "V")) then 1 else 0;
+    let r6 = if is_error(resolve_type_name("", "T")) then 1 else 0;
+
+    -- Named types (struct/enum)
+    let r7 = if is_named(resolve_type_name(tenv, "Point")) then 1 else 0;
+    let r8 = if is_named(resolve_type_name(tenv, "Option")) then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5 + r6 + r7 + r8;
+
 -- Main test runner
 fn main() -> i64 =
     let u0 = println(777);  -- Start marker
@@ -792,10 +905,20 @@ fn main() -> i64 =
     let t14 = test_type_param_resolve();
     let p14 = println(t14);  -- Expected: 4
 
+    -- v0.30.4: Type name resolution tests
+    let t15 = test_primitive_type();
+    let p15 = println(t15);  -- Expected: 7
+
+    let t16 = test_type_param_name();
+    let p16 = println(t16);  -- Expected: 8
+
+    let t17 = test_resolve_type_name();
+    let p17 = println(t17);  -- Expected: 8
+
     let u1 = println(888);  -- Separator
 
-    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14;
-    let u2 = println(total);  -- Expected: 66
+    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17;
+    let u2 = println(total);  -- Expected: 89
 
     let u3 = println(999);  -- End marker
     total;

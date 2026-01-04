@@ -161,10 +161,11 @@ Gap to Close:
 - ✅ Parse generic type applications (v0.30.1: Vec<T>, Map<K,V>)
 - ✅ Parse type parameter declarations (v0.30.2: struct Foo<T>, fn bar<T>)
 - ✅ Type parameter scope tracking (v0.30.3: tparam_add, tparam_lookup)
+- ✅ Type name resolution (v0.30.4: resolve_type_name with tenv)
 
 ### What Bootstrap CANNOT Do Yet
 
-- ⚠️ Generic type instantiation (scope tracking only, no substitution)
+- ⚠️ Generic type instantiation (name resolution only, no substitution)
 - ❌ Trait implementation dispatch
 - ❌ Closure capture and codegen
 - ❌ FFI linking
