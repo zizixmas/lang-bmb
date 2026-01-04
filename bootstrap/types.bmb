@@ -1430,6 +1430,79 @@ fn gen_enum_variant_name_at_from(variants: String, target: i64, current: i64, st
                 else gen_enum_variant_name_at_from(variants, target, current + 1, next);
 
 -- ============================================================================
+-- v0.30.14: Enum Registry
+-- ============================================================================
+-- Format: "Name1=def1;Name2=def2;..." (semicolon-separated name=definition pairs)
+
+-- Create empty enum registry
+fn enum_reg_new() -> String = "";
+
+-- Add enum definition to registry
+fn enum_reg_add(reg: String, def: String) -> String =
+    let name = gen_enum_name(def);
+    if reg.len() == 0 then name + "=" + def
+    else reg + ";" + name + "=" + def;
+
+-- Find semicolon in registry
+fn enum_reg_find_semi(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then 0 - 1
+    else if s.char_at(pos) == 59 then pos  -- ';' = 59
+    else enum_reg_find_semi(s, pos + 1);
+
+-- Find equals in registry
+fn enum_reg_find_eq(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then 0 - 1
+    else if s.char_at(pos) == 61 then pos  -- '=' = 61
+    else enum_reg_find_eq(s, pos + 1);
+
+-- Lookup enum definition by name
+fn enum_reg_lookup(reg: String, name: String) -> String =
+    if reg.len() == 0 then ""
+    else enum_reg_lookup_from(reg, name, 0);
+
+fn enum_reg_lookup_from(reg: String, name: String, pos: i64) -> String =
+    if pos >= reg.len() then ""
+    else
+        let semi = enum_reg_find_semi(reg, pos);
+        let end = if semi < 0 then reg.len() else semi;
+        let entry = reg.slice(pos, end);
+        let eq = enum_reg_find_eq(entry, 0);
+        if eq < 0 then ""
+        else
+            let ename = entry.slice(0, eq);
+            if ename == name then entry.slice(eq + 1, entry.len())
+            else if semi < 0 then ""
+            else enum_reg_lookup_from(reg, name, semi + 1);
+
+-- Check if enum exists in registry
+fn enum_reg_has(reg: String, name: String) -> bool =
+    let def = enum_reg_lookup(reg, name);
+    def.len() > 0;
+
+-- Resolve variant type with type arguments through registry lookup
+fn enum_reg_variant_type(reg: String, enum_name: String, targs: String, variant_name: String) -> String =
+    let def = enum_reg_lookup(reg, enum_name);
+    if def.len() == 0 then ""
+    else gen_enum_resolve_variant(def, targs, variant_name);
+
+-- Count entries in registry
+fn enum_reg_count(reg: String) -> i64 =
+    if reg.len() == 0 then 0
+    else enum_reg_count_from(reg, 0, 0);
+
+fn enum_reg_count_from(reg: String, pos: i64, count: i64) -> i64 =
+    if pos >= reg.len() then count + 1
+    else if reg.char_at(pos) == 59 then  -- ';' = 59
+        enum_reg_count_from(reg, pos + 1, count + 1)
+    else enum_reg_count_from(reg, pos + 1, count);
+
+-- Check if enum is generic (from registry)
+fn enum_reg_is_generic(reg: String, name: String) -> bool =
+    let def = enum_reg_lookup(reg, name);
+    if def.len() == 0 then false
+    else gen_enum_is_generic(def);
+
+-- ============================================================================
 -- Test Functions
 -- ============================================================================
 
@@ -2482,6 +2555,82 @@ fn test_gen_enum_variant_name_at() -> i64 =
 
     r1 + r2 + r3 + r4 + r5;
 
+-- v0.30.14: Enum registry tests
+
+-- Test enum_reg_add
+fn test_enum_reg_add() -> i64 =
+    let opt = gen_enum_pack("Option", "T", "Some:T,None");
+    let res = gen_enum_pack("Result", "T,E", "Ok:T,Err:E");
+
+    let reg1 = enum_reg_add(enum_reg_new(), opt);
+    let r1 = if enum_reg_count(reg1) == 1 then 1 else 0;
+
+    let reg2 = enum_reg_add(reg1, res);
+    let r2 = if enum_reg_count(reg2) == 2 then 1 else 0;
+
+    let status = gen_enum_pack("Status", "", "Active,Inactive");
+    let reg3 = enum_reg_add(reg2, status);
+    let r3 = if enum_reg_count(reg3) == 3 then 1 else 0;
+
+    r1 + r2 + r3;
+
+-- Test enum_reg_lookup
+fn test_enum_reg_lookup() -> i64 =
+    let opt = gen_enum_pack("Option", "T", "Some:T,None");
+    let res = gen_enum_pack("Result", "T,E", "Ok:T,Err:E");
+    let reg = enum_reg_add(enum_reg_add(enum_reg_new(), opt), res);
+
+    let r1 = if gen_enum_name(enum_reg_lookup(reg, "Option")) == "Option" then 1 else 0;
+    let r2 = if gen_enum_tparams(enum_reg_lookup(reg, "Option")) == "T" then 1 else 0;
+    let r3 = if gen_enum_name(enum_reg_lookup(reg, "Result")) == "Result" then 1 else 0;
+    let r4 = if gen_enum_tparams(enum_reg_lookup(reg, "Result")) == "T,E" then 1 else 0;
+    let r5 = if enum_reg_lookup(reg, "Missing").len() == 0 then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5;
+
+-- Test enum_reg_has
+fn test_enum_reg_has() -> i64 =
+    let opt = gen_enum_pack("Option", "T", "Some:T,None");
+    let reg = enum_reg_add(enum_reg_new(), opt);
+
+    let r1 = if enum_reg_has(reg, "Option") then 1 else 0;
+    let r2 = if not enum_reg_has(reg, "Missing") then 1 else 0;
+
+    r1 + r2;
+
+-- Test enum_reg_variant_type
+fn test_enum_reg_variant_type() -> i64 =
+    let opt = gen_enum_pack("Option", "T", "Some:T,None");
+    let res = gen_enum_pack("Result", "T,E", "Ok:T,Err:E");
+    let reg = enum_reg_add(enum_reg_add(enum_reg_new(), opt), res);
+
+    -- Option<i64>.Some → i64
+    let r1 = if enum_reg_variant_type(reg, "Option", "i64", "Some") == "i64" then 1 else 0;
+    -- Option<String>.Some → String
+    let r2 = if enum_reg_variant_type(reg, "Option", "String", "Some") == "String" then 1 else 0;
+    -- Option<i64>.None → "" (no payload)
+    let r3 = if enum_reg_variant_type(reg, "Option", "i64", "None") == "" then 1 else 0;
+    -- Result<i64,String>.Ok → i64
+    let r4 = if enum_reg_variant_type(reg, "Result", "i64,String", "Ok") == "i64" then 1 else 0;
+    -- Result<i64,String>.Err → String
+    let r5 = if enum_reg_variant_type(reg, "Result", "i64,String", "Err") == "String" then 1 else 0;
+    -- Missing enum
+    let r6 = if enum_reg_variant_type(reg, "Missing", "i64", "Some") == "" then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5 + r6;
+
+-- Test enum_reg_is_generic
+fn test_enum_reg_is_generic() -> i64 =
+    let opt = gen_enum_pack("Option", "T", "Some:T,None");
+    let status = gen_enum_pack("Status", "", "Active,Inactive");
+    let reg = enum_reg_add(enum_reg_add(enum_reg_new(), opt), status);
+
+    let r1 = if enum_reg_is_generic(reg, "Option") then 1 else 0;
+    let r2 = if not enum_reg_is_generic(reg, "Status") then 1 else 0;
+    let r3 = if not enum_reg_is_generic(reg, "Missing") then 1 else 0;
+
+    r1 + r2 + r3;
+
 -- Main test runner
 fn main() -> i64 =
     let u0 = println(777);  -- Start marker
@@ -2684,10 +2833,26 @@ fn main() -> i64 =
     let t62 = test_gen_enum_variant_name_at();
     let p62 = println(t62);  -- Expected: 5
 
+    -- v0.30.14: Enum registry tests
+    let t63 = test_enum_reg_add();
+    let p63 = println(t63);  -- Expected: 3
+
+    let t64 = test_enum_reg_lookup();
+    let p64 = println(t64);  -- Expected: 5
+
+    let t65 = test_enum_reg_has();
+    let p65 = println(t65);  -- Expected: 2
+
+    let t66 = test_enum_reg_variant_type();
+    let p66 = println(t66);  -- Expected: 6
+
+    let t67 = test_enum_reg_is_generic();
+    let p67 = println(t67);  -- Expected: 3
+
     let u1 = println(888);  -- Separator
 
-    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33 + t34 + t35 + t36 + t37 + t38 + t39 + t40 + t41 + t42 + t43 + t44 + t45 + t46 + t47 + t48 + t49 + t50 + t51 + t52 + t53 + t54 + t55 + t56 + t57 + t58 + t59 + t60 + t61 + t62;
-    let u2 = println(total);  -- Expected: 316
+    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33 + t34 + t35 + t36 + t37 + t38 + t39 + t40 + t41 + t42 + t43 + t44 + t45 + t46 + t47 + t48 + t49 + t50 + t51 + t52 + t53 + t54 + t55 + t56 + t57 + t58 + t59 + t60 + t61 + t62 + t63 + t64 + t65 + t66 + t67;
+    let u2 = println(total);  -- Expected: 335
 
     let u3 = println(999);  -- End marker
     total;
