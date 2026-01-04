@@ -26,6 +26,7 @@
 -- - v0.30.7: Add type substitution for generic instantiation
 -- - v0.30.8: Add generic instantiation integration (validate, resolve, encode)
 -- - v0.30.9: Add generic function type checking (signature, instantiate, check)
+-- - v0.30.10: Add generic type inference (infer type args from actual types)
 --
 -- LIMITATIONS:
 -- - Fixed max 64 variables in scope
@@ -967,6 +968,142 @@ fn gen_fn_match_params_from(expected: String, actual: String, exp_idx: i64, act_
         else false;
 
 -- ============================================================================
+-- v0.30.10: Generic Type Inference
+-- ============================================================================
+-- Infer type arguments from actual argument types
+-- Example: identity<T>(x: T) called with i64 → infer T = i64
+
+-- Check if a string represents a single type parameter (A-Z)
+fn is_single_tparam(s: String) -> bool =
+    if s.len() != 1 then false
+    else
+        let c = s.char_at(0);
+        c >= 65 and c <= 90;  -- A=65, Z=90
+
+-- Infer binding from a single param/actual pair
+-- Returns substitution string or "" if not a type param
+fn infer_single(param_type: String, actual_type: String) -> String =
+    if is_single_tparam(param_type) then
+        subst_new(param_type, actual_type)
+    else "";
+
+-- Merge two substitutions, checking consistency
+-- Returns merged subst or "" if conflict
+fn infer_merge(subst1: String, subst2: String) -> String =
+    if subst1.len() == 0 then subst2
+    else if subst2.len() == 0 then subst1
+    else infer_merge_items(subst1, subst2, 0);
+
+-- Helper: merge items from subst2 into subst1
+fn infer_merge_items(base: String, items: String, pos: i64) -> String =
+    if pos >= items.len() then base
+    else
+        -- Extract key=value pair starting at pos
+        let pair = infer_extract_pair(items, pos);
+        if pair.len() == 0 then base
+        else
+            let eq_pos = infer_find_eq(pair, 0);
+            if eq_pos < 0 then ""  -- invalid pair
+            else
+                let key = pair.slice(0, eq_pos);
+                let val = pair.slice(eq_pos + 1, pair.len());
+                let existing = subst_lookup(base, key);
+                if existing.len() > 0 and existing != val then ""  -- conflict
+                else
+                    let new_base = if existing.len() > 0 then base
+                                   else subst_add(base, key, val);
+                    let next_pos = infer_next_pair_pos(items, pos);
+                    if next_pos < 0 then new_base
+                    else infer_merge_items(new_base, items, next_pos);
+
+-- Find = in a string
+fn infer_find_eq(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then 0 - 1
+    else if s.char_at(pos) == 61 then pos  -- '=' = 61
+    else infer_find_eq(s, pos + 1);
+
+-- Extract pair ending at comma or end
+fn infer_extract_pair(s: String, pos: i64) -> String =
+    let comma = infer_find_comma(s, pos);
+    if comma < 0 then s.slice(pos, s.len())
+    else s.slice(pos, comma);
+
+-- Find comma in string
+fn infer_find_comma(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then 0 - 1
+    else if s.char_at(pos) == 44 then pos  -- ',' = 44
+    else infer_find_comma(s, pos + 1);
+
+-- Find next pair position (after comma)
+fn infer_next_pair_pos(s: String, pos: i64) -> i64 =
+    let comma = infer_find_comma(s, pos);
+    if comma < 0 then 0 - 1
+    else comma + 1;
+
+-- Infer type params from param types and actual types
+-- Returns substitution or "" on error
+fn infer_from_pair_list(param_types: String, actual_types: String) -> String =
+    if param_types.len() == 0 then ""
+    else infer_from_pair_list_from(param_types, actual_types, 0, 0, "");
+
+fn infer_from_pair_list_from(param_types: String, actual_types: String,
+                              param_idx: i64, actual_idx: i64, acc: String) -> String =
+    let param_count = if param_types.len() == 0 then 0 else gen_count_args(param_types, 0, 1);
+    let actual_count = if actual_types.len() == 0 then 0 else gen_count_args(actual_types, 0, 1);
+    if param_idx >= param_count then acc
+    else if actual_idx >= actual_count then ""  -- arity mismatch
+    else
+        let param = gen_extract_arg(param_types, param_idx, 0, 0);
+        let actual = gen_extract_arg(actual_types, actual_idx, 0, 0);
+        let inferred = infer_single(param, actual);
+        let merged = infer_merge(acc, inferred);
+        if inferred.len() > 0 and merged.len() == 0 then ""  -- conflict
+        else infer_from_pair_list_from(param_types, actual_types,
+                                        param_idx + 1, actual_idx + 1, merged);
+
+-- Infer and check a generic function call
+-- Returns return type string or "" on error
+fn gen_fn_infer_call(sig: String, arg_types: String) -> String =
+    let tparams = gen_fn_tparams(sig);
+    let param_types = gen_fn_params(sig);
+    -- Infer type arguments
+    let inferred = infer_from_pair_list(param_types, arg_types);
+    -- Check if all type params are bound
+    if not infer_all_bound(tparams, inferred) then ""
+    else
+        -- Now check the call with inferred type args
+        let targs = infer_build_targs(tparams, inferred);
+        gen_fn_check_call(sig, targs, arg_types);
+
+-- Check if all type params are bound in substitution
+fn infer_all_bound(tparams: String, subst: String) -> bool =
+    if tparams.len() == 0 then true
+    else infer_all_bound_from(tparams, subst, 0);
+
+fn infer_all_bound_from(tparams: String, subst: String, idx: i64) -> bool =
+    let count = gen_count_args(tparams, 0, 1);
+    if idx >= count then true
+    else
+        let param = gen_extract_arg(tparams, idx, 0, 0);
+        let bound = subst_lookup(subst, param);
+        if bound.len() == 0 then false
+        else infer_all_bound_from(tparams, subst, idx + 1);
+
+-- Build type args string from params and substitution
+fn infer_build_targs(tparams: String, subst: String) -> String =
+    if tparams.len() == 0 then ""
+    else infer_build_targs_from(tparams, subst, 0, "");
+
+fn infer_build_targs_from(tparams: String, subst: String, idx: i64, acc: String) -> String =
+    let count = gen_count_args(tparams, 0, 1);
+    if idx >= count then acc
+    else
+        let param = gen_extract_arg(tparams, idx, 0, 0);
+        let bound = subst_lookup(subst, param);
+        let new_acc = if acc.len() == 0 then bound else acc + "," + bound;
+        infer_build_targs_from(tparams, subst, idx + 1, new_acc);
+
+-- ============================================================================
 -- Test Functions
 -- ============================================================================
 
@@ -1664,6 +1801,100 @@ fn test_gen_fn_check_call() -> i64 =
 
     r1 + r2 + r3 + r4 + r5 + r6;
 
+-- v0.30.10: Type inference tests
+fn test_is_single_tparam() -> i64 =
+    let r1 = if is_single_tparam("T") then 1 else 0;
+    let r2 = if is_single_tparam("A") then 1 else 0;
+    let r3 = if is_single_tparam("Z") then 1 else 0;
+    let r4 = if not is_single_tparam("i64") then 1 else 0;
+    let r5 = if not is_single_tparam("AB") then 1 else 0;
+    let r6 = if not is_single_tparam("a") then 1 else 0;
+    r1 + r2 + r3 + r4 + r5 + r6;
+
+fn test_infer_single() -> i64 =
+    -- Infer T = i64
+    let r1 = if infer_single("T", "i64") == "T=i64" then 1 else 0;
+    -- Infer A = String
+    let r2 = if infer_single("A", "String") == "A=String" then 1 else 0;
+    -- Non-type-param returns ""
+    let r3 = if infer_single("i64", "i64").len() == 0 then 1 else 0;
+    let r4 = if infer_single("Vec", "Vec").len() == 0 then 1 else 0;
+    r1 + r2 + r3 + r4;
+
+fn test_infer_merge() -> i64 =
+    -- Merge empty with non-empty
+    let r1 = if infer_merge("", "T=i64") == "T=i64" then 1 else 0;
+    let r2 = if infer_merge("T=i64", "") == "T=i64" then 1 else 0;
+    -- Merge compatible
+    let r3 = if infer_merge("T=i64", "U=String") == "T=i64,U=String" then 1 else 0;
+    -- Merge duplicate (same value)
+    let merged = infer_merge("T=i64", "T=i64");
+    let r4 = if merged == "T=i64" then 1 else 0;
+    -- Conflict (different values for same key)
+    let conflict = infer_merge("T=i64", "T=String");
+    let r5 = if conflict.len() == 0 then 1 else 0;
+    r1 + r2 + r3 + r4 + r5;
+
+fn test_infer_from_pair_list() -> i64 =
+    -- Infer T from single param
+    let inferred1 = infer_from_pair_list("T", "i64");
+    let r1 = if inferred1 == "T=i64" then 1 else 0;
+    -- Infer A,B from two params
+    let inferred2 = infer_from_pair_list("A,B", "String,i64");
+    let r2 = if subst_lookup(inferred2, "A") == "String" then 1 else 0;
+    let r3 = if subst_lookup(inferred2, "B") == "i64" then 1 else 0;
+    -- Empty params
+    let r4 = if infer_from_pair_list("", "").len() == 0 then 1 else 0;
+    r1 + r2 + r3 + r4;
+
+fn test_infer_all_bound() -> i64 =
+    -- All params bound
+    let r1 = if infer_all_bound("T", "T=i64") then 1 else 0;
+    let r2 = if infer_all_bound("T,U", "T=i64,U=String") then 1 else 0;
+    -- Missing binding
+    let r3 = if not infer_all_bound("T,U", "T=i64") then 1 else 0;
+    let r4 = if not infer_all_bound("T", "") then 1 else 0;
+    -- Empty params always bound
+    let r5 = if infer_all_bound("", "") then 1 else 0;
+    r1 + r2 + r3 + r4 + r5;
+
+fn test_infer_build_targs() -> i64 =
+    -- Build single arg
+    let args1 = infer_build_targs("T", "T=i64");
+    let r1 = if args1 == "i64" then 1 else 0;
+    -- Build two args
+    let args2 = infer_build_targs("A,B", "A=String,B=i64");
+    let r2 = if args2 == "String,i64" then 1 else 0;
+    -- Empty
+    let r3 = if infer_build_targs("", "").len() == 0 then 1 else 0;
+    r1 + r2 + r3;
+
+fn test_gen_fn_infer_call() -> i64 =
+    -- identity<T>(x: T) called with i64 - infer T
+    let sig1 = gen_fn_pack("identity", "T", "T", "T");
+    let result1 = gen_fn_infer_call(sig1, "i64");
+    let r1 = if result1 == "i64" then 1 else 0;
+
+    -- identity<T>(x: T) called with String
+    let result2 = gen_fn_infer_call(sig1, "String");
+    let r2 = if result2 == "String" then 1 else 0;
+
+    -- swap<A,B>(a: A, b: B) -> B with String,i64
+    let sig2 = gen_fn_pack("swap", "A,B", "A,B", "B");
+    let result3 = gen_fn_infer_call(sig2, "String,i64");
+    let r3 = if result3 == "i64" then 1 else 0;
+
+    -- first<A,B>(a: A, b: B) -> A with i64,String
+    let sig3 = gen_fn_pack("first", "A,B", "A,B", "A");
+    let result4 = gen_fn_infer_call(sig3, "i64,String");
+    let r4 = if result4 == "i64" then 1 else 0;
+
+    -- Wrong arity should fail
+    let result5 = gen_fn_infer_call(sig1, "i64,String");
+    let r5 = if result5.len() == 0 then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5;
+
 -- Main test runner
 fn main() -> i64 =
     let u0 = println(777);  -- Start marker
@@ -1787,10 +2018,32 @@ fn main() -> i64 =
     let t37 = test_gen_fn_check_call();
     let p37 = println(t37);  -- Expected: 6
 
+    -- v0.30.10: Type inference tests
+    let t38 = test_is_single_tparam();
+    let p38 = println(t38);  -- Expected: 6
+
+    let t39 = test_infer_single();
+    let p39 = println(t39);  -- Expected: 4
+
+    let t40 = test_infer_merge();
+    let p40 = println(t40);  -- Expected: 5
+
+    let t41 = test_infer_from_pair_list();
+    let p41 = println(t41);  -- Expected: 4
+
+    let t42 = test_infer_all_bound();
+    let p42 = println(t42);  -- Expected: 5
+
+    let t43 = test_infer_build_targs();
+    let p43 = println(t43);  -- Expected: 3
+
+    let t44 = test_gen_fn_infer_call();
+    let p44 = println(t44);  -- Expected: 5
+
     let u1 = println(888);  -- Separator
 
-    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33 + t34 + t35 + t36 + t37;
-    let u2 = println(total);  -- Expected: 208
+    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33 + t34 + t35 + t36 + t37 + t38 + t39 + t40 + t41 + t42 + t43 + t44;
+    let u2 = println(total);  -- Expected: 240
 
     let u3 = println(999);  -- End marker
     total;

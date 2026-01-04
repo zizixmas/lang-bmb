@@ -121,7 +121,7 @@ Comprehensive test suite with 15 test categories.
 14. Deep nesting
 15. Nested function calls
 
-### types.bmb (69KB) - v0.30.9
+### types.bmb (79KB) - v0.30.10
 Type checker foundation for BMB.
 
 **Features:**
@@ -188,6 +188,15 @@ Type checker foundation for BMB.
 - `gen_fn_check_call`: Validate generic function call (arity, type matching)
 - `gen_fn_match_params`: Match expected and actual parameter types
 
+**Features (v0.30.10):**
+- Generic type inference: Infer type arguments from actual argument types
+- `is_single_tparam`: Check if string is a single type parameter (A-Z)
+- `infer_single`: Infer binding from single param/actual pair (T, i64 → T=i64)
+- `infer_merge`: Merge substitutions with conflict detection
+- `infer_from_pair_list`: Infer all type params from param/actual lists
+- `infer_all_bound`, `infer_build_targs`: Validate and construct type args
+- `gen_fn_infer_call`: Full inference and checking for generic function calls
+
 **Test output:**
 ```
 777 (start marker)
@@ -228,8 +237,15 @@ Type checker foundation for BMB.
 5  (gen fn instantiate tests)
 4  (gen fn param count tests)
 6  (gen fn check call tests)
+6  (is single tparam tests)
+4  (infer single tests)
+5  (infer merge tests)
+4  (infer from pair list tests)
+5  (infer all bound tests)
+3  (infer build targs tests)
+5  (gen fn infer call tests)
 888 (separator)
-208 (total passed)
+240 (total passed)
 999 (end marker)
 ```
 

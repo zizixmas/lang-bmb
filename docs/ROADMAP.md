@@ -267,6 +267,14 @@ v0.MAJOR.MINOR
 - `gen_fn_match_params`: Match expected and actual parameter types
 - 4 new test functions, 23 assertions (208 total in types.bmb)
 
+**v0.30.10 Completed (2026-01-04)**:
+- `is_single_tparam`: Check if string is a single type parameter (A-Z)
+- `infer_single`, `infer_merge`: Infer and merge type param bindings
+- `infer_from_pair_list`: Infer all type params from param/actual type lists
+- `infer_all_bound`, `infer_build_targs`: Validate and construct type args
+- `gen_fn_infer_call`: Full inference and checking for generic function calls
+- 7 new test functions, 32 assertions (240 total in types.bmb)
+
 **Deliverables**:
 - Bootstrap compiler can type-check generic code
 - Trait dispatch works in bootstrap
