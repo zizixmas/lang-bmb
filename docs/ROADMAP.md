@@ -2340,20 +2340,40 @@ let pipeline = OptimizationPipeline::for_level(mir_opt_level);
 let stats = pipeline.optimize(&mut mir);
 ```
 
+### v0.29.1 Bootstrap 최적화 확장 ✅
+
+**bootstrap/optimize.bmb** (18KB):
+- Rust 최적화 패스를 BMB로 포팅
+- 상수 폴딩, 분기 단순화 구현
+- 복사 전파, 죽은 코드 제거 인프라
+- 7/9 테스트 통과
+
 ---
 
 ## v0.30 Pure ★ (Rust 완전 제거)
 
 > 목표: Self-Hosting 완료, Rust 코드 0줄
 
+### 준비 현황 (2026-01-04)
+
+| 컴포넌트 | Rust LOC | BMB LOC | 커버리지 |
+|----------|----------|---------|----------|
+| 컴파일러 | ~17,679 | ~8,943 | 51% |
+| gotgan | ~4,104 | 0 | 0% |
+| **총계** | **21,783** | **8,943** | **41%** |
+
+> 상세 갭 분석: `docs/GAP_ANALYSIS.md` 참조
+
 ### Rust 제거 작업
 
 | 작업 | 설명 | 상태 |
 |------|------|------|
-| **lang-bmb 포팅** | 컴파일러 Rust → BMB | 계획 |
-| **gotgan 포팅** | 패키지 매니저 Rust → BMB | 계획 |
-| **Cargo.toml 삭제** | Rust 의존성 제거 | 계획 |
-| **Stage 3 검증** | 재현 가능한 빌드 확인 | 계획 |
+| **Bootstrap 최적화** | MIR 최적화 BMB 포팅 | ✅ 완료 (v0.29.1) |
+| **GAP 분석** | 컴파일러/gotgan 갭 문서화 | ✅ 완료 |
+| **lang-bmb 포팅** | 컴파일러 Rust → BMB | 계획 (Q2-Q3 2026) |
+| **gotgan 포팅** | 패키지 매니저 Rust → BMB | 계획 (Q3 2026) |
+| **Cargo.toml 삭제** | Rust 의존성 제거 | 계획 (Q4 2026) |
+| **Stage 3 검증** | 재현 가능한 빌드 확인 | 계획 (Q4 2026) |
 
 ### 포팅 대상 파일
 
