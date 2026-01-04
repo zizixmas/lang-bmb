@@ -101,6 +101,65 @@ enum Command {
     },
     /// Start Language Server Protocol server
     Lsp,
+    /// Generate project index for AI tools (v0.25)
+    Index {
+        /// Project root directory (default: current directory)
+        #[arg(default_value = ".")]
+        path: PathBuf,
+        /// Watch for file changes
+        #[arg(long)]
+        watch: bool,
+        /// Verbose output
+        #[arg(short, long)]
+        verbose: bool,
+    },
+    /// Query project index (AI Query System - v0.25)
+    #[command(name = "q")]
+    Query {
+        #[command(subcommand)]
+        query_type: QueryType,
+    },
+}
+
+#[derive(Subcommand)]
+enum QueryType {
+    /// Search symbols by pattern
+    Sym {
+        /// Pattern to search for
+        pattern: String,
+        /// Filter by kind (fn, struct, enum, type, trait)
+        #[arg(long)]
+        kind: Option<String>,
+        /// Only show public symbols
+        #[arg(long)]
+        public: bool,
+    },
+    /// Query function details
+    Fn {
+        /// Function name (optional when using filters)
+        #[arg(default_value = "")]
+        name: String,
+        /// Show functions with preconditions
+        #[arg(long)]
+        has_pre: bool,
+        /// Show functions with postconditions
+        #[arg(long)]
+        has_post: bool,
+        /// Show recursive functions
+        #[arg(long)]
+        recursive: bool,
+    },
+    /// Query type details
+    Type {
+        /// Type name (optional when using --kind filter)
+        #[arg(default_value = "")]
+        name: String,
+        /// Filter by kind (struct, enum, trait)
+        #[arg(long)]
+        kind: Option<String>,
+    },
+    /// Show project metrics
+    Metrics,
 }
 
 fn main() {
@@ -127,6 +186,8 @@ fn main() {
         Command::Test { file, filter, verbose } => test_file(&file, filter.as_deref(), verbose),
         Command::Fmt { file, check } => fmt_file(&file, check),
         Command::Lsp => start_lsp(),
+        Command::Index { path, watch, verbose } => index_project(&path, watch, verbose),
+        Command::Query { query_type } => run_query(query_type),
     };
 
     if let Err(e) = result {
@@ -1081,5 +1142,145 @@ fn start_lsp() -> Result<(), Box<dyn std::error::Error>> {
     // Create tokio runtime for async LSP server
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(bmb::lsp::run_server());
+    Ok(())
+}
+
+/// v0.25: Generate project index for AI tools
+fn index_project(path: &PathBuf, _watch: bool, verbose: bool) -> Result<(), Box<dyn std::error::Error>> {
+    use bmb::index::{IndexGenerator, write_index};
+
+    // Determine project name from directory
+    let project_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("bmb-project")
+        .to_string();
+
+    if verbose {
+        println!("Indexing project: {} at {}", project_name, path.display());
+    }
+
+    // Collect all .bmb files
+    let bmb_files = collect_bmb_files(path)?;
+
+    if bmb_files.is_empty() {
+        println!("No BMB files found in {}", path.display());
+        return Ok(());
+    }
+
+    if verbose {
+        println!("Found {} BMB files", bmb_files.len());
+    }
+
+    // Create index generator
+    let mut generator = IndexGenerator::new(&project_name);
+
+    // Index each file
+    for file in &bmb_files {
+        let source = std::fs::read_to_string(file)?;
+        let filename = file.display().to_string();
+
+        // Try to parse the file
+        match bmb::lexer::tokenize(&source) {
+            Ok(tokens) => {
+                match bmb::parser::parse(&filename, &source, tokens) {
+                    Ok(ast) => {
+                        if verbose {
+                            println!("  Indexed: {}", filename);
+                        }
+                        generator.index_file(&filename, &ast);
+                    }
+                    Err(e) => {
+                        if verbose {
+                            eprintln!("  Skipped {} (parse error: {})", filename, e);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                if verbose {
+                    eprintln!("  Skipped {} (lex error: {})", filename, e);
+                }
+            }
+        }
+    }
+
+    // Generate and write index
+    let index = generator.generate();
+    write_index(&index, path)?;
+
+    println!("✓ Index generated: .bmb/index/");
+    println!("  Files: {}", index.manifest.files);
+    println!("  Functions: {}", index.manifest.functions);
+    println!("  Types: {}", index.manifest.types);
+    println!("  Contracts: {}", index.manifest.contracts);
+
+    Ok(())
+}
+
+/// v0.25: Run query against project index
+fn run_query(query_type: QueryType) -> Result<(), Box<dyn std::error::Error>> {
+    use bmb::index::{read_index, SymbolKind};
+    use bmb::query::QueryEngine;
+
+    // Try to read index from current directory
+    let current_dir = std::env::current_dir()?;
+    let index = match read_index(&current_dir) {
+        Ok(idx) => idx,
+        Err(e) => {
+            eprintln!("Error: No index found at {:?}. Run 'bmb index' first.", current_dir);
+            eprintln!("  Detail: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    let engine = QueryEngine::new(index);
+
+    match query_type {
+        QueryType::Sym { pattern, kind, public } => {
+            let symbol_kind = kind.as_ref().and_then(|k| match k.as_str() {
+                "fn" | "function" => Some(SymbolKind::Function),
+                "struct" => Some(SymbolKind::Struct),
+                "enum" => Some(SymbolKind::Enum),
+                "type" => Some(SymbolKind::Type),
+                "trait" => Some(SymbolKind::Trait),
+                _ => None,
+            });
+
+            let result = engine.query_symbols(&pattern, symbol_kind, public);
+            println!("{}", serde_json::to_string_pretty(&result)?);
+        }
+
+        QueryType::Fn { name, has_pre, has_post, recursive } => {
+            if !name.is_empty() && !has_pre && !has_post && !recursive {
+                // Query specific function
+                let result = engine.query_function(&name);
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            } else {
+                // Query functions with filters
+                let pre_filter = if has_pre { Some(true) } else { None };
+                let post_filter = if has_post { Some(true) } else { None };
+                let recursive_filter = if recursive { Some(true) } else { None };
+                let result = engine.query_functions(pre_filter, post_filter, recursive_filter, false);
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            }
+        }
+
+        QueryType::Type { name, kind } => {
+            if !name.is_empty() {
+                let result = engine.query_type(&name);
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            } else {
+                let result = engine.query_types(kind.as_deref(), false);
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            }
+        }
+
+        QueryType::Metrics => {
+            let metrics = engine.query_metrics();
+            println!("{}", serde_json::to_string_pretty(&metrics)?);
+        }
+    }
+
     Ok(())
 }

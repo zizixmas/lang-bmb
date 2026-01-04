@@ -61,9 +61,9 @@ v0.MAJOR.MINOR
 | v0.22 | **Mirror** | Parser Struct/Enum + Type Checker Enhancement | ✅ 완료 (v0.22.0-3) |
 | v0.23 | **Verify** | Self-hosting Stage 1/2 Verification | ✅ 완료 (v0.23.0-2) |
 | v0.24 | **Examples** | Bootstrap Examples (알고리즘 예제 8개) | ✅ 완료 (v0.24.0-3) |
-| v0.25 | **Launch** | 프로덕션 서비스 런칭 | 계획 |
-| v0.26 | **Velocity** | C/Rust 성능 추월 스프린트 | 계획 |
-| v0.27 | **Query** | AI Query System (RFC-0001) | 계획 |
+| v0.25 | **Query** | AI Query System (RFC-0001) | ✅ 완료 (v0.25.0-1) |
+| v0.26 | **Launch** | 프로덕션 서비스 런칭 | 계획 |
+| v0.27 | **Velocity** | C/Rust 성능 추월 스프린트 | 계획 |
 | v1.0-RC | **Golden** | 최종 검증 + 안정성 약속 | 계획 |
 
 ---
@@ -1695,7 +1695,71 @@ examples/bootstrap_test/
 
 ---
 
-## v0.25 Launch (프로덕션 서비스 런칭)
+## v0.25 Query (AI Query System) ✅
+
+> 목표: AI 도구가 BMB 프로젝트의 계약/증명 정보를 쿼리할 수 있는 전용 인터페이스
+
+**RFC**: [RFC-0001-AI-Query-System](RFC/RFC-0001-AI-Query-System.md)
+
+### v0.25.0 - Index Generation ✅
+
+| 구성요소 | 설명 | 상태 |
+|----------|------|------|
+| `.bmb/index/` | 인덱스 디렉토리 구조 | ✅ 완료 |
+| `manifest.json` | 프로젝트 메타데이터 | ✅ 완료 |
+| `symbols.json` | 심볼 테이블 | ✅ 완료 |
+| `functions.json` | 함수 상세 정보 | ✅ 완료 |
+| `types.json` | 타입 정보 | ✅ 완료 |
+| `bmb index` | 인덱스 생성 명령 | ✅ 완료 |
+
+### v0.25.1 - Basic Queries ✅
+
+| 명령 | 설명 | 상태 |
+|------|------|------|
+| `bmb q sym <pattern>` | 심볼 패턴 검색 | ✅ 완료 |
+| `bmb q fn <name>` | 함수 상세 조회 | ✅ 완료 |
+| `bmb q fn --has-pre` | precondition 함수 필터 | ✅ 완료 |
+| `bmb q fn --has-post` | postcondition 함수 필터 | ✅ 완료 |
+| `bmb q fn --recursive` | 재귀 함수 필터 | ✅ 완료 |
+| `bmb q type <name>` | 타입 상세 조회 | ✅ 완료 |
+| `bmb q metrics` | 프로젝트 통계 | ✅ 완료 |
+
+### 인덱스 구조
+
+```
+.bmb/index/
+├── manifest.json    # 버전, 타임스탬프, 통계
+├── symbols.json     # 모든 심볼 목록
+├── functions.json   # 함수 상세 (시그니처, 계약, 본문 분석)
+└── types.json       # 타입 정보 (struct, enum, trait)
+```
+
+### 예시 출력
+
+```bash
+# 프로젝트 인덱스 생성
+$ bmb index
+✓ Index generated: .bmb/index/
+  Files: 40, Functions: 138, Types: 23, Contracts: 18
+
+# 함수 조회
+$ bmb q fn factorial
+{
+  "name": "factorial",
+  "signature": { "params": [{"name": "n", "type": "i64"}], "return": "i64" },
+  "contracts": { "pre": [{"expr": "n >= 0"}], "post": [{"expr": "fact >= 1"}] },
+  "body_info": { "recursive": true, "calls": ["factorial"] }
+}
+
+# precondition 있는 함수 목록
+$ bmb q fn --has-pre
+# 재귀 함수 목록
+$ bmb q fn --recursive
+```
+
+---
+
+## v0.26 Launch (프로덕션 서비스 런칭)
 
 > 목표: 서브모듈을 실제 도메인 서비스로 배포
 
@@ -1810,54 +1874,6 @@ benchmark-bmb/v0.22/
 | 런타임 성능 (vs C) | 70% | 85% | 102% | ✅ 100%+ |
 | 바이너리 크기 (vs Rust) | 120% | 100% | 88% | ✅ 90% |
 | 메모리 사용량 (vs Rust) | 110% | 100% | 93% | ✅ 95% |
-
----
-
-## v0.26 Query (AI Query System)
-
-> 목표: AI 도구가 BMB 프로젝트의 계약/증명 정보를 쿼리할 수 있는 전용 인터페이스
-
-**RFC**: [RFC-0001-AI-Query-System](RFC/RFC-0001-AI-Query-System.md)
-
-### 배경
-
-BMB의 계약 시스템(pre/post, forall/exists, refinement types)은 컴파일 타임에 풍부한 의미 정보를 추출한다. 이 정보를 AI 코드 생성 도구가 효과적으로 활용할 수 있도록 전용 쿼리 시스템을 제공한다.
-
-### v0.26.0 - Index Generation
-
-| 구성요소 | 설명 | 상태 |
-|----------|------|------|
-| `.bmb/index/` | 인덱스 디렉토리 구조 | 계획 |
-| `bmb index` | 인덱스 생성 명령 | 계획 |
-| symbols.idx | 심볼 테이블 | 계획 |
-| proofs.idx | 증명 결과 | 계획 |
-
-### v0.26.1 - Basic Queries
-
-| 명령 | 설명 | 상태 |
-|------|------|------|
-| `bmb q sym` | 심볼 검색 | 계획 |
-| `bmb q fn` | 함수 조회 | 계획 |
-| `bmb q type` | 타입 조회 | 계획 |
-| `bmb q proof` | 증명 상태 | 계획 |
-
-### v0.26.2 - Advanced Queries
-
-| 명령 | 설명 | 상태 |
-|------|------|------|
-| `bmb q contract` | 계약 조회 | 계획 |
-| `bmb q deps` | 의존성 분석 | 계획 |
-| `bmb q ctx` | AI 컨텍스트 | 계획 |
-| `bmb q counterexample` | 반례 조회 | 계획 |
-
-### v0.26.3 - Integration
-
-| 명령 | 설명 | 상태 |
-|------|------|------|
-| `bmb q sig` | 시그니처 검색 | 계획 |
-| `bmb q impact` | 영향 분석 | 계획 |
-| `bmb q batch` | 배치 쿼리 | 계획 |
-| `bmb q serve` | HTTP 서버 모드 | 계획 |
 
 ---
 
