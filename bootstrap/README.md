@@ -121,7 +121,7 @@ Comprehensive test suite with 15 test categories.
 14. Deep nesting
 15. Nested function calls
 
-### types.bmb (38KB) - v0.30.8
+### types.bmb (69KB) - v0.30.9
 Type checker foundation for BMB.
 
 **Features:**
@@ -179,6 +179,15 @@ Type checker foundation for BMB.
 - `validate_type_app`: Check well-formedness of type applications
 - `instantiate_type`: Full instantiation with validation and encoding
 
+**Features (v0.30.9):**
+- Generic function type checking: Signature representation and instantiation
+- Format: `"name|tparams|params|return"` (e.g., `"identity|T|T|T"`, `"map|K,V|K,V|V"`)
+- `gen_fn_pack`, `gen_fn_name`, `gen_fn_tparams`, `gen_fn_params`, `gen_fn_return`: Pack/unpack functions
+- `gen_fn_instantiate`: Instantiate generic function with concrete type arguments
+- `gen_fn_param_count`, `gen_fn_param_at`: Parameter access functions
+- `gen_fn_check_call`: Validate generic function call (arity, type matching)
+- `gen_fn_match_params`: Match expected and actual parameter types
+
 **Test output:**
 ```
 777 (start marker)
@@ -215,8 +224,12 @@ Type checker foundation for BMB.
 6  (resolve field type tests)
 6  (check arity tests)
 5  (instantiate type tests)
+8  (gen fn pack tests)
+5  (gen fn instantiate tests)
+4  (gen fn param count tests)
+6  (gen fn check call tests)
 888 (separator)
-185 (total passed)
+208 (total passed)
 999 (end marker)
 ```
 

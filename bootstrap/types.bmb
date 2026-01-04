@@ -25,6 +25,7 @@
 -- - v0.30.6: Add type argument tracking (string-based full type info)
 -- - v0.30.7: Add type substitution for generic instantiation
 -- - v0.30.8: Add generic instantiation integration (validate, resolve, encode)
+-- - v0.30.9: Add generic function type checking (signature, instantiate, check)
 --
 -- LIMITATIONS:
 -- - Fixed max 64 variables in scope
@@ -856,6 +857,116 @@ fn check_call_0args(func_name: String) -> i64 =
     else sig_return_type(sig);
 
 -- ============================================================================
+-- v0.30.9: Generic Function Type Checking
+-- ============================================================================
+-- Generic function signature representation and type checking
+-- Signature format: "name|tparams|param_types|return_type"
+-- Example: "identity|T|T|T" for fn identity<T>(x: T) -> T
+-- Example: "map|K,V|K,V|V" for fn map<K,V>(k: K, v: V) -> V
+
+-- Pack generic function signature
+fn gen_fn_pack(name: String, tparams: String, params: String, ret_ty: String) -> String =
+    name + "|" + tparams + "|" + params + "|" + ret_ty;
+
+-- Find the nth pipe in a string
+fn find_pipe(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then 0 - 1
+    else if s.char_at(pos) == 124 then pos  -- '|' = 124
+    else find_pipe(s, pos + 1);
+
+-- Find nth pipe (0-indexed)
+fn find_nth_pipe(s: String, n: i64, pos: i64, count: i64) -> i64 =
+    if pos >= s.len() then 0 - 1
+    else if s.char_at(pos) == 124 then
+        if count == n then pos
+        else find_nth_pipe(s, n, pos + 1, count + 1)
+    else find_nth_pipe(s, n, pos + 1, count);
+
+-- Extract name from signature
+fn gen_fn_name(sig: String) -> String =
+    let pipe1 = find_pipe(sig, 0);
+    if pipe1 < 0 then sig
+    else sig.slice(0, pipe1);
+
+-- Extract type params from signature
+fn gen_fn_tparams(sig: String) -> String =
+    let pipe1 = find_nth_pipe(sig, 0, 0, 0);
+    let pipe2 = find_nth_pipe(sig, 1, 0, 0);
+    if pipe1 < 0 or pipe2 < 0 then ""
+    else sig.slice(pipe1 + 1, pipe2);
+
+-- Extract param types from signature
+fn gen_fn_params(sig: String) -> String =
+    let pipe2 = find_nth_pipe(sig, 1, 0, 0);
+    let pipe3 = find_nth_pipe(sig, 2, 0, 0);
+    if pipe2 < 0 or pipe3 < 0 then ""
+    else sig.slice(pipe2 + 1, pipe3);
+
+-- Extract return type from signature
+fn gen_fn_return(sig: String) -> String =
+    let pipe3 = find_nth_pipe(sig, 2, 0, 0);
+    if pipe3 < 0 then ""
+    else sig.slice(pipe3 + 1, sig.len());
+
+-- Instantiate a generic function with concrete type arguments
+-- Returns concrete signature: "name||concrete_params|concrete_return"
+fn gen_fn_instantiate(sig: String, targs: String) -> String =
+    let name = gen_fn_name(sig);
+    let tparams = gen_fn_tparams(sig);
+    let params = gen_fn_params(sig);
+    let ret_ty = gen_fn_return(sig);
+    let subst = subst_from_params_args(tparams, targs);
+    let concrete_params = subst_apply_args(subst, params);
+    let concrete_ret = subst_apply(subst, ret_ty);
+    gen_fn_pack(name, "", concrete_params, concrete_ret);
+
+-- Get parameter count for generic function
+fn gen_fn_param_count(sig: String) -> i64 =
+    let params = gen_fn_params(sig);
+    if params.len() == 0 then 0
+    else gen_count_args(params, 0, 1);
+
+-- Get nth parameter type (after instantiation)
+fn gen_fn_param_at(sig: String, idx: i64) -> String =
+    let params = gen_fn_params(sig);
+    gen_extract_arg(params, idx, 0, 0);
+
+-- Check if a generic function call is valid
+-- Returns instantiated return type or empty string on error
+fn gen_fn_check_call(sig: String, targs: String, arg_types: String) -> String =
+    -- First check arity of type arguments
+    let tparams = gen_fn_tparams(sig);
+    if not check_arity(tparams, targs) then ""
+    else
+        -- Instantiate the signature
+        let inst = gen_fn_instantiate(sig, targs);
+        let expected_params = gen_fn_params(inst);
+        -- Check arity of value arguments
+        if not check_arity(expected_params, arg_types) then ""
+        else
+            -- Check each argument type
+            if gen_fn_match_params(expected_params, arg_types) then
+                gen_fn_return(inst)
+            else "";
+
+-- Check if all argument types match expected parameter types
+fn gen_fn_match_params(expected: String, actual: String) -> bool =
+    if expected.len() == 0 and actual.len() == 0 then true
+    else gen_fn_match_params_from(expected, actual, 0, 0);
+
+fn gen_fn_match_params_from(expected: String, actual: String, exp_idx: i64, act_idx: i64) -> bool =
+    let exp_count = if expected.len() == 0 then 0 else gen_count_args(expected, 0, 1);
+    let act_count = if actual.len() == 0 then 0 else gen_count_args(actual, 0, 1);
+    if exp_idx >= exp_count and act_idx >= act_count then true
+    else if exp_idx >= exp_count or act_idx >= act_count then false
+    else
+        let exp_type = gen_extract_arg(expected, exp_idx, 0, 0);
+        let act_type = gen_extract_arg(actual, act_idx, 0, 0);
+        if exp_type == act_type then
+            gen_fn_match_params_from(expected, actual, exp_idx + 1, act_idx + 1)
+        else false;
+
+-- ============================================================================
 -- Test Functions
 -- ============================================================================
 
@@ -1475,6 +1586,84 @@ fn test_instantiate_type() -> i64 =
 
     r1 + r2 + r3 + r4 + r5;
 
+-- v0.30.9: Generic function tests
+fn test_gen_fn_pack() -> i64 =
+    -- Pack identity<T>(x: T) -> T
+    let sig1 = gen_fn_pack("identity", "T", "T", "T");
+    let r1 = if gen_fn_name(sig1) == "identity" then 1 else 0;
+    let r2 = if gen_fn_tparams(sig1) == "T" then 1 else 0;
+    let r3 = if gen_fn_params(sig1) == "T" then 1 else 0;
+    let r4 = if gen_fn_return(sig1) == "T" then 1 else 0;
+
+    -- Pack map<K,V>(k: K, v: V) -> V
+    let sig2 = gen_fn_pack("map", "K,V", "K,V", "V");
+    let r5 = if gen_fn_name(sig2) == "map" then 1 else 0;
+    let r6 = if gen_fn_tparams(sig2) == "K,V" then 1 else 0;
+    let r7 = if gen_fn_params(sig2) == "K,V" then 1 else 0;
+    let r8 = if gen_fn_return(sig2) == "V" then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5 + r6 + r7 + r8;
+
+fn test_gen_fn_instantiate() -> i64 =
+    -- Instantiate identity<T> with i64
+    let sig1 = gen_fn_pack("identity", "T", "T", "T");
+    let inst1 = gen_fn_instantiate(sig1, "i64");
+    let r1 = if gen_fn_name(inst1) == "identity" then 1 else 0;
+    let r2 = if gen_fn_params(inst1) == "i64" then 1 else 0;
+    let r3 = if gen_fn_return(inst1) == "i64" then 1 else 0;
+
+    -- Instantiate swap<A,B>(a: A, b: B) -> B with String,i64
+    let sig2 = gen_fn_pack("swap", "A,B", "A,B", "B");
+    let inst2 = gen_fn_instantiate(sig2, "String,i64");
+    let r4 = if gen_fn_params(inst2) == "String,i64" then 1 else 0;
+    let r5 = if gen_fn_return(inst2) == "i64" then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5;
+
+fn test_gen_fn_param_count() -> i64 =
+    let sig1 = gen_fn_pack("identity", "T", "T", "T");
+    let r1 = if gen_fn_param_count(sig1) == 1 then 1 else 0;
+
+    let sig2 = gen_fn_pack("pair", "T,U", "T,U", "Pair");
+    let r2 = if gen_fn_param_count(sig2) == 2 then 1 else 0;
+
+    let sig3 = gen_fn_pack("empty", "", "", "Unit");
+    let r3 = if gen_fn_param_count(sig3) == 0 then 1 else 0;
+
+    let sig4 = gen_fn_pack("triple", "T", "T,T,T", "T");
+    let r4 = if gen_fn_param_count(sig4) == 3 then 1 else 0;
+
+    r1 + r2 + r3 + r4;
+
+fn test_gen_fn_check_call() -> i64 =
+    -- identity<T>(x: T) -> T called with i64
+    let sig1 = gen_fn_pack("identity", "T", "T", "T");
+    let result1 = gen_fn_check_call(sig1, "i64", "i64");
+    let r1 = if result1 == "i64" then 1 else 0;
+
+    -- identity<T>(x: T) -> T called with String
+    let result2 = gen_fn_check_call(sig1, "String", "String");
+    let r2 = if result2 == "String" then 1 else 0;
+
+    -- Wrong type arg arity
+    let result3 = gen_fn_check_call(sig1, "i64,String", "i64");
+    let r3 = if result3.len() == 0 then 1 else 0;
+
+    -- Wrong arg type
+    let result4 = gen_fn_check_call(sig1, "i64", "String");
+    let r4 = if result4.len() == 0 then 1 else 0;
+
+    -- Multi-param: swap<A,B>(a: A, b: B) -> B
+    let sig2 = gen_fn_pack("swap", "A,B", "A,B", "B");
+    let result5 = gen_fn_check_call(sig2, "String,i64", "String,i64");
+    let r5 = if result5 == "i64" then 1 else 0;
+
+    -- Multi-param with wrong order
+    let result6 = gen_fn_check_call(sig2, "String,i64", "i64,String");
+    let r6 = if result6.len() == 0 then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5 + r6;
+
 -- Main test runner
 fn main() -> i64 =
     let u0 = println(777);  -- Start marker
@@ -1585,10 +1774,23 @@ fn main() -> i64 =
     let t33 = test_instantiate_type();
     let p33 = println(t33);  -- Expected: 5
 
+    -- v0.30.9: Generic function tests
+    let t34 = test_gen_fn_pack();
+    let p34 = println(t34);  -- Expected: 8
+
+    let t35 = test_gen_fn_instantiate();
+    let p35 = println(t35);  -- Expected: 5
+
+    let t36 = test_gen_fn_param_count();
+    let p36 = println(t36);  -- Expected: 4
+
+    let t37 = test_gen_fn_check_call();
+    let p37 = println(t37);  -- Expected: 6
+
     let u1 = println(888);  -- Separator
 
-    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33;
-    let u2 = println(total);  -- Expected: 185
+    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33 + t34 + t35 + t36 + t37;
+    let u2 = println(total);  -- Expected: 208
 
     let u3 = println(999);  -- End marker
     total;

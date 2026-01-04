@@ -166,10 +166,11 @@ Gap to Close:
 - ✅ Type argument tracking (v0.30.6: gen_type_pack, gen_type_arg_at)
 - ✅ Type substitution (v0.30.7: subst_apply, subst_apply_gen, subst_from_params_args)
 - ✅ Generic instantiation integration (v0.30.8: instantiate_type, resolve_field_type)
+- ✅ Generic function type checking (v0.30.9: gen_fn_pack, gen_fn_instantiate, gen_fn_check_call)
 
 ### What Bootstrap CANNOT Do Yet
 
-- ⚠️ Generic type checking (instantiation ready, full integration pending)
+- ⚠️ Generic type checking (function signatures ready, full call-site integration pending)
 - ❌ Trait implementation dispatch
 - ❌ Closure capture and codegen
 - ❌ FFI linking

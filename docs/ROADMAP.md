@@ -259,6 +259,14 @@ v0.MAJOR.MINOR
 - `instantiate_type`: Full instantiation with validation and encoding
 - 4 new test functions, 22 assertions (185 total in types.bmb)
 
+**v0.30.9 Completed (2026-01-04)**:
+- `gen_fn_pack`, `gen_fn_name`, `gen_fn_tparams`, `gen_fn_params`, `gen_fn_return`: Signature pack/unpack
+- `gen_fn_instantiate`: Instantiate generic function with concrete type arguments
+- `gen_fn_param_count`, `gen_fn_param_at`: Parameter access functions
+- `gen_fn_check_call`: Validate generic function call (arity, type matching)
+- `gen_fn_match_params`: Match expected and actual parameter types
+- 4 new test functions, 23 assertions (208 total in types.bmb)
+
 **Deliverables**:
 - Bootstrap compiler can type-check generic code
 - Trait dispatch works in bootstrap
