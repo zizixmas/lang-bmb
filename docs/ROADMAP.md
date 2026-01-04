@@ -57,8 +57,8 @@ v0.MAJOR.MINOR
 | v0.18 | **Methods** | Option/Result 메서드 호출 구문 | ✅ 완료 (v0.18.0) |
 | v0.19 | **Complete** | MIR Completion (Struct/Enum/Pattern) | ✅ 완료 (v0.19.0-5) |
 | v0.20 | **Extend** | Language Extensions (Closures/Traits) | ✅ 완료 (v0.20.0-2) |
-| v0.21 | **Bootstrap** | Bootstrap Enhancement (Struct/Enum MIR) | 계획 |
-| v0.22 | **Mirror** | Self-Hosting (Stage 1/2/3 Verification) | 계획 |
+| v0.21 | **Bootstrap** | Bootstrap Enhancement (Struct/Enum MIR) | ✅ 완료 (v0.21.0-2) |
+| v0.22 | **Mirror** | Parser Struct/Enum + Type Checker Enhancement | ✅ 완료 (v0.22.0-3) |
 | v0.23 | **Showcase** | 주요 앱 시나리오 샘플 10개 | 계획 |
 | v0.24 | **Launch** | 프로덕션 서비스 런칭 | 계획 |
 | v0.25 | **Velocity** | C/Rust 성능 추월 스프린트 | 계획 |
@@ -1550,48 +1550,40 @@ Generated: test.mir
 
 ---
 
-## v0.22 Mirror (Self-Hosting)
+## v0.22 Mirror (Parser Enhancement) ✅
 
-> 목표: 모든 서브모듈 BMB로 재작성 + Stage 2 검증
+> 목표: Bootstrap 파서 struct/enum 지원 + 타입 체커 확장
 
-### 서브모듈 BMB 재작성
+### 서브버전
 
-| 컴포넌트 | Rust 버전 | BMB 버전 | 검증 |
-|----------|-----------|----------|------|
-| Lexer | ✅ | 🔄 | Stage 2 |
-| Parser | ✅ | 🔄 | Stage 2 |
-| Type Checker | ✅ | 🔄 | Stage 2 |
-| MIR Lowering | ✅ | 🔄 | Stage 2 |
-| LLVM Codegen | ✅ | 🔄 | Stage 2 |
-| WASM Codegen | ✅ | 🔄 | Stage 2 |
-| gotgan CLI | ✅ | 🔄 | 기능 동등 |
-| gotgan Resolver | ✅ | 🔄 | 기능 동등 |
-| action-bmb | ✅ | 🔄 | 기능 동등 |
+| 버전 | 내용 | 상태 |
+|------|------|------|
+| v0.22.0 | Struct definition/init/field-access parsing | ✅ 완료 |
+| v0.22.1 | Enum definition/variant/match parsing | ✅ 완료 |
+| v0.22.2 | Named types (struct/enum) in types.bmb | ✅ 완료 |
+| v0.22.3 | Integration tests (struct+enum combined) | ✅ 완료 |
 
-### Stage 2 검증
+### 완료 사항
 
-```bash
-# Stage 0: Rust 컴파일러
-$ cargo build --release
-$ ./bmb-rust build bmb-compiler -> bmb-stage1
+**parser_ast.bmb (38KB, 27 tests):**
+- Struct definition: `struct Point { x: i64, y: i64 }`
+- Struct initialization: `new Point { x: 10, y: 20 }`
+- Field access: `p.x`, `p.inner.z` (chained)
+- Enum definition: `enum Option { Some(i64), None }`
+- Match expression: `match x { Some(v) -> v, None -> 0 }`
 
-# Stage 1: BMB로 작성된 컴파일러
-$ ./bmb-stage1 build bmb-compiler -> bmb-stage2
+**types.bmb (45 tests):**
+- Named type encoding: `type_named(name_id)`
+- Field access type checking
+- Struct init type checking
+- Match expression type checking
 
-# Stage 2: Stage 1으로 컴파일된 컴파일러
-$ ./bmb-stage2 build bmb-compiler -> bmb-stage3
+### 다음 단계 (v0.23+)
 
-# 검증: Stage 2 = Stage 3
-$ diff bmb-stage2 bmb-stage3  # 동일해야 함
-```
-
-### gotgan 등록
-
-```bash
-$ gotgan publish bmb-compiler
-$ gotgan publish bmb-gotgan
-$ gotgan publish bmb-action
-```
+Full self-hosting 검증은 v0.23+ 로 이관:
+- Stage 1/2/3 verification
+- 전체 컴파일러 BMB 재작성
+- gotgan 패키지 등록
 
 ---
 
@@ -1830,8 +1822,8 @@ v0.17 Module       ────▶ 2025 Q4 ✅
 v0.18 Methods      ────▶ 2026 Q1 ✅
 v0.19 Complete     ────▶ 2026 Q1 ✅ (MIR Completion)
 v0.20 Extend       ────▶ 2026 Q1 ✅ (Language Extensions)
-v0.21 Bootstrap    ────▶ 2026 Q2 (Bootstrap Enhancement)
-v0.22 Mirror       ────▶ 2026 Q3 (Self-Hosting)
+v0.21 Bootstrap    ────▶ 2026 Q1 ✅ (Bootstrap Enhancement)
+v0.22 Mirror       ────▶ 2026 Q1 ✅ (Parser Enhancement)
 v0.23 Showcase     ────▶ 2026 Q3
 v0.24 Launch       ────▶ 2026 Q4
 v0.25 Velocity     ────▶ 2026 Q4

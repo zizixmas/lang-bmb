@@ -48,19 +48,33 @@ Recursive descent parser that validates BMB syntax.
 999 (end marker)
 ```
 
-### parser_ast.bmb (21KB)
+### parser_ast.bmb (38KB) - v0.22.3
 Parser that produces S-expression AST representation.
+
+**Features (v0.22):**
+- Struct definition parsing: `struct Point { x: i64, y: i64 }`
+- Struct initialization: `new Point { x: 10, y: 20 }`
+- Field access: `p.x`, `p.inner.z` (chained)
+- Enum definition parsing: `enum Option { Some(i64), None }`
+- Match expression: `match x { Some(v) -> v, None -> 0 }`
 
 **AST Format:**
 ```lisp
 (program
-  (fn <name> (params (p <param> type)...) return-type body))
+  (fn <name> (params (p <param> type)...) return-type body)
+  (struct <name> (fields (field <fname> type)...))
+  (enum <name> (variants (variant <vname>) (variant <vname> type)...)))
 
 ; Examples:
 (fn <add> (params (p <x> i64) (p <y> i64)) i64 (op + (var <x>) (var <y>)))
 (if (condition) (then-expr) (else-expr))
 (let <name> (value) (body))
 (call <name> (arg1) (arg2)...)
+(struct <Point> (fields (field <x> i64) (field <y> i64)))
+(enum <Option> (variants (variant <Some> i64) (variant <None>)))
+(new <Point> (x (int 10)) (y (int 20)))
+(field (var <p>) <x>)
+(match (var <x>) (arms (arm (pattern <Some> <v>) (var <v>)) (arm (pattern <None>) (int 0))))
 ```
 
 **Design decisions:**
@@ -156,12 +170,15 @@ entry:
 999 (end marker)
 ```
 
-### lowering.bmb (25KB) - v0.10.2
+### lowering.bmb (50KB) - v0.21.1
 AST to MIR lowering (transformation) module.
 
 **Features:**
 - S-expression AST parsing (from parser_ast.bmb output)
 - Expression lowering: int, bool, var, binop, unary, if, let, call
+- **Struct lowering (v0.21.0):** struct-init, field-access, field-store
+- **Enum lowering (v0.21.1):** enum-variant with discriminant
+- **Match lowering (v0.21.1):** switch instruction with cases
 - Function lowering with basic block generation
 - Program lowering (multiple functions)
 - Pack/unpack result format: `temp:block:place:text`
@@ -175,6 +192,15 @@ AST to MIR lowering (transformation) module.
 (if (var <c>) (int 1) (int 2)) →  branch %c, then_0, else_0 ...
 (let <x> (int 5) (var <x>))   →  %_t0 = const I:5 | %x = copy %_t0
 (call <foo> (var <a>))        →  %_t0 = call foo(%a)
+
+; Struct support (v0.21.0)
+(new Point (x (int 10)) (y (int 20))) →  %_t0 = struct-init Point { x: I:10, y: I:20 }
+(field (var <p>) x)                   →  %_t0 = field-access %p.x
+
+; Enum support (v0.21.1)
+(Status::None)                        →  %_t0 = enum-variant Status::None 0
+(Status::Active (int 42))             →  %_t0 = enum-variant Status::Active 1 I:42
+(match (var <s>) ...)                 →  switch %s, 0 -> label1, 1 -> label2
 ```
 
 **Test output:**
@@ -193,8 +219,15 @@ AST to MIR lowering (transformation) module.
 3  (call lowering)
 3  (function lowering)
 2  (program lowering)
+4  (struct node detection - v0.21.0)
+3  (struct value extraction - v0.21.0)
+3  (struct lowering - v0.21.0)
+3  (enum node detection - v0.21.1)
+4  (enum extraction - v0.21.1)
+3  (enum variant lowering - v0.21.1)
+3  (match lowering - v0.21.1)
 888 (separator)
-41 (total passed)
+67 (total passed)
 999 (end marker)
 ```
 
@@ -240,7 +273,7 @@ compile_expr("not b")   →  "%_t0 = not %b"
 999 (end marker)
 ```
 
-### llvm_ir.bmb (35KB) - v0.10.8
+### llvm_ir.bmb (58KB) - v0.21.1
 Complete LLVM IR generation module with full pipeline integration.
 
 **Features:**
@@ -261,6 +294,12 @@ Complete LLVM IR generation module with full pipeline integration.
   - Parameter conversion: MIR → LLVM parameter format
   - Function calls: `%r = call i64 @func(i64 %a)`
   - Complete function transformation: MIR → LLVM IR
+- **Struct codegen (v0.21.0):**
+  - struct-init → insertvalue chain
+  - field-access → extractvalue
+- **Enum codegen (v0.21.1):**
+  - enum-variant → insertvalue (discriminant + payload)
+  - switch → LLVM switch instruction
 - **Full pipeline integration (v0.10.8):**
   - Program generation: Multiple functions with `||` separator
   - Module headers: ModuleID and target triple
@@ -296,6 +335,19 @@ ret i64 %x             →  ret i64 %x
 ; Function generation (v0.10.7)
 fn add(a: i64, b: i64) -> i64 {  →  define i64 @add(i64 %a, i64 %b) {
 %_t0 = call foo(%a, %b)         →  %_t0 = call i64 @foo(i64 %a, i64 %b)
+
+; Struct codegen (v0.21.0)
+%_t0 = struct-init Point { x: %x, y: %y }
+  → %_t0_0 = insertvalue %Point %Point zeroinitializer, i64 %x, 0
+  → %_t0 = insertvalue %Point %_t0_0, i64 %y, 1
+%_t0 = field-access %p.x    →  %_t0 = extractvalue %Point %p, 0
+
+; Enum codegen (v0.21.1)
+%_t0 = enum-variant Status::None 0       →  %_t0 = add i64 0, 0
+%_t0 = enum-variant Status::Active 1 %v  →  %_t0_d = insertvalue %EnumData ..., 1
+                                         →  %_t0 = insertvalue %EnumData ..., %v
+switch %s, [0 -> arm0, 1 -> arm1], merge
+  → switch i64 %s, label %merge [i64 0, label %arm0 i64 1, label %arm1]
 
 ; Runtime declarations (v0.10.8)
 declare void @println(i64)
@@ -335,8 +387,16 @@ declare i64 @max(i64, i64)
 4  (full max function tests)
 2  (double pipe tests)
 3  (has pattern tests)
+4  (struct line detection - v0.21.0)
+3  (insertvalue generation - v0.21.0)
+2  (extractvalue generation - v0.21.0)
+3  (field name to index - v0.21.0)
+3  (field access IR - v0.21.0)
+4  (enum line detection - v0.21.1)
+3  (enum variant IR - v0.21.1)
+4  (switch IR - v0.21.1)
 888 (separator)
-93 (total passed)
+119 (total passed)
 999 (end marker)
 ```
 
@@ -674,5 +734,11 @@ cargo run --release --bin bmb -- run bootstrap/compiler.bmb
 - [x] Integration testing with LLVM toolchain (v0.10.10) ✅
 - [x] End-to-end program compilation validation (v0.10.11) ✅
 - [x] Native executable compilation: Text LLVM IR → clang/lld-link (v0.10.12) ✅
-- [ ] Struct/Enum lowering support (v0.11+)
-- [ ] Optimization passes in BMB (v0.11+)
+- [x] Struct/Enum MIR lowering support (v0.21.0/v0.21.1) ✅
+- [x] Struct/Enum LLVM IR codegen (v0.21.0/v0.21.1) ✅
+- [x] MIR text output (`--emit-mir` CLI option) (v0.21.2) ✅
+- [x] Struct/Enum parsing in parser_ast.bmb (v0.22.0/v0.22.1) ✅
+- [x] Struct/Enum type checking in types.bmb (v0.22.2) ✅
+- [x] Parser integration tests (v0.22.3) ✅
+- [ ] Full self-hosting Stage 1/2/3 verification (v0.23+)
+- [ ] Optimization passes in BMB (v0.24+)

@@ -8,6 +8,11 @@
 -- - Examples:
 --   - (fn <add> (params (param <x> i64)) i64 (binary + (var <x>) (var <y>)))
 --
+-- VERSION HISTORY:
+-- - v0.22.0: Add struct definition/init/field-access parsing
+-- - v0.22.1: Add enum definition/variant/match parsing
+-- - v0.22.3: Add integration tests (struct+enum combined)
+--
 -- LIMITATIONS:
 -- - String building is memory-intensive
 -- - Deep recursion for complex expressions
@@ -29,6 +34,10 @@ fn TK_NOT() -> i64 = 109;
 fn TK_PRE() -> i64 = 110;
 fn TK_POST() -> i64 = 111;
 fn TK_MUT() -> i64 = 117;
+fn TK_STRUCT() -> i64 = 118;  -- v0.22.0: struct keyword
+fn TK_NEW() -> i64 = 119;     -- v0.22.0: new keyword for struct init
+fn TK_ENUM() -> i64 = 120;    -- v0.22.1: enum keyword
+fn TK_MATCH() -> i64 = 121;   -- v0.22.1: match keyword
 
 fn TK_I32() -> i64 = 150;
 fn TK_I64() -> i64 = 151;
@@ -45,6 +54,9 @@ fn TK_SEMI() -> i64 = 303;
 fn TK_COMMA() -> i64 = 304;
 fn TK_LPAREN() -> i64 = 305;
 fn TK_RPAREN() -> i64 = 306;
+fn TK_LBRACE() -> i64 = 307;  -- v0.22.0: { for struct body
+fn TK_RBRACE() -> i64 = 308;  -- v0.22.0: } for struct body
+fn TK_DOT() -> i64 = 301;     -- v0.22.0: . for field access
 
 fn TK_ARROW() -> i64 = 321;
 fn TK_DOTDOT() -> i64 = 323;
@@ -118,6 +130,10 @@ fn lookup_keyword(w: String) -> i64 =
     else if w == "pre" then 110
     else if w == "post" then 111
     else if w == "mut" then 117
+    else if w == "struct" then 118  -- v0.22.0
+    else if w == "new" then 119     -- v0.22.0
+    else if w == "enum" then 120    -- v0.22.1
+    else if w == "match" then 121   -- v0.22.1
     else if w == "i32" then 150
     else if w == "i64" then 151
     else if w == "f64" then 152
@@ -250,6 +266,291 @@ fn is_binop(kind: i64) -> bool =
     kind == TK_AND() or kind == TK_OR() or kind == TK_DOTDOT();
 
 -- ============================================================
+-- v0.22.0: Struct Definition Parser
+-- ============================================================
+
+-- Parse struct definition: struct Name { field1: Type, field2: Type }
+-- Returns: (struct <Name> (fields (field <f1> T1) (field <f2> T2)))
+fn parse_struct_def(src: String, pos: i64) -> String =
+    let t1 = next_token_raw(src, pos);
+    if tok_kind(t1) != TK_IDENT() then pack_result(pos, make_error("struct-name"))
+    else
+        let ns = skip_all(src, pos);
+        let ne = tok_end(t1);
+        let name = src.slice(ns, ne);
+        let t2 = next_token_raw(src, ne);
+        if tok_kind(t2) != TK_LBRACE() then pack_result(ne, make_error("struct-lbrace"))
+        else
+            let rf = parse_struct_fields(src, tok_end(t2), "");
+            if is_error(unpack_ast(rf)) then rf
+            else pack_result(unpack_pos(rf), "(struct <" + name + "> (fields" + unpack_ast(rf) + "))");
+
+-- Parse struct fields: field1: Type, field2: Type, ...
+fn parse_struct_fields(src: String, pos: i64, fields: String) -> String =
+    let tok = next_token_raw(src, pos);
+    let kind = tok_kind(tok);
+    if kind == TK_RBRACE() then pack_result(tok_end(tok), fields)
+    else if kind == TK_IDENT() then
+        let ns = skip_all(src, pos);
+        let ne = tok_end(tok);
+        let fname = src.slice(ns, ne);
+        let t2 = next_token_raw(src, ne);
+        if tok_kind(t2) != TK_COLON() then pack_result(ne, make_error("field-colon"))
+        else
+            let rt = parse_type_or_ident(src, tok_end(t2));
+            if is_error(unpack_ast(rt)) then rt
+            else parse_struct_fields_more(src, unpack_pos(rt), fields + " (field <" + fname + "> " + unpack_ast(rt) + ")")
+    else pack_result(pos, make_error("struct-field"));
+
+-- Continue parsing more struct fields after comma
+fn parse_struct_fields_more(src: String, pos: i64, fields: String) -> String =
+    let tok = next_token_raw(src, pos);
+    let kind = tok_kind(tok);
+    if kind == TK_RBRACE() then pack_result(tok_end(tok), fields)
+    else if kind == TK_COMMA() then
+        let t2 = next_token_raw(src, tok_end(tok));
+        if tok_kind(t2) == TK_RBRACE() then pack_result(tok_end(t2), fields)  -- trailing comma
+        else if tok_kind(t2) != TK_IDENT() then pack_result(tok_end(tok), make_error("field-name"))
+        else
+            let ns = skip_all(src, tok_end(tok));
+            let ne = tok_end(t2);
+            let fname = src.slice(ns, ne);
+            let t3 = next_token_raw(src, ne);
+            if tok_kind(t3) != TK_COLON() then pack_result(ne, make_error("field-colon"))
+            else
+                let rt = parse_type_or_ident(src, tok_end(t3));
+                if is_error(unpack_ast(rt)) then rt
+                else parse_struct_fields_more(src, unpack_pos(rt), fields + " (field <" + fname + "> " + unpack_ast(rt) + ")")
+    else pack_result(pos, make_error("field-comma"));
+
+-- Parse type or identifier (for struct types like Point)
+fn parse_type_or_ident(src: String, pos: i64) -> String =
+    let tok = next_token_raw(src, pos);
+    let kind = tok_kind(tok);
+    if kind >= 150 and kind <= 154 then pack_result(tok_end(tok), type_str(kind))
+    else if kind == TK_IDENT() then
+        let ns = skip_all(src, pos);
+        let ne = tok_end(tok);
+        pack_result(ne, src.slice(ns, ne))
+    else pack_result(pos, make_error("type"));
+
+-- ============================================================
+-- v0.22.0: Struct Initialization Parser
+-- ============================================================
+
+-- Parse struct init: new StructName { field1: value1, field2: value2 }
+-- Returns: (new <StructName> (x (int 10)) (y (int 20)))
+fn parse_struct_init(src: String, pos: i64) -> String =
+    let t1 = next_token_raw(src, pos);
+    if tok_kind(t1) != TK_IDENT() then pack_result(pos, make_error("new-struct-name"))
+    else
+        let ns = skip_all(src, pos);
+        let ne = tok_end(t1);
+        let name = src.slice(ns, ne);
+        let t2 = next_token_raw(src, ne);
+        if tok_kind(t2) != TK_LBRACE() then pack_result(ne, make_error("new-lbrace"))
+        else
+            let rf = parse_struct_init_fields(src, tok_end(t2), "");
+            if is_error(unpack_ast(rf)) then rf
+            else pack_result(unpack_pos(rf), "(new <" + name + ">" + unpack_ast(rf) + ")");
+
+-- Parse struct init fields: field1: value1, field2: value2
+fn parse_struct_init_fields(src: String, pos: i64, fields: String) -> String =
+    let tok = next_token_raw(src, pos);
+    let kind = tok_kind(tok);
+    if kind == TK_RBRACE() then pack_result(tok_end(tok), fields)
+    else if kind == TK_IDENT() then
+        let ns = skip_all(src, pos);
+        let ne = tok_end(tok);
+        let fname = src.slice(ns, ne);
+        let t2 = next_token_raw(src, ne);
+        if tok_kind(t2) != TK_COLON() then pack_result(ne, make_error("init-field-colon"))
+        else
+            let rv = parse_expr(src, tok_end(t2));
+            if is_error(unpack_ast(rv)) then rv
+            else parse_struct_init_fields_more(src, unpack_pos(rv), fields + " (" + fname + " " + unpack_ast(rv) + ")")
+    else pack_result(pos, make_error("init-field"));
+
+-- Continue parsing more init fields after comma
+fn parse_struct_init_fields_more(src: String, pos: i64, fields: String) -> String =
+    let tok = next_token_raw(src, pos);
+    let kind = tok_kind(tok);
+    if kind == TK_RBRACE() then pack_result(tok_end(tok), fields)
+    else if kind == TK_COMMA() then
+        let t2 = next_token_raw(src, tok_end(tok));
+        if tok_kind(t2) == TK_RBRACE() then pack_result(tok_end(t2), fields)  -- trailing comma
+        else if tok_kind(t2) != TK_IDENT() then pack_result(tok_end(tok), make_error("init-field-name"))
+        else
+            let ns = skip_all(src, tok_end(tok));
+            let ne = tok_end(t2);
+            let fname = src.slice(ns, ne);
+            let t3 = next_token_raw(src, ne);
+            if tok_kind(t3) != TK_COLON() then pack_result(ne, make_error("init-field-colon"))
+            else
+                let rv = parse_expr(src, tok_end(t3));
+                if is_error(unpack_ast(rv)) then rv
+                else parse_struct_init_fields_more(src, unpack_pos(rv), fields + " (" + fname + " " + unpack_ast(rv) + ")")
+    else pack_result(pos, make_error("init-field-comma"));
+
+-- ============================================================
+-- v0.22.1: Enum Definition Parser
+-- ============================================================
+
+-- Parse enum definition: enum Name { Variant1, Variant2(Type), ... }
+-- Returns: (enum <Name> (variants (variant <V1>) (variant <V2> Type)))
+fn parse_enum_def(src: String, pos: i64) -> String =
+    let t1 = next_token_raw(src, pos);
+    if tok_kind(t1) != TK_IDENT() then pack_result(pos, make_error("enum-name"))
+    else
+        let ns = skip_all(src, pos);
+        let ne = tok_end(t1);
+        let name = src.slice(ns, ne);
+        let t2 = next_token_raw(src, ne);
+        if tok_kind(t2) != TK_LBRACE() then pack_result(ne, make_error("enum-lbrace"))
+        else
+            let rv = parse_enum_variants(src, tok_end(t2), "");
+            if is_error(unpack_ast(rv)) then rv
+            else pack_result(unpack_pos(rv), "(enum <" + name + "> (variants" + unpack_ast(rv) + "))");
+
+-- Parse enum variants: Variant1, Variant2(Type), ...
+fn parse_enum_variants(src: String, pos: i64, variants: String) -> String =
+    let tok = next_token_raw(src, pos);
+    let kind = tok_kind(tok);
+    if kind == TK_RBRACE() then pack_result(tok_end(tok), variants)
+    else if kind == TK_IDENT() then
+        let ns = skip_all(src, pos);
+        let ne = tok_end(tok);
+        let vname = src.slice(ns, ne);
+        let t2 = next_token_raw(src, ne);
+        if tok_kind(t2) == TK_LPAREN() then
+            -- Variant with payload: Variant(Type)
+            let rt = parse_type_or_ident(src, tok_end(t2));
+            if is_error(unpack_ast(rt)) then rt
+            else
+                let t3 = next_token_raw(src, unpack_pos(rt));
+                if tok_kind(t3) != TK_RPAREN() then pack_result(unpack_pos(rt), make_error("variant-rparen"))
+                else parse_enum_variants_more(src, tok_end(t3), variants + " (variant <" + vname + "> " + unpack_ast(rt) + ")")
+        else
+            -- Variant without payload
+            parse_enum_variants_more(src, ne, variants + " (variant <" + vname + ">)")
+    else pack_result(pos, make_error("enum-variant"));
+
+-- Continue parsing more enum variants after comma
+fn parse_enum_variants_more(src: String, pos: i64, variants: String) -> String =
+    let tok = next_token_raw(src, pos);
+    let kind = tok_kind(tok);
+    if kind == TK_RBRACE() then pack_result(tok_end(tok), variants)
+    else if kind == TK_COMMA() then
+        let t2 = next_token_raw(src, tok_end(tok));
+        if tok_kind(t2) == TK_RBRACE() then pack_result(tok_end(t2), variants)  -- trailing comma
+        else if tok_kind(t2) != TK_IDENT() then pack_result(tok_end(tok), make_error("variant-name"))
+        else
+            let ns = skip_all(src, tok_end(tok));
+            let ne = tok_end(t2);
+            let vname = src.slice(ns, ne);
+            let t3 = next_token_raw(src, ne);
+            if tok_kind(t3) == TK_LPAREN() then
+                let rt = parse_type_or_ident(src, tok_end(t3));
+                if is_error(unpack_ast(rt)) then rt
+                else
+                    let t4 = next_token_raw(src, unpack_pos(rt));
+                    if tok_kind(t4) != TK_RPAREN() then pack_result(unpack_pos(rt), make_error("variant-rparen"))
+                    else parse_enum_variants_more(src, tok_end(t4), variants + " (variant <" + vname + "> " + unpack_ast(rt) + ")")
+            else
+                parse_enum_variants_more(src, ne, variants + " (variant <" + vname + ">)")
+    else pack_result(pos, make_error("variant-comma"));
+
+-- ============================================================
+-- v0.22.1: Match Expression Parser
+-- ============================================================
+
+-- Parse match expression: match expr { Pattern -> expr, ... }
+-- Returns: (match expr (arms (arm pattern expr) ...))
+fn parse_match(src: String, pos: i64) -> String =
+    let re = parse_expr(src, pos);
+    if is_error(unpack_ast(re)) then re
+    else
+        let t1 = next_token_raw(src, unpack_pos(re));
+        if tok_kind(t1) != TK_LBRACE() then pack_result(unpack_pos(re), make_error("match-lbrace"))
+        else
+            let ra = parse_match_arms(src, tok_end(t1), "");
+            if is_error(unpack_ast(ra)) then ra
+            else pack_result(unpack_pos(ra), "(match " + unpack_ast(re) + " (arms" + unpack_ast(ra) + "))");
+
+-- Parse match arms: Pattern -> expr, ...
+fn parse_match_arms(src: String, pos: i64, arms: String) -> String =
+    let tok = next_token_raw(src, pos);
+    let kind = tok_kind(tok);
+    if kind == TK_RBRACE() then pack_result(tok_end(tok), arms)
+    else if kind == TK_IDENT() then
+        -- Parse pattern: Variant or Variant(binding)
+        let ns = skip_all(src, pos);
+        let ne = tok_end(tok);
+        let pname = src.slice(ns, ne);
+        let t2 = next_token_raw(src, ne);
+        if tok_kind(t2) == TK_LPAREN() then
+            -- Pattern with binding: Variant(x)
+            let t3 = next_token_raw(src, tok_end(t2));
+            if tok_kind(t3) != TK_IDENT() then pack_result(tok_end(t2), make_error("pattern-binding"))
+            else
+                let bs = skip_all(src, tok_end(t2));
+                let be = tok_end(t3);
+                let binding = src.slice(bs, be);
+                let t4 = next_token_raw(src, be);
+                if tok_kind(t4) != TK_RPAREN() then pack_result(be, make_error("pattern-rparen"))
+                else
+                    let t5 = next_token_raw(src, tok_end(t4));
+                    if tok_kind(t5) != TK_ARROW() then pack_result(tok_end(t4), make_error("match-arrow"))
+                    else
+                        let rb = parse_expr(src, tok_end(t5));
+                        if is_error(unpack_ast(rb)) then rb
+                        else parse_match_arms_more(src, unpack_pos(rb), arms + " (arm (pattern <" + pname + "> <" + binding + ">) " + unpack_ast(rb) + ")")
+        else if tok_kind(t2) == TK_ARROW() then
+            -- Pattern without binding: Variant
+            let rb = parse_expr(src, tok_end(t2));
+            if is_error(unpack_ast(rb)) then rb
+            else parse_match_arms_more(src, unpack_pos(rb), arms + " (arm (pattern <" + pname + ">) " + unpack_ast(rb) + ")")
+        else pack_result(ne, make_error("pattern-arrow"))
+    else pack_result(pos, make_error("match-pattern"));
+
+-- Continue parsing more match arms after comma
+fn parse_match_arms_more(src: String, pos: i64, arms: String) -> String =
+    let tok = next_token_raw(src, pos);
+    let kind = tok_kind(tok);
+    if kind == TK_RBRACE() then pack_result(tok_end(tok), arms)
+    else if kind == TK_COMMA() then
+        let t2 = next_token_raw(src, tok_end(tok));
+        if tok_kind(t2) == TK_RBRACE() then pack_result(tok_end(t2), arms)  -- trailing comma
+        else if tok_kind(t2) != TK_IDENT() then pack_result(tok_end(tok), make_error("pattern-name"))
+        else
+            let ns = skip_all(src, tok_end(tok));
+            let ne = tok_end(t2);
+            let pname = src.slice(ns, ne);
+            let t3 = next_token_raw(src, ne);
+            if tok_kind(t3) == TK_LPAREN() then
+                let t4 = next_token_raw(src, tok_end(t3));
+                if tok_kind(t4) != TK_IDENT() then pack_result(tok_end(t3), make_error("pattern-binding"))
+                else
+                    let bs = skip_all(src, tok_end(t3));
+                    let be = tok_end(t4);
+                    let binding = src.slice(bs, be);
+                    let t5 = next_token_raw(src, be);
+                    if tok_kind(t5) != TK_RPAREN() then pack_result(be, make_error("pattern-rparen"))
+                    else
+                        let t6 = next_token_raw(src, tok_end(t5));
+                        if tok_kind(t6) != TK_ARROW() then pack_result(tok_end(t5), make_error("match-arrow"))
+                        else
+                            let rb = parse_expr(src, tok_end(t6));
+                            if is_error(unpack_ast(rb)) then rb
+                            else parse_match_arms_more(src, unpack_pos(rb), arms + " (arm (pattern <" + pname + "> <" + binding + ">) " + unpack_ast(rb) + ")")
+            else if tok_kind(t3) == TK_ARROW() then
+                let rb = parse_expr(src, tok_end(t3));
+                if is_error(unpack_ast(rb)) then rb
+                else parse_match_arms_more(src, unpack_pos(rb), arms + " (arm (pattern <" + pname + ">) " + unpack_ast(rb) + ")")
+            else pack_result(ne, make_error("pattern-arrow"))
+    else pack_result(pos, make_error("arm-comma"));
+
+-- ============================================================
 -- Expression Parser with AST
 -- ============================================================
 
@@ -275,6 +576,8 @@ fn parse_primary(src: String, pos: i64) -> String =
         let r = parse_primary(src, end);
         if is_error(unpack_ast(r)) then r
         else pack_result(unpack_pos(r), "(neg " + unpack_ast(r) + ")")
+    else if kind == TK_NEW() then parse_struct_init(src, end)  -- v0.22.0: struct init
+    else if kind == TK_MATCH() then parse_match(src, end)      -- v0.22.1: match expr
     else pack_result(pos, make_error("expr"));
 
 fn parse_call_or_var(src: String, pos: i64, name: String) -> String =
@@ -357,15 +660,35 @@ fn parse_let(src: String, pos: i64) -> String =
 fn parse_expr(src: String, pos: i64) -> String =
     let r1 = parse_primary(src, pos);
     if is_error(unpack_ast(r1)) then r1
-    else parse_binop(src, unpack_pos(r1), unpack_ast(r1));
+    else
+        let r2 = parse_postfix(src, unpack_pos(r1), unpack_ast(r1));
+        if is_error(unpack_ast(r2)) then r2
+        else parse_binop(src, unpack_pos(r2), unpack_ast(r2));
+
+-- v0.22.0: Parse postfix operators (field access: expr.field)
+fn parse_postfix(src: String, pos: i64, expr: String) -> String =
+    let tok = next_token_raw(src, pos);
+    let kind = tok_kind(tok);
+    if kind == TK_DOT() then
+        let t2 = next_token_raw(src, tok_end(tok));
+        if tok_kind(t2) != TK_IDENT() then pack_result(tok_end(tok), make_error("field-name"))
+        else
+            let ns = skip_all(src, tok_end(tok));
+            let ne = tok_end(t2);
+            let fname = src.slice(ns, ne);
+            parse_postfix(src, ne, "(field " + expr + " <" + fname + ">)")
+    else pack_result(pos, expr);
 
 fn parse_binop(src: String, pos: i64, left: String) -> String =
     let tok = next_token_raw(src, pos);
     let kind = tok_kind(tok);
     if is_binop(kind) then
-        let r2 = parse_primary(src, tok_end(tok));
-        if is_error(unpack_ast(r2)) then r2
-        else parse_binop(src, unpack_pos(r2), "(op " + op_str(kind) + " " + left + " " + unpack_ast(r2) + ")")
+        let r1 = parse_primary(src, tok_end(tok));
+        if is_error(unpack_ast(r1)) then r1
+        else
+            let r2 = parse_postfix(src, unpack_pos(r1), unpack_ast(r1));
+            if is_error(unpack_ast(r2)) then r2
+            else parse_binop(src, unpack_pos(r2), "(op " + op_str(kind) + " " + left + " " + unpack_ast(r2) + ")")
     else pack_result(pos, left);
 
 -- ============================================================
@@ -456,14 +779,22 @@ fn parse_fn(src: String, pos: i64) -> String =
                                 if tok_kind(t5) != TK_SEMI() then pack_result(unpack_pos(rb), make_error("fn-semi"))
                                 else pack_result(tok_end(t5), "(fn <" + name + "> " + unpack_ast(rp) + " " + unpack_ast(rt) + " " + unpack_ast(rb) + ")");
 
-fn parse_program(src: String, pos: i64, fns: String) -> String =
+fn parse_program(src: String, pos: i64, items: String) -> String =
     let tok = next_token_raw(src, pos);
     let kind = tok_kind(tok);
-    if kind == TK_EOF() then pack_result(tok_end(tok), "(program" + fns + ")")
+    if kind == TK_EOF() then pack_result(tok_end(tok), "(program" + items + ")")
     else if kind == TK_FN() then
         let r = parse_fn(src, tok_end(tok));
         if is_error(unpack_ast(r)) then r
-        else parse_program(src, unpack_pos(r), fns + " " + unpack_ast(r))
+        else parse_program(src, unpack_pos(r), items + " " + unpack_ast(r))
+    else if kind == TK_STRUCT() then  -- v0.22.0: struct definition
+        let r = parse_struct_def(src, tok_end(tok));
+        if is_error(unpack_ast(r)) then r
+        else parse_program(src, unpack_pos(r), items + " " + unpack_ast(r))
+    else if kind == TK_ENUM() then    -- v0.22.1: enum definition
+        let r = parse_enum_def(src, tok_end(tok));
+        if is_error(unpack_ast(r)) then r
+        else parse_program(src, unpack_pos(r), items + " " + unpack_ast(r))
     else pack_result(pos, make_error("program"));
 
 -- ============================================================
@@ -506,6 +837,129 @@ fn validate_bool() -> i64 =
     let ast = unpack_ast(result);
     if ast_has_prefix(ast, "(program (fn <yes>") then 1 else 0;
 
+-- ============================================================
+-- v0.22.0: Struct parsing tests
+-- ============================================================
+
+-- Test struct definition
+fn test_struct_def() -> i64 =
+    let result = parse_program("struct Point { x: i64, y: i64 }", 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0 else 1;
+
+fn validate_struct_def() -> i64 =
+    let result = parse_program("struct Point { x: i64, y: i64 }", 0, "");
+    let ast = unpack_ast(result);
+    if ast_has_prefix(ast, "(program (struct <Point>") then 1 else 0;
+
+-- Test struct init
+fn test_struct_init() -> i64 =
+    let result = parse_program("fn make() -> i64 = new Point { x: 10, y: 20 };", 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0 else 1;
+
+fn validate_struct_init() -> i64 =
+    let result = parse_program("fn make() -> i64 = new Point { x: 10, y: 20 };", 0, "");
+    let ast = unpack_ast(result);
+    -- Should contain (new <Point> ...)
+    if ast_has_prefix(ast, "(program (fn <make>") then 1 else 0;
+
+-- Test field access
+fn test_field_access() -> i64 =
+    let result = parse_program("fn getx(p: i64) -> i64 = p.x;", 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0 else 1;
+
+fn validate_field_access() -> i64 =
+    let result = parse_program("fn getx(p: i64) -> i64 = p.x;", 0, "");
+    let ast = unpack_ast(result);
+    -- Should contain (field (var <p>) <x>)
+    if ast_has_prefix(ast, "(program (fn <getx>") then 1 else 0;
+
+-- Test chained field access
+fn test_chained_field() -> i64 =
+    let result = parse_program("fn getz(p: i64) -> i64 = p.inner.z;", 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0 else 1;
+
+-- ============================================================
+-- v0.22.1: Enum/Match parsing tests
+-- ============================================================
+
+-- Test enum definition with payload variant
+fn test_enum_def() -> i64 =
+    let result = parse_program("enum Option { Some(i64), None }", 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0 else 1;
+
+fn validate_enum_def() -> i64 =
+    let result = parse_program("enum Option { Some(i64), None }", 0, "");
+    let ast = unpack_ast(result);
+    if ast_has_prefix(ast, "(program (enum <Option>") then 1 else 0;
+
+-- Test enum with only unit variants
+fn test_enum_unit() -> i64 =
+    let result = parse_program("enum Color { Red, Green, Blue }", 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0 else 1;
+
+-- Test match expression with payload pattern
+fn test_match_expr() -> i64 =
+    let result = parse_program("fn unwrap(x: i64) -> i64 = match x { Some(v) -> v, None -> 0 };", 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0 else 1;
+
+fn validate_match_expr() -> i64 =
+    let result = parse_program("fn unwrap(x: i64) -> i64 = match x { Some(v) -> v, None -> 0 };", 0, "");
+    let ast = unpack_ast(result);
+    if ast_has_prefix(ast, "(program (fn <unwrap>") then 1 else 0;
+
+-- Test match with unit patterns only
+fn test_match_unit() -> i64 =
+    let result = parse_program("fn color_code(c: i64) -> i64 = match c { Red -> 1, Green -> 2, Blue -> 3 };", 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0 else 1;
+
+-- Test trailing comma in match
+fn test_match_trailing() -> i64 =
+    let result = parse_program("fn test(x: i64) -> i64 = match x { A -> 1, B -> 2, };", 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0 else 1;
+
+-- ============================================================
+-- v0.22.3: Integration tests (struct + enum combined)
+-- ============================================================
+
+-- Test combined struct and enum parsing
+fn test_integration_struct_enum() -> i64 =
+    let src = "struct Point { x: i64, y: i64 } enum Option { Some(i64), None } fn main() -> i64 = 0;";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0 else 1;
+
+-- Test struct init with match expression
+fn test_integration_init_match() -> i64 =
+    let src = "fn test(x: i64) -> i64 = match x { Some(v) -> v, None -> 0 };";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0 else 1;
+
+-- Test field access in function
+fn test_integration_field() -> i64 =
+    let src = "fn get_coords(p: i64) -> i64 = p.x + p.y;";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0 else 1;
+
+-- Helper to check if ast contains substring
+fn ast_contains(ast: String, pattern: String) -> bool =
+    ast_contains_at(ast, pattern, 0);
+
+fn ast_contains_at(ast: String, pattern: String, pos: i64) -> bool =
+    if pos + pattern.len() > ast.len() then false
+    else if ast.slice(pos, pos + pattern.len()) == pattern then true
+    else ast_contains_at(ast, pattern, pos + 1);
+
 fn main() -> i64 =
     let u0 = println(777);  -- Start marker
 
@@ -523,6 +977,29 @@ fn main() -> i64 =
     let v4 = validate_call();
     let v5 = validate_bool();
 
+    -- v0.22.0: Struct parsing tests
+    let s1 = test_struct_def();
+    let s2 = validate_struct_def();
+    let s3 = test_struct_init();
+    let s4 = validate_struct_init();
+    let s5 = test_field_access();
+    let s6 = validate_field_access();
+    let s7 = test_chained_field();
+
+    -- v0.22.1: Enum/Match parsing tests
+    let e1 = test_enum_def();
+    let e2 = validate_enum_def();
+    let e3 = test_enum_unit();
+    let e4 = test_match_expr();
+    let e5 = validate_match_expr();
+    let e6 = test_match_unit();
+    let e7 = test_match_trailing();
+
+    -- v0.22.3: Integration tests
+    let i1 = test_integration_struct_enum();
+    let i2 = test_integration_init_match();
+    let i3 = test_integration_field();
+
     let u1 = println(888);  -- Middle marker
 
     let parse_passed = t1 + t2 + t3 + t4 + t5;
@@ -531,6 +1008,15 @@ fn main() -> i64 =
     let ast_passed = v1 + v2 + v3 + v4 + v5;
     let u3 = println(ast_passed);  -- Should be 5
 
+    let struct_passed = s1 + s2 + s3 + s4 + s5 + s6 + s7;
+    let u5 = println(struct_passed);  -- Should be 7
+
+    let enum_passed = e1 + e2 + e3 + e4 + e5 + e6 + e7;
+    let u6 = println(enum_passed);  -- Should be 7
+
+    let integration_passed = i1 + i2 + i3;
+    let u7 = println(integration_passed);  -- Should be 3
+
     let u4 = println(999);  -- End marker
 
-    parse_passed + ast_passed;  -- Should be 10
+    parse_passed + ast_passed + struct_passed + enum_passed + integration_passed;  -- Should be 27

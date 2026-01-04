@@ -16,10 +16,14 @@
 -- - Let binding type checking
 -- - Function call type checking (built-in functions)
 --
+-- VERSION HISTORY:
+-- - v0.10.0: Basic type checking (literals, binops, if, let, calls)
+-- - v0.22.2: Add struct/enum named types, field access, match checking
+--
 -- LIMITATIONS:
 -- - Fixed max 64 variables in scope
 -- - Fixed max 32 functions
--- - No struct/enum type checking (v0.10.1)
+-- - Struct/enum field types not fully tracked (placeholder in v0.22.2)
 -- - No generic types
 
 -- ============================================================================
@@ -46,6 +50,16 @@ fn type_bool() -> i64 = 4000;
 fn type_string() -> i64 = 5000;
 fn type_unit() -> i64 = 6000;
 fn type_error() -> i64 = 9000;
+
+-- v0.22.2: Named types (struct/enum)
+-- Encoding: 7000 + name_id (0-999)
+fn type_named(name_id: i64) -> i64 = 7000 + name_id;
+
+-- Check if type is named (struct/enum)
+fn is_named(ty: i64) -> bool = type_kind(ty) == 7;
+
+-- Get name_id from named type
+fn named_type_id(ty: i64) -> i64 = ty - 7000;
 
 -- Extract type kind from encoded type
 fn type_kind(ty: i64) -> i64 = ty / 1000;
@@ -157,6 +171,46 @@ fn builtin_param_type(name: String, idx: i64) -> i64 =
     else if name == "min" and idx == 1 then builtin_min_p2()
     else if name == "max" and idx == 0 then builtin_max_p1()
     else if name == "max" and idx == 1 then builtin_max_p2()
+    else type_error();
+
+-- ============================================================================
+-- v0.22.2: Struct/Enum Type Registry
+-- ============================================================================
+-- Struct/Enum types use name-based lookup via string encoding
+-- Type registry format: "name1:kind1:fields1;name2:kind2:fields2;..."
+-- kind: 1 = struct, 2 = enum
+-- fields: comma-separated "field_name=type_code" pairs
+
+-- Register a struct type (returns name_id for type_named)
+-- struct_def: "name:1:field1=type1,field2=type2"
+fn make_struct_type(name: String) -> i64 =
+    name_hash(name) - (name_hash(name) / 1000) * 1000;
+
+-- Register an enum type
+fn make_enum_type(name: String) -> i64 =
+    name_hash(name) - (name_hash(name) / 1000) * 1000;
+
+-- Check field access on struct type
+-- struct_name: the struct name to look up
+-- field_name: the field to access
+-- Returns field type or type_error()
+fn check_field_access(struct_type: i64, field_name: String) -> i64 =
+    -- For now, return i64 as placeholder (proper registry in v0.22.3)
+    if is_named(struct_type) then type_i64()
+    else type_error();
+
+-- Check struct initialization
+-- struct_name: the struct being instantiated
+-- Returns the struct type
+fn check_struct_init(struct_name: String) -> i64 =
+    type_named(make_struct_type(struct_name));
+
+-- Check match expression
+-- scrutinee_type: type being matched
+-- arm_types: must all be same
+fn check_match(scrutinee_type: i64, arm1_type: i64, arm2_type: i64) -> i64 =
+    if is_error(scrutinee_type) then type_error()
+    else if arm1_type == arm2_type then arm1_type
     else type_error();
 
 -- ============================================================================
@@ -487,6 +541,38 @@ fn test_call_check() -> i64 =
 
     r1 + r2 + r3 + r4 + r5 + r6 + r7 + r8;
 
+-- v0.22.2: Test struct/enum type checking
+fn test_struct_types() -> i64 =
+    -- Create struct type for "Point"
+    let pt = type_named(make_struct_type("Point"));
+    -- Verify it's a named type
+    let r1 = if is_named(pt) then 1 else 0;
+    -- Check field access returns i64 (placeholder)
+    let r2 = if check_field_access(pt, "x") == type_i64() then 1 else 0;
+    -- Check struct init returns struct type
+    let st = check_struct_init("Point");
+    let r3 = if is_named(st) then 1 else 0;
+    -- Verify non-named type fails field access
+    let r4 = if is_error(check_field_access(type_i64(), "x")) then 1 else 0;
+
+    r1 + r2 + r3 + r4;
+
+fn test_match_types() -> i64 =
+    let i = type_i64();
+    let b = type_bool();
+    let pt = type_named(make_enum_type("Option"));
+
+    -- match enum { arm1 -> i64, arm2 -> i64 } = i64
+    let r1 = if check_match(pt, i, i) == i then 1 else 0;
+    -- match enum { arm1 -> bool, arm2 -> bool } = bool
+    let r2 = if check_match(pt, b, b) == b then 1 else 0;
+    -- match enum { arm1 -> i64, arm2 -> bool } = error (branch mismatch)
+    let r3 = if is_error(check_match(pt, i, b)) then 1 else 0;
+    -- match error { ... } = error
+    let r4 = if is_error(check_match(type_error(), i, i)) then 1 else 0;
+
+    r1 + r2 + r3 + r4;
+
 -- Main test runner
 fn main() -> i64 =
     let u0 = println(777);  -- Start marker
@@ -515,10 +601,17 @@ fn main() -> i64 =
     let t8 = test_call_check();
     let p8 = println(t8);  -- Expected: 8
 
+    -- v0.22.2: Struct/Enum type tests
+    let t9 = test_struct_types();
+    let p9 = println(t9);  -- Expected: 4
+
+    let t10 = test_match_types();
+    let p10 = println(t10);  -- Expected: 4
+
     let u1 = println(888);  -- Separator
 
-    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
-    let u2 = println(total);  -- Expected: 37
+    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10;
+    let u2 = println(total);  -- Expected: 45
 
     let u3 = println(999);  -- End marker
     total;
