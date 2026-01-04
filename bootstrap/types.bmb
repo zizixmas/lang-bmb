@@ -22,6 +22,7 @@
 -- - v0.30.3: Add type parameter scope tracking (generic foundations)
 -- - v0.30.4: Add type name resolution (primitives, type params, named types)
 -- - v0.30.5: Add generic type application encoding (Vec<T>, Option<T>, etc.)
+-- - v0.30.6: Add type argument tracking (string-based full type info)
 --
 -- LIMITATIONS:
 -- - Fixed max 64 variables in scope
@@ -117,6 +118,90 @@ fn name_hash_base_acc(name: String, pos: i64, acc: i64) -> i64 =
         let c = name.char_at(pos);
         let new_acc = (acc * 33 + c) - ((acc * 33 + c) / 1000000) * 1000000;
         name_hash_base_acc(name, pos + 1, new_acc);
+
+-- ============================================================================
+-- v0.30.6: Type Argument Tracking (String-based)
+-- ============================================================================
+-- Full generic type information stored as strings for complete type tracking
+-- Format: "Base:Arg1,Arg2,..." (e.g., "Vec:i64", "Map:String,i64")
+-- This complements the i64 encoding which only stores base_hash
+
+-- Pack generic type info: base name and type arguments
+-- Example: gen_type_pack("Vec", "i64") -> "Vec:i64"
+-- Example: gen_type_pack("Map", "String,i64") -> "Map:String,i64"
+fn gen_type_pack(base: String, args: String) -> String =
+    base + ":" + args;
+
+-- Unpack: get base type name from packed info
+fn gen_type_base(info: String) -> String =
+    gen_slice_until_colon(info, 0);
+
+-- Unpack: get type arguments string from packed info
+fn gen_type_args(info: String) -> String =
+    let colon_pos = gen_find_colon(info, 0);
+    if colon_pos < 0 then ""
+    else info.slice(colon_pos + 1, info.len());
+
+-- Count number of type arguments (comma-separated)
+fn gen_type_arg_count(info: String) -> i64 =
+    let args = gen_type_args(info);
+    if args.len() == 0 then 0
+    else gen_count_args(args, 0, 1);
+
+fn gen_count_args(args: String, pos: i64, count: i64) -> i64 =
+    if pos >= args.len() then count
+    else if args.char_at(pos) == 44 then gen_count_args(args, pos + 1, count + 1)  -- ',' = 44
+    else gen_count_args(args, pos + 1, count);
+
+-- Get specific type argument by index (0-based)
+fn gen_type_arg_at(info: String, idx: i64) -> String =
+    let args = gen_type_args(info);
+    gen_extract_arg(args, idx, 0, 0);
+
+fn gen_extract_arg(args: String, target_idx: i64, current_idx: i64, start_pos: i64) -> String =
+    if start_pos >= args.len() then ""
+    else if current_idx == target_idx then
+        -- Found target, extract until comma or end
+        let end_pos = gen_find_arg_end(args, start_pos);
+        args.slice(start_pos, end_pos)
+    else
+        -- Skip to next argument
+        let comma_pos = gen_find_comma(args, start_pos);
+        if comma_pos < 0 then ""
+        else gen_extract_arg(args, target_idx, current_idx + 1, comma_pos + 1);
+
+fn gen_find_arg_end(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then s.len()
+    else if s.char_at(pos) == 44 then pos  -- ',' = 44
+    else gen_find_arg_end(s, pos + 1);
+
+fn gen_find_comma(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then 0 - 1
+    else if s.char_at(pos) == 44 then pos  -- ',' = 44
+    else gen_find_comma(s, pos + 1);
+
+fn gen_find_colon(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then 0 - 1
+    else if s.char_at(pos) == 58 then pos  -- ':' = 58
+    else gen_find_colon(s, pos + 1);
+
+fn gen_slice_until_colon(s: String, pos: i64) -> String =
+    let colon_pos = gen_find_colon(s, pos);
+    if colon_pos < 0 then s
+    else s.slice(pos, colon_pos);
+
+-- Build type arguments string from multiple args
+fn gen_args_1(arg1: String) -> String = arg1;
+fn gen_args_2(arg1: String, arg2: String) -> String = arg1 + "," + arg2;
+fn gen_args_3(arg1: String, arg2: String, arg3: String) -> String = arg1 + "," + arg2 + "," + arg3;
+
+-- Convenience functions for common generic types (with full info)
+fn gen_vec_info(elem_type: String) -> String = gen_type_pack("Vec", elem_type);
+fn gen_option_info(inner_type: String) -> String = gen_type_pack("Option", inner_type);
+fn gen_result_info(ok_type: String, err_type: String) -> String =
+    gen_type_pack("Result", gen_args_2(ok_type, err_type));
+fn gen_map_info(key_type: String, val_type: String) -> String =
+    gen_type_pack("Map", gen_args_2(key_type, val_type));
 
 -- Extract type kind from encoded type
 fn type_kind(ty: i64) -> i64 = ty / 1000;
@@ -968,6 +1053,91 @@ fn test_name_hash_mod() -> i64 =
 
     r1 + r2 + r3 + r4 + r5 + r6 + r7;
 
+-- ============================================================================
+-- v0.30.6: Type Argument Tracking Tests
+-- ============================================================================
+
+fn test_gen_type_pack() -> i64 =
+    -- Basic packing
+    let info1 = gen_type_pack("Vec", "i64");
+    let r1 = if info1 == "Vec:i64" then 1 else 0;
+
+    let info2 = gen_type_pack("Map", "String,i64");
+    let r2 = if info2 == "Map:String,i64" then 1 else 0;
+
+    -- Unpacking base
+    let r3 = if gen_type_base(info1) == "Vec" then 1 else 0;
+    let r4 = if gen_type_base(info2) == "Map" then 1 else 0;
+
+    -- Unpacking args
+    let r5 = if gen_type_args(info1) == "i64" then 1 else 0;
+    let r6 = if gen_type_args(info2) == "String,i64" then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5 + r6;
+
+fn test_gen_type_arg_count() -> i64 =
+    -- Single arg
+    let info1 = gen_type_pack("Vec", "i64");
+    let r1 = if gen_type_arg_count(info1) == 1 then 1 else 0;
+
+    -- Two args
+    let info2 = gen_type_pack("Map", "String,i64");
+    let r2 = if gen_type_arg_count(info2) == 2 then 1 else 0;
+
+    -- Three args
+    let info3 = gen_type_pack("Triple", "i64,bool,String");
+    let r3 = if gen_type_arg_count(info3) == 3 then 1 else 0;
+
+    -- Empty args (no colon)
+    let r4 = if gen_type_arg_count("NoArgs") == 0 then 1 else 0;
+
+    r1 + r2 + r3 + r4;
+
+fn test_gen_type_arg_at() -> i64 =
+    let info1 = gen_type_pack("Vec", "i64");
+    -- First arg of Vec<i64> is "i64"
+    let r1 = if gen_type_arg_at(info1, 0) == "i64" then 1 else 0;
+
+    let info2 = gen_type_pack("Map", "String,i64");
+    -- First arg of Map<String, i64> is "String"
+    let r2 = if gen_type_arg_at(info2, 0) == "String" then 1 else 0;
+    -- Second arg is "i64"
+    let r3 = if gen_type_arg_at(info2, 1) == "i64" then 1 else 0;
+
+    let info3 = gen_type_pack("Triple", "A,B,C");
+    let r4 = if gen_type_arg_at(info3, 0) == "A" then 1 else 0;
+    let r5 = if gen_type_arg_at(info3, 1) == "B" then 1 else 0;
+    let r6 = if gen_type_arg_at(info3, 2) == "C" then 1 else 0;
+
+    -- Out of bounds returns empty
+    let r7 = if gen_type_arg_at(info1, 1) == "" then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5 + r6 + r7;
+
+fn test_gen_convenience() -> i64 =
+    -- gen_vec_info
+    let vec_info = gen_vec_info("i64");
+    let r1 = if gen_type_base(vec_info) == "Vec" then 1 else 0;
+    let r2 = if gen_type_arg_at(vec_info, 0) == "i64" then 1 else 0;
+
+    -- gen_option_info
+    let opt_info = gen_option_info("String");
+    let r3 = if gen_type_base(opt_info) == "Option" then 1 else 0;
+    let r4 = if gen_type_arg_at(opt_info, 0) == "String" then 1 else 0;
+
+    -- gen_result_info
+    let res_info = gen_result_info("i64", "Error");
+    let r5 = if gen_type_base(res_info) == "Result" then 1 else 0;
+    let r6 = if gen_type_arg_at(res_info, 0) == "i64" then 1 else 0;
+    let r7 = if gen_type_arg_at(res_info, 1) == "Error" then 1 else 0;
+
+    -- gen_map_info
+    let map_info = gen_map_info("String", "i64");
+    let r8 = if gen_type_base(map_info) == "Map" then 1 else 0;
+    let r9 = if gen_type_arg_count(map_info) == 2 then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5 + r6 + r7 + r8 + r9;
+
 -- Main test runner
 fn main() -> i64 =
     let u0 = println(777);  -- Start marker
@@ -1036,10 +1206,23 @@ fn main() -> i64 =
     let t20 = test_name_hash_mod();
     let p20 = println(t20);  -- Expected: 7
 
+    -- v0.30.6: Type argument tracking tests
+    let t21 = test_gen_type_pack();
+    let p21 = println(t21);  -- Expected: 6
+
+    let t22 = test_gen_type_arg_count();
+    let p22 = println(t22);  -- Expected: 4
+
+    let t23 = test_gen_type_arg_at();
+    let p23 = println(t23);  -- Expected: 7
+
+    let t24 = test_gen_convenience();
+    let p24 = println(t24);  -- Expected: 9
+
     let u1 = println(888);  -- Separator
 
-    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20;
-    let u2 = println(total);  -- Expected: 109
+    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24;
+    let u2 = println(total);  -- Expected: 135
 
     let u3 = println(999);  -- End marker
     total;

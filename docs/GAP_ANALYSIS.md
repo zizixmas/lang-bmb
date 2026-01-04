@@ -163,6 +163,7 @@ Gap to Close:
 - ✅ Type parameter scope tracking (v0.30.3: tparam_add, tparam_lookup)
 - ✅ Type name resolution (v0.30.4: resolve_type_name with tenv)
 - ✅ Generic type application encoding (v0.30.5: kind=11, type_vec, type_option)
+- ✅ Type argument tracking (v0.30.6: gen_type_pack, gen_type_arg_at)
 
 ### What Bootstrap CANNOT Do Yet
 

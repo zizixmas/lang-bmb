@@ -121,7 +121,7 @@ Comprehensive test suite with 15 test categories.
 14. Deep nesting
 15. Nested function calls
 
-### types.bmb (30KB) - v0.30.5
+### types.bmb (34KB) - v0.30.6
 Type checker foundation for BMB.
 
 **Features:**
@@ -154,6 +154,13 @@ Type checker foundation for BMB.
 - Common generic type constructors: `type_vec`, `type_option`, `type_result`, `type_map`
 - Mod-safe hash function: `name_hash_mod` for base type names
 
+**Features (v0.30.6):**
+- Type argument tracking: String-based full type info
+- Format: `"Base:Arg1,Arg2,..."` (e.g., `"Vec:i64"`, `"Map:String,i64"`)
+- `gen_type_pack`, `gen_type_base`, `gen_type_args`: Pack/unpack functions
+- `gen_type_arg_count`, `gen_type_arg_at`: Argument access functions
+- `gen_vec_info`, `gen_option_info`, `gen_result_info`, `gen_map_info`: Convenience constructors
+
 **Test output:**
 ```
 777 (start marker)
@@ -177,8 +184,12 @@ Type checker foundation for BMB.
 6  (generic app encoding tests)
 7  (common generic types tests)
 7  (name hash mod tests)
+6  (gen type pack tests)
+4  (gen type arg count tests)
+7  (gen type arg at tests)
+9  (gen convenience tests)
 888 (separator)
-109 (total passed)
+135 (total passed)
 999 (end marker)
 ```
 

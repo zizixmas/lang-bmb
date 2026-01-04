@@ -235,6 +235,13 @@ v0.MAJOR.MINOR
 - `name_hash_mod`, `name_hash_base`: Mod-safe hash for base type names
 - 3 new test functions, 20 assertions (109 total in types.bmb)
 
+**v0.30.6 Completed (2026-01-04)**:
+- `gen_type_pack(base, args)`: Pack generic type info as string "Base:Arg1,Arg2"
+- `gen_type_base`, `gen_type_args`: Unpack base and arguments
+- `gen_type_arg_count`, `gen_type_arg_at`: Access individual type arguments
+- `gen_vec_info`, `gen_option_info`, `gen_result_info`, `gen_map_info`: Convenience constructors
+- 4 new test functions, 26 assertions (135 total in types.bmb)
+
 **Deliverables**:
 - Bootstrap compiler can type-check generic code
 - Trait dispatch works in bootstrap
