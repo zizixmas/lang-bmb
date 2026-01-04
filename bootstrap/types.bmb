@@ -19,12 +19,13 @@
 -- VERSION HISTORY:
 -- - v0.10.0: Basic type checking (literals, binops, if, let, calls)
 -- - v0.22.2: Add struct/enum named types, field access, match checking
+-- - v0.30.3: Add type parameter scope tracking (generic foundations)
 --
 -- LIMITATIONS:
 -- - Fixed max 64 variables in scope
 -- - Fixed max 32 functions
 -- - Struct/enum field types not fully tracked (placeholder in v0.22.2)
--- - No generic types
+-- - Type parameters: scope tracking only, no instantiation yet (v0.30.3)
 
 -- ============================================================================
 -- Type Encoding
@@ -42,6 +43,7 @@
 --   7 = Named (struct/enum) - extra_info = name index in type table
 --   8 = Array - encoded separately
 --   9 = Error (type checking failed)
+--  10 = TypeParam (v0.30.3) - extra_info = param index in scope
 
 fn type_i32() -> i64 = 1000;
 fn type_i64() -> i64 = 2000;
@@ -60,6 +62,21 @@ fn is_named(ty: i64) -> bool = type_kind(ty) == 7;
 
 -- Get name_id from named type
 fn named_type_id(ty: i64) -> i64 = ty - 7000;
+
+-- ============================================================================
+-- v0.30.3: Type Parameter Support
+-- ============================================================================
+-- Type parameters (like T, U in generics) are encoded as kind=10
+-- Encoding: 10000 + param_index (0-999)
+-- Type parameter index is assigned when declared in scope
+
+fn type_param(param_idx: i64) -> i64 = 10000 + param_idx;
+
+-- Check if type is a type parameter
+fn is_type_param(ty: i64) -> bool = type_kind(ty) == 10;
+
+-- Get param_idx from type parameter
+fn type_param_idx(ty: i64) -> i64 = ty - 10000;
 
 -- Extract type kind from encoded type
 fn type_kind(ty: i64) -> i64 = ty / 1000;
@@ -323,6 +340,86 @@ fn env_add(env: String, name: String, ty: i64) -> String =
     else env + ";" + name + ":" + int_to_string(ty);
 
 -- ============================================================================
+-- v0.30.3: Type Parameter Environment
+-- ============================================================================
+-- Type parameters are tracked in a separate environment from values
+-- Format: "T,U,V" (comma-separated names)
+-- Each type param gets an index based on its position (0, 1, 2, ...)
+
+-- Add type parameter to environment, returns new env and assigned index
+-- Returns: "new_env|index" packed as string
+fn tparam_add(tenv: String, name: String) -> String =
+    let idx = tparam_count(tenv);
+    let new_env = if tenv.len() == 0 then name else tenv + "," + name;
+    new_env + "|" + int_to_string(idx);
+
+-- Count type parameters in environment
+fn tparam_count(tenv: String) -> i64 =
+    if tenv.len() == 0 then 0
+    else tparam_count_from(tenv, 0, 1);
+
+fn tparam_count_from(tenv: String, pos: i64, count: i64) -> i64 =
+    if pos >= tenv.len() then count
+    else if tenv.char_at(pos) == 44 then tparam_count_from(tenv, pos + 1, count + 1)  -- ',' = 44
+    else tparam_count_from(tenv, pos + 1, count);
+
+-- Lookup type parameter by name, returns index or -1 if not found
+fn tparam_lookup(tenv: String, name: String) -> i64 =
+    if tenv.len() == 0 then 0 - 1
+    else tparam_lookup_from(tenv, name, 0, 0);
+
+fn tparam_lookup_from(tenv: String, name: String, pos: i64, idx: i64) -> i64 =
+    if pos >= tenv.len() then 0 - 1
+    else
+        -- Find end of current name (comma or end)
+        let end_pos = tparam_find_end(tenv, pos);
+        let current = tenv.slice(pos, end_pos);
+        if current == name then idx
+        else if end_pos >= tenv.len() then 0 - 1
+        else tparam_lookup_from(tenv, name, end_pos + 1, idx + 1);
+
+fn tparam_find_end(tenv: String, pos: i64) -> i64 =
+    if pos >= tenv.len() then tenv.len()
+    else if tenv.char_at(pos) == 44 then pos  -- ',' = 44
+    else tparam_find_end(tenv, pos + 1);
+
+-- Check if type parameter name is in scope
+fn tparam_in_scope(tenv: String, name: String) -> bool =
+    tparam_lookup(tenv, name) >= 0;
+
+-- Get type code for a type parameter (if in scope)
+-- Returns type_param(idx) or type_error() if not in scope
+fn tparam_resolve(tenv: String, name: String) -> i64 =
+    let idx = tparam_lookup(tenv, name);
+    if idx < 0 then type_error()
+    else type_param(idx);
+
+-- Unpack tparam_add result: get environment part
+fn tparam_unpack_env(result: String) -> String =
+    tparam_slice_until(result, 124, 0);  -- '|' = 124
+
+-- Unpack tparam_add result: get index part
+fn tparam_unpack_idx(result: String) -> i64 =
+    let pipe_pos = tparam_find_pipe(result, 0);
+    if pipe_pos < 0 then 0 - 1
+    else parse_int_at(result, pipe_pos + 1, 0);
+
+fn tparam_find_pipe(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then 0 - 1
+    else if s.char_at(pos) == 124 then pos  -- '|' = 124
+    else tparam_find_pipe(s, pos + 1);
+
+fn tparam_slice_until(s: String, delim: i64, pos: i64) -> String =
+    let end_pos = tparam_find_char(s, delim, pos);
+    if end_pos < 0 then s
+    else s.slice(pos, end_pos);
+
+fn tparam_find_char(s: String, c: i64, pos: i64) -> i64 =
+    if pos >= s.len() then 0 - 1
+    else if s.char_at(pos) == c then pos
+    else tparam_find_char(s, c, pos + 1);
+
+-- ============================================================================
 -- Integer to String Helper
 -- ============================================================================
 fn int_to_string_helper(n: i64, acc: String) -> String =
@@ -573,6 +670,80 @@ fn test_match_types() -> i64 =
 
     r1 + r2 + r3 + r4;
 
+-- ============================================================================
+-- v0.30.3: Type Parameter Tests
+-- ============================================================================
+
+fn test_type_param_encoding() -> i64 =
+    -- type_param(0) should be 10000
+    let r1 = if type_param(0) == 10000 then 1 else 0;
+    -- type_param(5) should be 10005
+    let r2 = if type_param(5) == 10005 then 1 else 0;
+    -- is_type_param should detect type params
+    let r3 = if is_type_param(type_param(0)) then 1 else 0;
+    -- is_type_param should not detect i64
+    let r4 = if not is_type_param(type_i64()) then 1 else 0;
+    -- type_param_idx should extract index
+    let r5 = if type_param_idx(type_param(3)) == 3 then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5;
+
+fn test_type_param_env() -> i64 =
+    -- Empty environment count = 0
+    let r1 = if tparam_count("") == 0 then 1 else 0;
+
+    -- Add first type param "T"
+    let add1 = tparam_add("", "T");
+    let env1 = tparam_unpack_env(add1);
+    let idx1 = tparam_unpack_idx(add1);
+    let r2 = if env1 == "T" then 1 else 0;
+    let r3 = if idx1 == 0 then 1 else 0;
+
+    -- Add second type param "U"
+    let add2 = tparam_add(env1, "U");
+    let env2 = tparam_unpack_env(add2);
+    let idx2 = tparam_unpack_idx(add2);
+    let r4 = if env2 == "T,U" then 1 else 0;
+    let r5 = if idx2 == 1 then 1 else 0;
+
+    -- Count should be 2
+    let r6 = if tparam_count(env2) == 2 then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5 + r6;
+
+fn test_type_param_lookup() -> i64 =
+    let tenv = "T,U,V";
+
+    -- Lookup T should return 0
+    let r1 = if tparam_lookup(tenv, "T") == 0 then 1 else 0;
+    -- Lookup U should return 1
+    let r2 = if tparam_lookup(tenv, "U") == 1 then 1 else 0;
+    -- Lookup V should return 2
+    let r3 = if tparam_lookup(tenv, "V") == 2 then 1 else 0;
+    -- Lookup X should return -1
+    let r4 = if tparam_lookup(tenv, "X") == (0 - 1) then 1 else 0;
+
+    -- tparam_in_scope tests
+    let r5 = if tparam_in_scope(tenv, "T") then 1 else 0;
+    let r6 = if not tparam_in_scope(tenv, "X") then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5 + r6;
+
+fn test_type_param_resolve() -> i64 =
+    let tenv = "T,U";
+
+    -- Resolve T should return type_param(0)
+    let r1 = if tparam_resolve(tenv, "T") == type_param(0) then 1 else 0;
+    -- Resolve U should return type_param(1)
+    let r2 = if tparam_resolve(tenv, "U") == type_param(1) then 1 else 0;
+    -- Resolve X should return type_error()
+    let r3 = if is_error(tparam_resolve(tenv, "X")) then 1 else 0;
+
+    -- Resolved type should be detected as type_param
+    let r4 = if is_type_param(tparam_resolve(tenv, "T")) then 1 else 0;
+
+    r1 + r2 + r3 + r4;
+
 -- Main test runner
 fn main() -> i64 =
     let u0 = println(777);  -- Start marker
@@ -608,10 +779,23 @@ fn main() -> i64 =
     let t10 = test_match_types();
     let p10 = println(t10);  -- Expected: 4
 
+    -- v0.30.3: Type parameter tests
+    let t11 = test_type_param_encoding();
+    let p11 = println(t11);  -- Expected: 5
+
+    let t12 = test_type_param_env();
+    let p12 = println(t12);  -- Expected: 6
+
+    let t13 = test_type_param_lookup();
+    let p13 = println(t13);  -- Expected: 6
+
+    let t14 = test_type_param_resolve();
+    let p14 = println(t14);  -- Expected: 4
+
     let u1 = println(888);  -- Separator
 
-    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10;
-    let u2 = println(total);  -- Expected: 45
+    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14;
+    let u2 = println(total);  -- Expected: 66
 
     let u3 = println(999);  -- End marker
     total;

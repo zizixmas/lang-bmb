@@ -194,6 +194,7 @@ v0.MAJOR.MINOR
 |------|-------------|----------|--------|
 | 30.1.0 | Generic type parsing (Vec<T>, Map<K,V>) | P0 | ✅ Complete |
 | 30.1.5 | Type parameter declaration parsing | P0 | ✅ Complete |
+| 30.1.6 | Type parameter scope tracking | P0 | ✅ Complete |
 | 30.1.1 | Add generics to bootstrap type checker | P0 | Pending |
 | 30.1.2 | Add trait support to bootstrap | P0 | Pending |
 | 30.1.3 | Add closure codegen to bootstrap | P1 | Pending |
@@ -211,6 +212,13 @@ v0.MAJOR.MINOR
 - `try_parse_type_params`: Optional type parameter block after name
 - Extended `parse_struct_def`, `parse_enum_def`, `parse_fn` for generics
 - 6 new tests for type parameter declarations (39 total)
+
+**v0.30.3 Completed (2026-01-04)**:
+- Type parameter encoding: `kind=10` for TypeParam in types.bmb
+- `tparam_add`, `tparam_count`: Type parameter environment management
+- `tparam_lookup`, `tparam_in_scope`: Scope checking functions
+- `tparam_resolve`: Convert name to type_param(idx) or type_error()
+- 4 new test functions, 21 assertions (66 total in types.bmb)
 
 **Deliverables**:
 - Bootstrap compiler can type-check generic code

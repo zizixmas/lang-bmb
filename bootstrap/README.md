@@ -121,7 +121,7 @@ Comprehensive test suite with 15 test categories.
 14. Deep nesting
 15. Nested function calls
 
-### types.bmb (15KB) - v0.10.0
+### types.bmb (23KB) - v0.30.3
 Type checker foundation for BMB.
 
 **Features:**
@@ -133,6 +133,13 @@ Type checker foundation for BMB.
 - If-then-else type checking (condition bool, branches match)
 - Let binding type checking
 - Function call type checking (arity and arg types)
+- Named types: struct/enum support (v0.22.2)
+
+**Features (v0.30.3):**
+- Type parameter encoding: `kind=10` (TypeParam)
+- Type parameter environment: comma-separated names ("T,U,V")
+- `tparam_add`, `tparam_lookup`, `tparam_resolve` functions
+- Scope tracking for generic type parameters
 
 **Test output:**
 ```
@@ -145,8 +152,14 @@ Type checker foundation for BMB.
 4  (if-then-else tests)
 3  (let binding tests)
 8  (function call tests)
+4  (struct type tests)
+4  (match type tests)
+5  (type param encoding tests)
+6  (type param env tests)
+6  (type param lookup tests)
+4  (type param resolve tests)
 888 (separator)
-37 (total passed)
+66 (total passed)
 999 (end marker)
 ```
 
