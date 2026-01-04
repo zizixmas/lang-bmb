@@ -121,7 +121,7 @@ Comprehensive test suite with 15 test categories.
 14. Deep nesting
 15. Nested function calls
 
-### types.bmb (79KB) - v0.30.10
+### types.bmb (88KB) - v0.30.11
 Type checker foundation for BMB.
 
 **Features:**
@@ -197,6 +197,14 @@ Type checker foundation for BMB.
 - `infer_all_bound`, `infer_build_targs`: Validate and construct type args
 - `gen_fn_infer_call`: Full inference and checking for generic function calls
 
+**Features (v0.30.11):**
+- Generic struct definition: Represent and resolve generic structs
+- Format: `"StructName|tparams|field1:type1,field2:type2"` (e.g., `"Box|T|value:T"`)
+- `gen_struct_pack`, `gen_struct_name`, `gen_struct_tparams`, `gen_struct_fields`: Pack/unpack
+- `gen_struct_field_type`: Get field type string by name
+- `gen_struct_resolve_field`: Resolve field type with type arguments (Box<i64>.value → i64)
+- `gen_struct_is_generic`, `gen_struct_field_count`, `gen_struct_field_name_at`: Utilities
+
 **Test output:**
 ```
 777 (start marker)
@@ -244,8 +252,14 @@ Type checker foundation for BMB.
 5  (infer all bound tests)
 3  (infer build targs tests)
 5  (gen fn infer call tests)
+6  (gen struct pack tests)
+5  (gen struct field type tests)
+4  (gen struct field count tests)
+4  (gen struct resolve field tests)
+2  (gen struct is generic tests)
+4  (gen struct field name at tests)
 888 (separator)
-240 (total passed)
+265 (total passed)
 999 (end marker)
 ```
 

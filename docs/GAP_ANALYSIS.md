@@ -168,10 +168,11 @@ Gap to Close:
 - ✅ Generic instantiation integration (v0.30.8: instantiate_type, resolve_field_type)
 - ✅ Generic function type checking (v0.30.9: gen_fn_pack, gen_fn_instantiate, gen_fn_check_call)
 - ✅ Generic type inference (v0.30.10: infer_from_pair_list, gen_fn_infer_call)
+- ✅ Generic struct definitions (v0.30.11: gen_struct_pack, gen_struct_resolve_field)
 
 ### What Bootstrap CANNOT Do Yet
 
-- ⚠️ Generic type checking (inference ready, full AST integration pending)
+- ⚠️ Generic type checking (struct/function ready, full AST integration pending)
 - ❌ Trait implementation dispatch
 - ❌ Closure capture and codegen
 - ❌ FFI linking

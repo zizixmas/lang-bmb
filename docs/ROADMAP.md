@@ -275,6 +275,13 @@ v0.MAJOR.MINOR
 - `gen_fn_infer_call`: Full inference and checking for generic function calls
 - 7 new test functions, 32 assertions (240 total in types.bmb)
 
+**v0.30.11 Completed (2026-01-04)**:
+- `gen_struct_pack`, `gen_struct_name`, `gen_struct_tparams`, `gen_struct_fields`: Pack/unpack
+- `gen_struct_field_type`: Get field type string by name
+- `gen_struct_resolve_field`: Resolve field type with type arguments (Box<i64>.value → i64)
+- `gen_struct_is_generic`, `gen_struct_field_count`, `gen_struct_field_name_at`: Utilities
+- 6 new test functions, 25 assertions (265 total in types.bmb)
+
 **Deliverables**:
 - Bootstrap compiler can type-check generic code
 - Trait dispatch works in bootstrap
