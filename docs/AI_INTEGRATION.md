@@ -1,6 +1,6 @@
 # BMB AI Integration Guide
 
-**Version**: v0.19.1 (2026-01-04)
+**Version**: v0.20.0 (2026-01-04)
 **Status**: Draft
 
 ## 1. Overview

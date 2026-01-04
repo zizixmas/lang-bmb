@@ -1413,18 +1413,29 @@ pub enum MirInst {
 
 | 구성요소 | 설명 | 상태 |
 |----------|------|------|
-| Lambda syntax | `\|x\| x + 1` 람다 표현식 | 계획 |
-| Capture semantics | 값 캡처 vs 참조 캡처 | 계획 |
+| Pipe token | `\|` 토큰 추가 (lexer) | ✅ 완료 |
+| Closure AST | ClosureParam, Closure 표현식 | ✅ 완료 |
+| Lambda syntax | `fn \|x\| { body }` 클로저 문법 | ✅ 완료 |
+| Parser tests | 3개 테스트 케이스 추가 | ✅ 완료 |
+| Capture semantics | 값 캡처 분석 | 계획 |
 | Closure type inference | 클로저 타입 추론 | 계획 |
-| MIR representation | 클로저 MIR 표현 | 계획 |
+| MIR representation | 클로저 MIR 표현 (struct 디슈가링) | 계획 |
 
-**테스트 목표:**
+**구문 (2026-01-04 확정):**
 ```bmb
-let add = |x| x + 1;
+-- 클로저는 fn 키워드와 블록을 필수로 사용
+fn || { 42 }                      -- 파라미터 없음
+fn |x: i64| { x + 1 }             -- 단일 파라미터
+fn |x: i64, y: i64| { x + y }     -- 다중 파라미터
+```
+
+**테스트 목표 (향후):**
+```bmb
+let add = fn |x: i64| { x + 1 };
 let result = add(5);  -- 6
 
 let list = [1, 2, 3];
-let doubled = list.map(|x| x * 2);  -- [2, 4, 6]
+let doubled = list.map(fn |x: i64| { x * 2 });  -- [2, 4, 6]
 ```
 
 ### v0.20.1 - Trait Foundation

@@ -1,0 +1,16 @@
+-- v0.20.0: Closure test file
+
+-- Simple closure with single parameter
+fn make_adder(x: i64) -> i64 = fn |y: i64| { x + y };
+
+-- Closure with multiple parameters
+fn apply_binary(a: i64, b: i64) -> i64 = fn |x: i64, y: i64| { x * y };
+
+-- Empty closure (no parameters)
+fn constant_fn() -> i64 = fn || { 42 };
+
+-- Closure with block body
+fn complex_closure() -> i64 = fn |x: i64| {
+    let doubled = x * 2;
+    doubled + 1
+};

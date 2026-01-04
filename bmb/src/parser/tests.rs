@@ -374,6 +374,62 @@ fn test_parse_use_statement() {
 }
 
 // ============================================
+// Closures (v0.20.0)
+// ============================================
+
+#[test]
+fn test_parse_closure_single_param() {
+    let source = "fn test() -> i64 = fn |x: i64| { x + 1 };";
+    let prog = parse_ok(source);
+    assert_eq!(prog.items.len(), 1);
+    if let Item::FnDef(f) = &prog.items[0] {
+        if let Expr::Closure { params, ret_ty, body } = &f.body.node {
+            assert_eq!(params.len(), 1);
+            assert_eq!(params[0].name.node, "x");
+            assert!(params[0].ty.is_some());
+            assert!(ret_ty.is_none());
+            assert!(matches!(body.node, Expr::Block(_)));
+        } else {
+            panic!("Expected Closure");
+        }
+    } else {
+        panic!("Expected FnDef");
+    }
+}
+
+#[test]
+fn test_parse_closure_empty_params() {
+    let source = "fn test() -> i64 = fn || { 42 };";
+    let prog = parse_ok(source);
+    if let Item::FnDef(f) = &prog.items[0] {
+        if let Expr::Closure { params, .. } = &f.body.node {
+            assert!(params.is_empty());
+        } else {
+            panic!("Expected Closure");
+        }
+    } else {
+        panic!("Expected FnDef");
+    }
+}
+
+#[test]
+fn test_parse_closure_multi_params() {
+    let source = "fn test() -> i64 = fn |x: i64, y: i64| { x + y };";
+    let prog = parse_ok(source);
+    if let Item::FnDef(f) = &prog.items[0] {
+        if let Expr::Closure { params, .. } = &f.body.node {
+            assert_eq!(params.len(), 2);
+            assert_eq!(params[0].name.node, "x");
+            assert_eq!(params[1].name.node, "y");
+        } else {
+            panic!("Expected Closure");
+        }
+    } else {
+        panic!("Expected FnDef");
+    }
+}
+
+// ============================================
 // Negative Tests (Parser Errors)
 // ============================================
 

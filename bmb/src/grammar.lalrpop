@@ -46,6 +46,8 @@ extern {
         // v0.13.2: Error propagation
         "try" => Token::Try,
         "?" => Token::Question,
+        // v0.20.0: Closure syntax
+        "|" => Token::Pipe,
 
         "i32" => Token::TyI32,
         "i64" => Token::TyI64,
@@ -889,6 +891,49 @@ Primary: Expr = {
     },
     // v0.5 Phase 6: Array literal
     "[" <elems:ArrayElems> "]" => Expr::ArrayLit(elems),
+    // v0.20.0: Closure expressions
+    // Using "fn" prefix for unambiguous parsing: fn |params| { body }
+    // Body must be a block expression to avoid grammar conflicts
+    // Empty closure: fn || { expr }
+    "fn" "|" "|" <l:@L> "{" <es:(<BlockStmt> ";")*> <last:BlockStmt?> "}" <r:@R> => Expr::Closure {
+        params: vec![],
+        ret_ty: None,
+        body: Box::new({
+            let mut exprs = es;
+            if let Some(e) = last {
+                exprs.push(e);
+            }
+            Spanned::new(Expr::Block(exprs), Span::new(l, r))
+        }),
+    },
+    // Single param closure: fn |x| { expr }
+    "fn" "|" <p:SingleClosureParam> "|" <l:@L> "{" <es:(<BlockStmt> ";")*> <last:BlockStmt?> "}" <r:@R> => Expr::Closure {
+        params: vec![p],
+        ret_ty: None,
+        body: Box::new({
+            let mut exprs = es;
+            if let Some(e) = last {
+                exprs.push(e);
+            }
+            Spanned::new(Expr::Block(exprs), Span::new(l, r))
+        }),
+    },
+    // Multi param closure: fn |x, y| { expr }
+    "fn" "|" <first:SingleClosureParam> <rest:("," <SingleClosureParam>)+> "|" <l:@L> "{" <es:(<BlockStmt> ";")*> <last:BlockStmt?> "}" <r:@R> => Expr::Closure {
+        params: {
+            let mut v = vec![first];
+            v.extend(rest);
+            v
+        },
+        ret_ty: None,
+        body: Box::new({
+            let mut exprs = es;
+            if let Some(e) = last {
+                exprs.push(e);
+            }
+            Spanned::new(Expr::Block(exprs), Span::new(l, r))
+        }),
+    },
 };
 
 // Array elements (v0.5 Phase 6)
@@ -900,6 +945,20 @@ ArrayElems: Vec<Spanned<Expr>> = {
             v.push(e);
             v
         }
+    },
+};
+
+// v0.20.0: Single closure parameter
+SingleClosureParam: ClosureParam = {
+    // Without type annotation: x
+    <l:@L> <name:RawIdent> <r:@R> => ClosureParam {
+        name: Spanned::new(name, Span::new(l, r)),
+        ty: None
+    },
+    // With type annotation: x: i64
+    <l:@L> <name:RawIdent> ":" <ty:SpannedType> <r:@R> => ClosureParam {
+        name: Spanned::new(name, Span::new(l, r)),
+        ty: Some(ty)
     },
 };
 

@@ -685,6 +685,11 @@ fn lower_expr(expr: &Spanned<Expr>, ctx: &mut LoweringContext) -> Operand {
         // v0.13.2: Question mark operator - lower the inner expression
         // Full error propagation semantics will be added with Result type support
         Expr::Question { expr: inner } => lower_expr(inner, ctx),
+
+        // v0.20.0: Closure expressions
+        // TODO: Implement closure desugaring to struct with captured variables
+        // For now, just lower the body expression
+        Expr::Closure { body, .. } => lower_expr(body, ctx),
     }
 }
 

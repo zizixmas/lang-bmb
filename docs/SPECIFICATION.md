@@ -118,6 +118,31 @@ Type definitions with constraints verified statically.
 
 Types with quantified constraints like Sorted, NonEmpty, Unique.
 
+### 4.5 Closure Types (v0.20.0)
+
+Closures are anonymous functions that can capture variables from their enclosing scope.
+
+**Syntax:**
+```bmb
+fn || { body }                    -- no parameters
+fn |x: T| { body }                -- single parameter
+fn |x: T, y: U| { body }          -- multiple parameters
+```
+
+**Design Decisions:**
+- `fn` prefix: Disambiguates from other uses of `|` in future grammar extensions
+- Block body required: Avoids grammar conflicts with refinement types
+- Move semantics: Variables are captured by value (copy for primitives, move for owned)
+
+**Example:**
+```bmb
+let x = 10;
+let add_x = fn |y: i64| { x + y };
+let result = add_x(5);  -- 15
+```
+
+**Status:** Parser complete, type inference and codegen planned.
+
 ## 5. Contract System
 
 ### 5.1 Basic Structure

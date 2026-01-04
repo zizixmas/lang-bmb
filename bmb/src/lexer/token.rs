@@ -151,6 +151,9 @@ pub enum Token {
     // v0.13.2: Error propagation operator
     #[token("?")]
     Question,
+    // v0.20.0: Closure syntax
+    #[token("|")]
+    Pipe,
 
     // Operators
     #[token("+")]
@@ -239,6 +242,7 @@ impl std::fmt::Display for Token {
             Token::Ampersand => write!(f, "&"),
             Token::At => write!(f, "@"),
             Token::Question => write!(f, "?"),
+            Token::Pipe => write!(f, "|"),
             Token::Plus => write!(f, "+"),
             Token::Minus => write!(f, "-"),
             Token::Star => write!(f, "*"),

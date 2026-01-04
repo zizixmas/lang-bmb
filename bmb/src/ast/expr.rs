@@ -171,6 +171,19 @@ pub enum Expr {
     Question {
         expr: Box<Spanned<Expr>>,
     },
+
+    // v0.20.0: Closures
+
+    /// Closure expression: |params| body
+    /// Captures variables from the enclosing scope by value (move semantics)
+    Closure {
+        /// Closure parameters: name and optional type annotation
+        params: Vec<ClosureParam>,
+        /// Optional explicit return type
+        ret_ty: Option<Box<Spanned<Type>>>,
+        /// Closure body expression
+        body: Box<Spanned<Expr>>,
+    },
 }
 
 /// A single arm in a match expression
@@ -178,6 +191,15 @@ pub enum Expr {
 pub struct MatchArm {
     pub pattern: Spanned<Pattern>,
     pub body: Spanned<Expr>,
+}
+
+/// Closure parameter (v0.20.0)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClosureParam {
+    /// Parameter name
+    pub name: Spanned<String>,
+    /// Optional type annotation
+    pub ty: Option<Spanned<Type>>,
 }
 
 /// Pattern for match expressions

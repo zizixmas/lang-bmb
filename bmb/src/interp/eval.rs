@@ -426,6 +426,14 @@ impl Interpreter {
                 // Full error propagation will be added with Result type support
                 self.eval(inner, env)
             }
+
+            // v0.20.0: Closure expressions
+            // TODO: Implement closure evaluation with proper capture
+            Expr::Closure { body, .. } => {
+                // For now, just evaluate the body directly
+                // Full closure semantics (capture, delayed execution) will be implemented later
+                self.eval(body, env)
+            }
         }
     }
 

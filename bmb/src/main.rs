@@ -931,6 +931,26 @@ fn format_expr(expr: &bmb::ast::Expr) -> String {
         Expr::Question { expr: inner } => {
             format!("{}?", format_expr(&inner.node))
         }
+
+        // v0.20.0: Closure expressions
+        Expr::Closure { params, ret_ty, body } => {
+            let params_str = params
+                .iter()
+                .map(|p| {
+                    if let Some(ty) = &p.ty {
+                        format!("{}: {}", p.name.node, format_type(&ty.node))
+                    } else {
+                        p.name.node.clone()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            let ret_str = ret_ty
+                .as_ref()
+                .map(|t| format!(" -> {}", format_type(&t.node)))
+                .unwrap_or_default();
+            format!("fn |{}|{} {{ {} }}", params_str, ret_str, format_expr(&body.node))
+        }
     }
 }
 

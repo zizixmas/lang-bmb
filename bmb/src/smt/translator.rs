@@ -309,6 +309,13 @@ impl SmtTranslator {
             // v0.13.2: Question mark operator - translate inner expression
             // Full error propagation semantics not needed for SMT verification
             Expr::Question { expr: inner } => self.translate_expr(&inner.node),
+
+            // v0.20.0: Closure expressions
+            // Closures are currently not supported in SMT verification
+            // They would require higher-order logic which is not in SMT-LIB2 core
+            Expr::Closure { .. } => Err(TranslateError::UnsupportedFeature(
+                "closures are not supported in contract verification".to_string(),
+            )),
         }
     }
 

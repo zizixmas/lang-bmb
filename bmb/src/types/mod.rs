@@ -757,6 +757,22 @@ impl TypeChecker {
                 // Full Result/Option unwrapping will be added later
                 self.infer(&inner.node, inner.span)
             }
+
+            // v0.20.0: Closure expressions
+            // TODO: Implement proper closure type with capture analysis
+            Expr::Closure { params, ret_ty: _, body } => {
+                // For now, just type check the body with params in scope
+                // Full closure type system will be implemented in Phase 2
+                for param in params {
+                    if let Some(ty) = &param.ty {
+                        self.env.insert(param.name.node.clone(), ty.node.clone());
+                    }
+                }
+                let body_ty = self.infer(&body.node, body.span)?;
+                // Placeholder: return the body type
+                // Real implementation will return a Fn trait type
+                Ok(body_ty)
+            }
         }
     }
 
