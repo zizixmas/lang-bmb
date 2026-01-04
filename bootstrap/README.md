@@ -121,7 +121,7 @@ Comprehensive test suite with 15 test categories.
 14. Deep nesting
 15. Nested function calls
 
-### types.bmb (88KB) - v0.30.11
+### types.bmb (90KB) - v0.30.12
 Type checker foundation for BMB.
 
 **Features:**
@@ -205,6 +205,14 @@ Type checker foundation for BMB.
 - `gen_struct_resolve_field`: Resolve field type with type arguments (Box<i64>.value → i64)
 - `gen_struct_is_generic`, `gen_struct_field_count`, `gen_struct_field_name_at`: Utilities
 
+**Features (v0.30.12):**
+- Struct registry: Global registry for managing struct definitions
+- Format: `"Name1=def1;Name2=def2;..."` (semicolon-separated name=definition pairs)
+- `struct_reg_new`, `struct_reg_add`: Create and populate registry
+- `struct_reg_lookup`, `struct_reg_has`: Query registry for definitions
+- `struct_reg_field_type`: Resolve field type with type arguments through registry lookup
+- `struct_reg_count`, `struct_reg_is_generic`: Registry utilities
+
 **Test output:**
 ```
 777 (start marker)
@@ -258,8 +266,13 @@ Type checker foundation for BMB.
 4  (gen struct resolve field tests)
 2  (gen struct is generic tests)
 4  (gen struct field name at tests)
+4  (struct reg add tests)
+5  (struct reg lookup tests)
+2  (struct reg has tests)
+6  (struct reg field type tests)
+3  (struct reg is generic tests)
 888 (separator)
-265 (total passed)
+285 (total passed)
 999 (end marker)
 ```
 

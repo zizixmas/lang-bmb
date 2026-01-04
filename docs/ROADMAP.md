@@ -282,6 +282,13 @@ v0.MAJOR.MINOR
 - `gen_struct_is_generic`, `gen_struct_field_count`, `gen_struct_field_name_at`: Utilities
 - 6 new test functions, 25 assertions (265 total in types.bmb)
 
+**v0.30.12 Completed (2026-01-04)**:
+- `struct_reg_new`, `struct_reg_add`: Create and populate struct registry
+- `struct_reg_lookup`, `struct_reg_has`: Query registry for struct definitions
+- `struct_reg_field_type`: Resolve field type with type args through registry lookup
+- `struct_reg_count`, `struct_reg_is_generic`: Registry utilities
+- 5 new test functions, 20 assertions (285 total in types.bmb)
+
 **Deliverables**:
 - Bootstrap compiler can type-check generic code
 - Trait dispatch works in bootstrap

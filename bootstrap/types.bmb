@@ -28,6 +28,7 @@
 -- - v0.30.9: Add generic function type checking (signature, instantiate, check)
 -- - v0.30.10: Add generic type inference (infer type args from actual types)
 -- - v0.30.11: Add generic struct definition (field types, resolution)
+-- - v0.30.12: Add struct registry (store, lookup, integrated field access)
 --
 -- LIMITATIONS:
 -- - Fixed max 64 variables in scope
@@ -1222,6 +1223,83 @@ fn gen_struct_field_name_at_from(fields: String, target_idx: i64, pos: i64, curr
             else gen_struct_field_name_at_from(fields, target_idx, next, curr_idx + 1);
 
 -- ============================================================================
+-- v0.30.12: Struct Registry
+-- ============================================================================
+-- Store and lookup struct definitions by name
+-- Registry format: "Name1=def1;Name2=def2;..." (semicolon separated)
+-- Where def is the gen_struct_pack format: "Name|tparams|fields"
+
+-- Create empty registry
+fn struct_reg_new() -> String = "";
+
+-- Add struct definition to registry
+fn struct_reg_add(reg: String, def: String) -> String =
+    let name = gen_struct_name(def);
+    if reg.len() == 0 then name + "=" + def
+    else reg + ";" + name + "=" + def;
+
+-- Find semicolon in string
+fn struct_reg_find_semi(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then 0 - 1
+    else if s.char_at(pos) == 59 then pos  -- ';' = 59
+    else struct_reg_find_semi(s, pos + 1);
+
+-- Find equals in string (within entry)
+fn struct_reg_find_eq(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then 0 - 1
+    else if s.char_at(pos) == 61 then pos  -- '=' = 61
+    else if s.char_at(pos) == 59 then 0 - 1  -- stop at semicolon
+    else struct_reg_find_eq(s, pos + 1);
+
+-- Lookup struct definition by name
+fn struct_reg_lookup(reg: String, name: String) -> String =
+    if reg.len() == 0 then ""
+    else struct_reg_lookup_from(reg, name, 0);
+
+fn struct_reg_lookup_from(reg: String, name: String, pos: i64) -> String =
+    if pos >= reg.len() then ""
+    else
+        -- Extract entry (name=def)
+        let semi = struct_reg_find_semi(reg, pos);
+        let entry_end = if semi < 0 then reg.len() else semi;
+        let entry = reg.slice(pos, entry_end);
+        let eq = struct_reg_find_eq(entry, 0);
+        if eq < 0 then ""
+        else
+            let entry_name = entry.slice(0, eq);
+            if entry_name == name then entry.slice(eq + 1, entry.len())
+            else if semi < 0 then ""
+            else struct_reg_lookup_from(reg, name, semi + 1);
+
+-- Check if struct exists in registry
+fn struct_reg_has(reg: String, name: String) -> bool =
+    let def = struct_reg_lookup(reg, name);
+    def.len() > 0;
+
+-- Get struct field type (resolved with type args)
+fn struct_reg_field_type(reg: String, struct_name: String, targs: String, field_name: String) -> String =
+    let def = struct_reg_lookup(reg, struct_name);
+    if def.len() == 0 then ""  -- struct not found
+    else gen_struct_resolve_field(def, targs, field_name);
+
+-- Count structs in registry
+fn struct_reg_count(reg: String) -> i64 =
+    if reg.len() == 0 then 0
+    else struct_reg_count_from(reg, 0, 1);
+
+fn struct_reg_count_from(reg: String, pos: i64, count: i64) -> i64 =
+    if pos >= reg.len() then count
+    else if reg.char_at(pos) == 59 then  -- ';'
+        struct_reg_count_from(reg, pos + 1, count + 1)
+    else struct_reg_count_from(reg, pos + 1, count);
+
+-- Check if struct is generic (from registry)
+fn struct_reg_is_generic(reg: String, name: String) -> bool =
+    let def = struct_reg_lookup(reg, name);
+    if def.len() == 0 then false
+    else gen_struct_is_generic(def);
+
+-- ============================================================================
 -- Test Functions
 -- ============================================================================
 
@@ -2086,6 +2164,95 @@ fn test_gen_struct_field_name_at() -> i64 =
     let r4 = if gen_struct_field_name_at(fields, 3).len() == 0 then 1 else 0;
     r1 + r2 + r3 + r4;
 
+-- v0.30.12: Struct registry tests
+fn test_struct_reg_add() -> i64 =
+    let reg0 = struct_reg_new();
+    let r1 = if reg0.len() == 0 then 1 else 0;
+
+    -- Add Box<T>
+    let box_def = gen_struct_pack("Box", "T", "value:T");
+    let reg1 = struct_reg_add(reg0, box_def);
+    let r2 = if struct_reg_count(reg1) == 1 then 1 else 0;
+
+    -- Add Pair<A,B>
+    let pair_def = gen_struct_pack("Pair", "A,B", "first:A,second:B");
+    let reg2 = struct_reg_add(reg1, pair_def);
+    let r3 = if struct_reg_count(reg2) == 2 then 1 else 0;
+
+    -- Add Point (non-generic)
+    let point_def = gen_struct_pack("Point", "", "x:i64,y:i64");
+    let reg3 = struct_reg_add(reg2, point_def);
+    let r4 = if struct_reg_count(reg3) == 3 then 1 else 0;
+
+    r1 + r2 + r3 + r4;
+
+fn test_struct_reg_lookup() -> i64 =
+    let box_def = gen_struct_pack("Box", "T", "value:T");
+    let pair_def = gen_struct_pack("Pair", "A,B", "first:A,second:B");
+    let reg = struct_reg_add(struct_reg_add(struct_reg_new(), box_def), pair_def);
+
+    -- Lookup Box
+    let box_found = struct_reg_lookup(reg, "Box");
+    let r1 = if gen_struct_name(box_found) == "Box" then 1 else 0;
+    let r2 = if gen_struct_tparams(box_found) == "T" then 1 else 0;
+
+    -- Lookup Pair
+    let pair_found = struct_reg_lookup(reg, "Pair");
+    let r3 = if gen_struct_name(pair_found) == "Pair" then 1 else 0;
+    let r4 = if gen_struct_tparams(pair_found) == "A,B" then 1 else 0;
+
+    -- Missing struct
+    let missing = struct_reg_lookup(reg, "Missing");
+    let r5 = if missing.len() == 0 then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5;
+
+fn test_struct_reg_has() -> i64 =
+    let box_def = gen_struct_pack("Box", "T", "value:T");
+    let reg = struct_reg_add(struct_reg_new(), box_def);
+
+    let r1 = if struct_reg_has(reg, "Box") then 1 else 0;
+    let r2 = if not struct_reg_has(reg, "Missing") then 1 else 0;
+
+    r1 + r2;
+
+fn test_struct_reg_field_type() -> i64 =
+    let box_def = gen_struct_pack("Box", "T", "value:T");
+    let pair_def = gen_struct_pack("Pair", "A,B", "first:A,second:B");
+    let point_def = gen_struct_pack("Point", "", "x:i64,y:i64");
+    let reg = struct_reg_add(struct_reg_add(struct_reg_add(struct_reg_new(), box_def), pair_def), point_def);
+
+    -- Box<i64>.value = i64
+    let r1 = if struct_reg_field_type(reg, "Box", "i64", "value") == "i64" then 1 else 0;
+
+    -- Pair<String,i64>.first = String
+    let r2 = if struct_reg_field_type(reg, "Pair", "String,i64", "first") == "String" then 1 else 0;
+
+    -- Pair<String,i64>.second = i64
+    let r3 = if struct_reg_field_type(reg, "Pair", "String,i64", "second") == "i64" then 1 else 0;
+
+    -- Point.x = i64 (non-generic, empty targs)
+    let r4 = if struct_reg_field_type(reg, "Point", "", "x") == "i64" then 1 else 0;
+
+    -- Missing struct
+    let r5 = if struct_reg_field_type(reg, "Missing", "", "x").len() == 0 then 1 else 0;
+
+    -- Missing field
+    let r6 = if struct_reg_field_type(reg, "Box", "i64", "missing").len() == 0 then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5 + r6;
+
+fn test_struct_reg_is_generic() -> i64 =
+    let box_def = gen_struct_pack("Box", "T", "value:T");
+    let point_def = gen_struct_pack("Point", "", "x:i64,y:i64");
+    let reg = struct_reg_add(struct_reg_add(struct_reg_new(), box_def), point_def);
+
+    let r1 = if struct_reg_is_generic(reg, "Box") then 1 else 0;
+    let r2 = if not struct_reg_is_generic(reg, "Point") then 1 else 0;
+    let r3 = if not struct_reg_is_generic(reg, "Missing") then 1 else 0;
+
+    r1 + r2 + r3;
+
 -- Main test runner
 fn main() -> i64 =
     let u0 = println(777);  -- Start marker
@@ -2250,10 +2417,26 @@ fn main() -> i64 =
     let t50 = test_gen_struct_field_name_at();
     let p50 = println(t50);  -- Expected: 4
 
+    -- v0.30.12: Struct registry tests
+    let t51 = test_struct_reg_add();
+    let p51 = println(t51);  -- Expected: 4
+
+    let t52 = test_struct_reg_lookup();
+    let p52 = println(t52);  -- Expected: 5
+
+    let t53 = test_struct_reg_has();
+    let p53 = println(t53);  -- Expected: 2
+
+    let t54 = test_struct_reg_field_type();
+    let p54 = println(t54);  -- Expected: 6
+
+    let t55 = test_struct_reg_is_generic();
+    let p55 = println(t55);  -- Expected: 3
+
     let u1 = println(888);  -- Separator
 
-    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33 + t34 + t35 + t36 + t37 + t38 + t39 + t40 + t41 + t42 + t43 + t44 + t45 + t46 + t47 + t48 + t49 + t50;
-    let u2 = println(total);  -- Expected: 265
+    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33 + t34 + t35 + t36 + t37 + t38 + t39 + t40 + t41 + t42 + t43 + t44 + t45 + t46 + t47 + t48 + t49 + t50 + t51 + t52 + t53 + t54 + t55;
+    let u2 = println(total);  -- Expected: 285
 
     let u3 = println(999);  -- End marker
     total;
