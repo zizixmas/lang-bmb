@@ -3,10 +3,25 @@
 //! MIR is a CFG-based intermediate representation that sits between
 //! the high-level AST and LLVM IR. It makes control flow explicit
 //! through basic blocks and terminators.
+//!
+//! # Optimization (v0.29)
+//!
+//! The `optimize` module provides optimization passes that transform
+//! MIR programs to improve performance. Key optimizations include:
+//! - Constant folding and propagation
+//! - Dead code elimination
+//! - Common subexpression elimination
+//! - Contract-based optimizations (BMB-specific)
 
 mod lower;
+mod optimize;
 
 pub use lower::lower_program;
+pub use optimize::{
+    OptimizationPass, OptimizationPipeline, OptimizationStats, OptLevel,
+    ConstantFolding, DeadCodeElimination, SimplifyBranches,
+    CopyPropagation, CommonSubexpressionElimination, ContractBasedOptimization,
+};
 
 use std::collections::HashMap;
 

@@ -175,10 +175,29 @@ pub fn build(config: &BuildConfig) -> BuildResult<()> {
     }
 
     // Lower to MIR
-    let mir = lower_program(&program);
+    let mut mir = lower_program(&program);
 
     if config.verbose {
         println!("  Generated MIR for {} functions", mir.functions.len());
+    }
+
+    // v0.29: Run MIR optimizations
+    {
+        use crate::mir::{OptimizationPipeline, OptLevel as MirOptLevel};
+
+        let mir_opt_level = match config.opt_level {
+            OptLevel::Debug => MirOptLevel::Debug,
+            OptLevel::Release => MirOptLevel::Release,
+            OptLevel::Size => MirOptLevel::Release, // Size uses release-level MIR opts
+            OptLevel::Aggressive => MirOptLevel::Aggressive,
+        };
+
+        let pipeline = OptimizationPipeline::for_level(mir_opt_level);
+        let stats = pipeline.optimize(&mut mir);
+
+        if config.verbose && !stats.pass_counts.is_empty() {
+            println!("  MIR optimizations applied: {:?}", stats.pass_counts);
+        }
     }
 
     // Generate LLVM IR or object file
