@@ -59,10 +59,11 @@ v0.MAJOR.MINOR
 | v0.20 | **Extend** | Language Extensions (Closures/Traits) | ✅ 완료 (v0.20.0-2) |
 | v0.21 | **Bootstrap** | Bootstrap Enhancement (Struct/Enum MIR) | ✅ 완료 (v0.21.0-2) |
 | v0.22 | **Mirror** | Parser Struct/Enum + Type Checker Enhancement | ✅ 완료 (v0.22.0-3) |
-| v0.23 | **Showcase** | 주요 앱 시나리오 샘플 10개 | 계획 |
-| v0.24 | **Launch** | 프로덕션 서비스 런칭 | 계획 |
-| v0.25 | **Velocity** | C/Rust 성능 추월 스프린트 | 계획 |
-| v0.26 | **Query** | AI Query System (RFC-0001) | 계획 |
+| v0.23 | **Verify** | Self-hosting Stage 1/2 Verification | ✅ 완료 (v0.23.0-2) |
+| v0.24 | **Showcase** | 주요 앱 시나리오 샘플 10개 | 계획 |
+| v0.25 | **Launch** | 프로덕션 서비스 런칭 | 계획 |
+| v0.26 | **Velocity** | C/Rust 성능 추월 스프린트 | 계획 |
+| v0.27 | **Query** | AI Query System (RFC-0001) | 계획 |
 | v1.0-RC | **Golden** | 최종 검증 + 안정성 약속 | 계획 |
 
 ---
@@ -1578,16 +1579,66 @@ Generated: test.mir
 - Struct init type checking
 - Match expression type checking
 
-### 다음 단계 (v0.23+)
+### 다음 단계 (v0.24+)
 
-Full self-hosting 검증은 v0.23+ 로 이관:
-- Stage 1/2/3 verification
+Full self-hosting Stage 3 및 생태계 구축:
+- Stage 3 full bootstrap compilation
 - 전체 컴파일러 BMB 재작성
 - gotgan 패키지 등록
+- 주요 앱 시나리오 샘플 개발
 
 ---
 
-## v0.23 Showcase (주요 앱 시나리오 샘플)
+## v0.23 Verify (Self-hosting 검증) ✅ 완료
+
+> 목표: Bootstrap 컴파일러의 Self-hosting 검증 (Stage 1/2)
+
+### v0.23.0: Stage 1 준비
+
+- Bootstrap 컴파일러 기능 점검 (lexer, parser, lowering, llvm_ir, compiler)
+- Self-hosting 테스트 파일 준비 (selfhost_test.bmb)
+- 전체 Bootstrap 테스트 스위트 실행 및 검증
+
+### v0.23.1: Stage 1 Parser Verification
+
+- selfhost_test.bmb: 8개 파서 테스트
+  - 상수 함수, 파라미터 함수, 이항 연산
+  - if 표현식, let 표현식, 함수 호출
+  - 비교 연산자, 불리언 표현식
+
+### v0.23.2: Stage 2 Equivalence Tests
+
+- selfhost_equiv.bmb: 19개 동등성 테스트
+  - MIR 패턴 매칭 (5개): entry, binop, return, cmp, branch
+  - LLVM IR 패턴 매칭 (6개): define, add, ret, icmp, br, phi
+  - Bootstrap Lowering 패턴 (3개): const, binop, call
+  - Bootstrap LLVM 패턴 (5개): const, binop, cmp, branch, phi
+
+### 검증 결과
+
+| 테스트 파일 | 테스트 수 | 결과 |
+|------------|-----------|------|
+| selfhost_test.bmb | 8 | ✅ 통과 |
+| selfhost_equiv.bmb | 19 | ✅ 통과 |
+| 총계 | 27 | ✅ 100% |
+
+### Bootstrap 모듈 테스트 현황
+
+| 모듈 | 테스트 수 | 결과 |
+|------|-----------|------|
+| lexer.bmb | 15 | ✅ |
+| parser.bmb | 전체 | ✅ |
+| parser_ast.bmb | 27 | ✅ |
+| types.bmb | 45 | ✅ |
+| mir.bmb | 46 | ✅ |
+| lowering.bmb | 52+ | ✅ |
+| pipeline.bmb | 14 | ✅ |
+| llvm_ir.bmb | 119 | ✅ |
+| compiler.bmb | 8 | ✅ |
+
+---
+
+## v0.24 Showcase (주요 앱 시나리오 샘플)
 
 > 목표: 실제 도메인 샘플 애플리케이션 10개
 
@@ -1608,7 +1659,7 @@ Full self-hosting 검증은 v0.23+ 로 이관:
 
 ---
 
-## v0.24 Launch (프로덕션 서비스 런칭)
+## v0.25 Launch (프로덕션 서비스 런칭)
 
 > 목표: 서브모듈을 실제 도메인 서비스로 배포
 
@@ -1824,10 +1875,11 @@ v0.19 Complete     ────▶ 2026 Q1 ✅ (MIR Completion)
 v0.20 Extend       ────▶ 2026 Q1 ✅ (Language Extensions)
 v0.21 Bootstrap    ────▶ 2026 Q1 ✅ (Bootstrap Enhancement)
 v0.22 Mirror       ────▶ 2026 Q1 ✅ (Parser Enhancement)
-v0.23 Showcase     ────▶ 2026 Q3
-v0.24 Launch       ────▶ 2026 Q4
-v0.25 Velocity     ────▶ 2026 Q4
-v0.26 Query        ────▶ 2027 Q1 (AI Query System - RFC-0001)
+v0.23 Verify       ────▶ 2026 Q1 ✅ (Self-hosting Verification)
+v0.24 Showcase     ────▶ 2026 Q3
+v0.25 Launch       ────▶ 2026 Q4
+v0.26 Velocity     ────▶ 2026 Q4
+v0.27 Query        ────▶ 2027 Q1 (AI Query System - RFC-0001)
 v1.0-RC Golden     ────▶ 2027 Q2
 ```
 

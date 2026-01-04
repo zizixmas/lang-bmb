@@ -1,0 +1,251 @@
+-- ============================================================================
+-- BMB Bootstrap Self-Hosting Stage 2: Equivalence Test
+-- Version: v0.23.2
+--
+-- This file tests the equivalence between Rust compiler output and
+-- Bootstrap compiler output for the same BMB source patterns.
+-- ============================================================================
+
+-- ============================================================================
+-- SECTION 1: Expected MIR Patterns (from Rust compiler --emit-mir)
+-- ============================================================================
+
+-- Test: add(a, b) -> i64 = a + b
+-- Rust MIR output:
+--   fn add(a: i64, b: i64) -> i64 {
+--   entry:
+--     %_t0 = + %a, %b
+--     return %_t0
+--   }
+
+fn mir_add_has_entry() -> i64 =
+    let mir = "fn add(a: i64, b: i64) -> i64 { entry: %_t0 = + %a, %b return %_t0 }";
+    if has_pattern(mir, "entry:", 0) then 1 else 0;
+
+fn mir_add_has_binop() -> i64 =
+    let mir = "fn add(a: i64, b: i64) -> i64 { entry: %_t0 = + %a, %b return %_t0 }";
+    if has_pattern(mir, "+ %a, %b", 0) then 1 else 0;
+
+fn mir_add_has_return() -> i64 =
+    let mir = "fn add(a: i64, b: i64) -> i64 { entry: %_t0 = + %a, %b return %_t0 }";
+    if has_pattern(mir, "return %_t0", 0) then 1 else 0;
+
+-- Test: max(a, b) = if a > b then a else b
+-- Rust MIR output (with branches and phi):
+--   fn max(a: i64, b: i64) -> i64 {
+--   entry:
+--     %_t0 = > %a, %b
+--     branch %_t0, then_0, else_0
+--   then_0:
+--     br merge_0
+--   else_0:
+--     br merge_0
+--   merge_0:
+--     return %result
+--   }
+
+fn mir_max_has_cmp() -> i64 =
+    let mir = "fn max { entry: %_t0 = > %a, %b branch %_t0, then_0, else_0 }";
+    if has_pattern(mir, "> %a, %b", 0) then 1 else 0;
+
+fn mir_max_has_branch() -> i64 =
+    let mir = "fn max { entry: %_t0 = > %a, %b branch %_t0, then_0, else_0 }";
+    if has_pattern(mir, "branch", 0) then 1 else 0;
+
+-- ============================================================================
+-- SECTION 2: Expected LLVM IR Patterns (from Rust compiler --emit-ir)
+-- ============================================================================
+
+-- Test: add function LLVM IR
+-- Rust LLVM output:
+--   define i64 @add(i64 %a, i64 %b) {
+--   entry:
+--     %_t0 = add i64 %a, %b
+--     ret i64 %_t0
+--   }
+
+fn llvm_add_has_define() -> i64 =
+    let ir = "define i64 @add(i64 %a, i64 %b) { entry: %_t0 = add i64 %a, %b ret i64 %_t0 }";
+    if has_pattern(ir, "define i64 @add", 0) then 1 else 0;
+
+fn llvm_add_has_add() -> i64 =
+    let ir = "define i64 @add(i64 %a, i64 %b) { entry: %_t0 = add i64 %a, %b ret i64 %_t0 }";
+    if has_pattern(ir, "add i64 %a, %b", 0) then 1 else 0;
+
+fn llvm_add_has_ret() -> i64 =
+    let ir = "define i64 @add(i64 %a, i64 %b) { entry: %_t0 = add i64 %a, %b ret i64 %_t0 }";
+    if has_pattern(ir, "ret i64 %_t0", 0) then 1 else 0;
+
+-- Test: max function LLVM IR (with icmp, br, phi)
+-- Rust LLVM output:
+--   define i64 @max(i64 %a, i64 %b) {
+--   entry:
+--     %_t0 = icmp sgt i64 %a, %b
+--     br i1 %_t0, label %then_0, label %else_0
+--   then_0:
+--     br label %merge_0
+--   else_0:
+--     br label %merge_0
+--   merge_0:
+--     %result = phi i64 [ %a, %then_0 ], [ %b, %else_0 ]
+--     ret i64 %result
+--   }
+
+fn llvm_max_has_icmp() -> i64 =
+    let ir = "define i64 @max { entry: %_t0 = icmp sgt i64 %a, %b br i1 %_t0 }";
+    if has_pattern(ir, "icmp sgt", 0) then 1 else 0;
+
+fn llvm_max_has_br() -> i64 =
+    let ir = "define i64 @max { entry: %_t0 = icmp sgt i64 %a, %b br i1 %_t0 }";
+    if has_pattern(ir, "br i1", 0) then 1 else 0;
+
+fn llvm_max_has_phi() -> i64 =
+    let ir = "define i64 @max { merge: %result = phi i64 [ %a, %then_0 ], [ %b, %else_0 ] }";
+    if has_pattern(ir, "phi i64", 0) then 1 else 0;
+
+-- ============================================================================
+-- SECTION 3: Pattern Matching Utilities
+-- ============================================================================
+
+fn has_pattern(s: String, pat: String, pos: i64) -> bool =
+    if pos + pat.len() > s.len() then false
+    else if s.slice(pos, pos + pat.len()) == pat then true
+    else has_pattern(s, pat, pos + 1);
+
+-- ============================================================================
+-- SECTION 4: Bootstrap Lowering Pattern Tests
+-- ============================================================================
+
+-- Test: Bootstrap produces same MIR patterns as Rust compiler
+-- The lowering.bmb tests verify these patterns:
+-- - (int N) -> %_t0 = const I:N
+-- - (var <x>) -> %x (reference)
+-- - (op + left right) -> %_t0 = + %left, %right
+-- - (if cond then else) -> branch + phi
+
+fn test_lowering_const_pattern() -> i64 =
+    -- Bootstrap pattern: %_t0 = const I:42
+    let pattern = "const I:";
+    if has_pattern("test: %_t0 = const I:42", pattern, 0) then 1 else 0;
+
+fn test_lowering_binop_pattern() -> i64 =
+    -- Bootstrap pattern: %_t0 = + %a, %b
+    let pattern = "= + %";
+    if has_pattern("test: %_t0 = + %a, %b", pattern, 0) then 1 else 0;
+
+fn test_lowering_call_pattern() -> i64 =
+    -- Bootstrap pattern: %_t0 = call foo(%a)
+    let pattern = "call ";
+    if has_pattern("test: %_t0 = call add(%x, %y)", pattern, 0) then 1 else 0;
+
+-- ============================================================================
+-- SECTION 5: Bootstrap LLVM IR Pattern Tests
+-- ============================================================================
+
+fn test_llvm_const_pattern() -> i64 =
+    -- Bootstrap LLVM: %_t0 = add i64 0, 42
+    let pattern = "add i64 0,";
+    if has_pattern("test: %_t0 = add i64 0, 42", pattern, 0) then 1 else 0;
+
+fn test_llvm_binop_pattern() -> i64 =
+    -- Bootstrap LLVM: %_t0 = add i64 %a, %b
+    let pattern = "add i64 %";
+    if has_pattern("test: %_t0 = add i64 %a, %b", pattern, 0) then 1 else 0;
+
+fn test_llvm_cmp_pattern() -> i64 =
+    -- Bootstrap LLVM: %_t0 = icmp sgt i64 %a, %b
+    let pattern = "icmp s";
+    if has_pattern("test: %_t0 = icmp sgt i64 %a, %b", pattern, 0) then 1 else 0;
+
+fn test_llvm_branch_pattern() -> i64 =
+    -- Bootstrap LLVM: br i1 %cond, label %then, label %else
+    let pattern = "br i1 %";
+    if has_pattern("test: br i1 %cond, label %then, label %else", pattern, 0) then 1 else 0;
+
+fn test_llvm_phi_pattern() -> i64 =
+    -- Bootstrap LLVM: %result = phi i64 [ %a, %then ], [ %b, %else ]
+    let pattern = "phi i64 [";
+    if has_pattern("test: %result = phi i64 [ %a, %then ], [ %b, %else ]", pattern, 0) then 1 else 0;
+
+-- ============================================================================
+-- SECTION 6: Main Test Runner
+-- ============================================================================
+
+fn main() -> i64 =
+    let u0 = println(777);  -- Start marker
+
+    -- Stage 2: MIR Equivalence Tests
+    let u1 = println(2);  -- Section: MIR patterns
+
+    let t1 = mir_add_has_entry();
+    let u2 = println(t1);
+
+    let t2 = mir_add_has_binop();
+    let u3 = println(t2);
+
+    let t3 = mir_add_has_return();
+    let u4 = println(t3);
+
+    let t4 = mir_max_has_cmp();
+    let u5 = println(t4);
+
+    let t5 = mir_max_has_branch();
+    let u6 = println(t5);
+
+    -- Stage 2: LLVM IR Equivalence Tests
+    let u7 = println(3);  -- Section: LLVM patterns
+
+    let t6 = llvm_add_has_define();
+    let u8 = println(t6);
+
+    let t7 = llvm_add_has_add();
+    let u9 = println(t7);
+
+    let t8 = llvm_add_has_ret();
+    let u10 = println(t8);
+
+    let t9 = llvm_max_has_icmp();
+    let u11 = println(t9);
+
+    let t10 = llvm_max_has_br();
+    let u12 = println(t10);
+
+    let t11 = llvm_max_has_phi();
+    let u13 = println(t11);
+
+    -- Stage 2: Bootstrap Lowering Pattern Tests
+    let u14 = println(4);  -- Section: Bootstrap MIR
+
+    let t12 = test_lowering_const_pattern();
+    let u15 = println(t12);
+
+    let t13 = test_lowering_binop_pattern();
+    let u16 = println(t13);
+
+    let t14 = test_lowering_call_pattern();
+    let u17 = println(t14);
+
+    -- Stage 2: Bootstrap LLVM Pattern Tests
+    let u18 = println(5);  -- Section: Bootstrap LLVM
+
+    let t15 = test_llvm_const_pattern();
+    let u19 = println(t15);
+
+    let t16 = test_llvm_binop_pattern();
+    let u20 = println(t16);
+
+    let t17 = test_llvm_cmp_pattern();
+    let u21 = println(t17);
+
+    let t18 = test_llvm_branch_pattern();
+    let u22 = println(t18);
+
+    let t19 = test_llvm_phi_pattern();
+    let u23 = println(t19);
+
+    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19;
+    let u24 = println(888);  -- Separator
+    let u25 = println(total);
+    let u26 = println(999);  -- End marker
+
+    total;

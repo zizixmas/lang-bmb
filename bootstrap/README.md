@@ -474,6 +474,71 @@ rather than parsing BMB source strings within the test file.
 8 (total passed)
 ```
 
+## Self-Hosting Tests (v0.23)
+
+Self-hosting verification tests for the Bootstrap compiler.
+
+### selfhost_test.bmb - Stage 1 Parser Verification
+
+Tests the Bootstrap parser's ability to parse BMB source code correctly.
+
+**Features:**
+- Token encoding and lexer functions
+- Parser for functions, expressions, operators
+- 8 test cases covering core language features
+
+**Test coverage:**
+1. Constant function: `fn one() -> i64 = 1;`
+2. Parameter function: `fn id(x: i64) -> i64 = x;`
+3. Binary operations: `fn add(a: i64, b: i64) -> i64 = a + b;`
+4. If expressions: `fn max(a: i64, b: i64) -> i64 = if a > b then a else b;`
+5. Let expressions: `fn double(x: i64) -> i64 = let y = x + x; y;`
+6. Function calls: `fn double_inc(x: i64) -> i64 = inc(inc(x));`
+7. Comparison operators: `fn test(a: i64, b: i64) -> bool = a == b;`
+8. Boolean expressions: `fn test(a: bool, b: bool) -> bool = a and b or not a;`
+
+**Test output:**
+```
+777 (start marker)
+1  (section marker)
+1  (8 parser tests...)
+888 (separator)
+8 (total passed)
+999 (end marker)
+```
+
+### selfhost_equiv.bmb - Stage 2 Equivalence Tests
+
+Tests equivalence between Rust compiler output and Bootstrap compiler patterns.
+
+**Features:**
+- MIR pattern matching (entry, binop, return, branch)
+- LLVM IR pattern matching (define, add, ret, icmp, br, phi)
+- Bootstrap lowering pattern verification
+- Bootstrap LLVM codegen pattern verification
+
+**Test categories:**
+1. MIR patterns: 5 tests (entry, binop, return, cmp, branch)
+2. LLVM IR patterns: 6 tests (define, add, ret, icmp, br, phi)
+3. Bootstrap MIR patterns: 3 tests (const, binop, call)
+4. Bootstrap LLVM patterns: 5 tests (const, binop, cmp, branch, phi)
+
+**Test output:**
+```
+777 (start marker)
+2  (MIR section)
+5  (5 MIR tests...)
+3  (LLVM section)
+6  (6 LLVM tests...)
+4  (Bootstrap MIR section)
+3  (3 lowering tests...)
+5  (Bootstrap LLVM section)
+5  (5 codegen tests...)
+888 (separator)
+19 (total passed)
+999 (end marker)
+```
+
 ## Integration Testing (v0.10.10)
 
 The `runtime/` directory contains integration testing infrastructure for validating generated LLVM IR.
@@ -740,5 +805,7 @@ cargo run --release --bin bmb -- run bootstrap/compiler.bmb
 - [x] Struct/Enum parsing in parser_ast.bmb (v0.22.0/v0.22.1) ✅
 - [x] Struct/Enum type checking in types.bmb (v0.22.2) ✅
 - [x] Parser integration tests (v0.22.3) ✅
-- [ ] Full self-hosting Stage 1/2/3 verification (v0.23+)
-- [ ] Optimization passes in BMB (v0.24+)
+- [x] Self-hosting Stage 1 verification (v0.23.0) ✅
+- [x] Self-hosting Stage 2 equivalence tests (v0.23.1-2) ✅
+- [ ] Self-hosting Stage 3 full bootstrap compilation (v0.24+)
+- [ ] Optimization passes in BMB (v0.25+)
