@@ -196,13 +196,13 @@ fn eval_binop(op: String, left: i64, right: i64) -> i64 =
     else 0;
 
 -- Process single instruction for constant folding
--- Returns: "changed:new_table:new_line"
+-- Returns: "changed;new_table;new_line" (using ; to avoid conflict with table's :)
 fn fold_const_inst(line: String, const_table: String) -> String =
     if is_const_inst(line) then
         let dest = extract_dest(line);
         let val = extract_const_value(line);
         let new_table = const_table_set(const_table, dest, val);
-        "0:" + new_table + ":" + line
+        "0;" + new_table + ";" + line
     else if is_binop_inst(line) then
         let dest = extract_dest(line);
         let op = extract_binop(line);
@@ -214,9 +214,9 @@ fn fold_const_inst(line: String, const_table: String) -> String =
             let result = eval_binop(op, left_val, right_val);
             let new_line = "  " + dest + " = const I:" + int_to_string(result);
             let new_table = const_table_set(const_table, dest, result);
-            "1:" + new_table + ":" + new_line
-        else "0:" + const_table + ":" + line
-    else "0:" + const_table + ":" + line;
+            "1;" + new_table + ";" + new_line
+        else "0;" + const_table + ";" + line
+    else "0;" + const_table + ";" + line;
 
 -- ============================================================================
 -- SECTION 5: Dead Code Elimination Pass
@@ -341,9 +341,9 @@ fn run_constant_folding(mir: String, pos: i64, table: String, acc: String, count
         let end_pos = if pipe < 0 then mir.len() else pipe;
         let line = mir.slice(pos, end_pos);
         let result = fold_const_inst(line, table);
-        -- Parse result: "changed:new_table:new_line"
-        let c1 = find_char(result, 58, 0);
-        let c2 = find_char(result, 58, c1 + 1);
+        -- Parse result: "changed;new_table;new_line" (semicolon=59)
+        let c1 = find_char(result, 59, 0);
+        let c2 = find_char(result, 59, c1 + 1);
         let changed = parse_int_at(result, 0, 0);
         let new_table = result.slice(c1 + 1, c2);
         let new_line = result.slice(c2 + 1, result.len());

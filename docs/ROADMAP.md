@@ -164,15 +164,15 @@ v0.MAJOR.MINOR
 | v0.28 | Benchmark | C/Rust/BMB benchmark suite | Compute-intensive benchmarks, Contract-optimized benchmarks, Real-world workloads |
 | v0.29 | Velocity | C/Rust performance sprint | MIR optimization framework (6 passes), Contract-based optimization, Bootstrap optimization module |
 
-### Bootstrap Statistics (as of v0.29)
+### Bootstrap Statistics (as of v0.29.2)
 
 | Metric | Value |
 |--------|-------|
 | Rust Codebase | ~21,783 LOC |
-| BMB Bootstrap | ~8,943 LOC |
-| Coverage | 41% |
+| BMB Bootstrap | ~9,400 LOC |
+| Coverage | 43% |
 | Stage 1/2 Tests | 19 tests passing |
-| Bootstrap Tests | 306 tests (119 llvm_ir + 67 lowering + 46 mir + 37 types + 15 parser + 14 pipeline + 8 compiler) |
+| Bootstrap Tests | 320 tests (119 llvm_ir + 52 lowering + 46 mir + 45 types + 19 selfhost_equiv + 14 pipeline + 9 optimize + 8 selfhost_test + 8 compiler) |
 
 ---
 
@@ -574,10 +574,11 @@ $ bmb doc --check
 
 For detailed analysis of the remaining work, see [GAP_ANALYSIS.md](./GAP_ANALYSIS.md).
 
-**Key Metrics (as of v0.29)**:
+**Key Metrics (as of v0.29.2)**:
 - Rust code to remove: ~21,783 LOC
-- BMB bootstrap code: ~8,943 LOC (41% coverage)
-- Gap to close: ~14,000 LOC additional BMB
+- BMB bootstrap code: ~9,400 LOC (43% coverage)
+- Gap to close: ~13,500 LOC additional BMB
+- Bootstrap tests passing: 320 tests
 
 ---
 
