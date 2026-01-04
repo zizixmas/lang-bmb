@@ -15,6 +15,13 @@
 | **패키지 우선** | 모든 재사용 코드는 gotgan 등록 | 생태계 성장 |
 | **성능 증명** | C/Rust 대비 벤치마크로 검증 | 계약 기반 최적화 |
 
+### Non-Negotiable Priorities (타협불가)
+
+| Priority | Principle | Description |
+|----------|-----------|-------------|
+| **Performance** | Maximum Performance Syntax | Syntax must enable maximum performance without constraints. No syntax limitations constraining performance. |
+| **Correctness** | Compile-Time Verification | If compile-time checking is possible, it MUST be in the language spec. All verifiable invariants should be checked statically. |
+
 ### 버전 체계
 
 ```
@@ -48,10 +55,13 @@ v0.MAJOR.MINOR
 | v0.16 | **Consolidate** | 제네릭 enum/struct 타입 체커 완성 | ✅ 완료 (v0.16.0-3) |
 | v0.17 | **Module** | 모듈 시스템 + 패키지 간 타입 참조 | ✅ 완료 (v0.17.0-3) |
 | v0.18 | **Methods** | Option/Result 메서드 호출 구문 | ✅ 완료 (v0.18.0) |
-| v0.19 | **Mirror** | Self-Hosting (BMB 자기 컴파일) | 계획 |
-| v0.20 | **Showcase** | 주요 앱 시나리오 샘플 10개 | 계획 |
-| v0.21 | **Launch** | 프로덕션 서비스 런칭 | 계획 |
-| v0.22 | **Velocity** | C/Rust 성능 추월 스프린트 | 계획 |
+| v0.19 | **Complete** | MIR Completion (Struct/Enum/Pattern) | 계획 |
+| v0.20 | **Extend** | Language Extensions (Closures/Traits) | 계획 |
+| v0.21 | **Bootstrap** | Bootstrap Enhancement (Struct/Enum MIR) | 계획 |
+| v0.22 | **Mirror** | Self-Hosting (Stage 1/2/3 Verification) | 계획 |
+| v0.23 | **Showcase** | 주요 앱 시나리오 샘플 10개 | 계획 |
+| v0.24 | **Launch** | 프로덕션 서비스 런칭 | 계획 |
+| v0.25 | **Velocity** | C/Rust 성능 추월 스프린트 | 계획 |
 | v1.0-RC | **Golden** | 최종 검증 + 안정성 약속 | 계획 |
 
 ---
@@ -60,13 +70,13 @@ v0.MAJOR.MINOR
 
 | 레포지토리 | 용도 | Rust 버전 | BMB 재작성 | 서비스 런칭 |
 |------------|------|-----------|------------|-------------|
-| lang-bmb | 메인 컴파일러 | v0.1 ✅ | v0.19 | - |
-| gotgan | 패키지 매니저 | v0.8 ✅ | v0.19 | gotgan.bmb.dev |
-| action-bmb | GitHub Action | v0.7 ✅ | v0.19 | - |
-| bmb-samples | 예제 프로그램 | - | v0.20 | - |
+| lang-bmb | 메인 컴파일러 | v0.1 ✅ | v0.22 | - |
+| gotgan | 패키지 매니저 | v0.8 ✅ | v0.22 | gotgan.bmb.dev |
+| action-bmb | GitHub Action | v0.7 ✅ | v0.22 | - |
+| bmb-samples | 예제 프로그램 | - | v0.23 | - |
 | benchmark-bmb | 표준 벤치마크 | v0.9 ✅ | v0.15 | bench.bmb.dev |
-| playground | 온라인 플레이그라운드 | - | v0.21 | play.bmb.dev |
-| lang-bmb-site | 공식 웹사이트 | - | v0.21 | bmb.dev |
+| playground | 온라인 플레이그라운드 | - | v0.24 | play.bmb.dev |
+| lang-bmb-site | 공식 웹사이트 | - | v0.24 | bmb.dev |
 
 ---
 
@@ -149,26 +159,40 @@ Phase 5 (v0.10-v0.12): WASM + 듀얼 타깃
   - WASM 백엔드
   - 런타임 바인딩
 
-Phase 6 (v0.13-v0.18): 패키지 생태계 구축 ★ NEW
+Phase 6 (v0.13-v0.18): 패키지 생태계 구축
   - 115개 패키지 개발
   - 각 패키지 샘플 앱
   - gotgan 레지스트리 등록
   - 벤치마크 + 최적화 반복
 
-Phase 7 (v0.19): Self-Hosting ★ NEW
+Phase 7 (v0.19): MIR Completion ★ REVISED
+  - Struct/Enum MIR lowering 완성
+  - Pattern matching 완전 구현
+  - Array/Method dispatch 구현
+
+Phase 8 (v0.20): Language Extensions ★ REVISED
+  - Closures (람다 문법, 캡처 의미론)
+  - Traits (trait 키워드, impl 블록)
+  - FFI Enhancement (extern "C" 링킹)
+
+Phase 9 (v0.21): Bootstrap Enhancement ★ REVISED
+  - Bootstrap에 struct/enum 지원 추가
+  - Bootstrap-Rust compiler 동등성 테스트
+
+Phase 10 (v0.22): Self-Hosting ★ REVISED
   - 컴파일러 BMB 재작성
   - gotgan BMB 재작성
-  - Stage 2 자기 컴파일 검증
+  - Stage 1/2/3 자기 컴파일 검증
 
-Phase 8 (v0.20-v0.21): 프로덕션 런칭 ★ NEW
+Phase 11 (v0.23-v0.24): 프로덕션 런칭
   - 주요 앱 시나리오 샘플
   - 서브모듈 서비스 런칭
 
-Phase 9 (v0.22): 성능 스프린트 ★ NEW
+Phase 12 (v0.25): 성능 스프린트
   - C/Rust 성능 추월
   - 계약 기반 최적화
 
-Phase 10 (v1.0-RC): Golden Release
+Phase 13 (v1.0-RC): Golden Release
   - 전체 검증
   - 안정성 약속
 ```
@@ -1250,7 +1274,220 @@ test result: ok. 85 passed; 0 failed
 
 ---
 
-## v0.19 Mirror (Self-Hosting)
+## v0.19 Complete (MIR Completion)
+
+> 목표: Self-Hosting에 필요한 MIR 기능 완성 (Struct/Enum/Pattern/Array)
+
+### 배경
+
+Gap 분석 결과 (docs/GAP_ANALYSIS.md 참조):
+- MIR lowering에서 Struct/Enum/Pattern이 미구현 상태
+- Self-Hosting은 이러한 핵심 기능 없이 불가능
+- 원래 v0.19 "Mirror" 계획을 v0.22로 연기
+
+### v0.19.0 - Struct MIR Support
+
+| 구성요소 | 설명 | 상태 |
+|----------|------|------|
+| MirInst::StructInit | 구조체 초기화 명령 | 계획 |
+| MirInst::FieldAccess | 필드 접근 명령 | 계획 |
+| lower_struct_init() | AST → MIR 변환 | 계획 |
+| LLVM codegen | 구조체 메모리 레이아웃 | 계획 |
+
+**테스트 목표:**
+```bmb
+struct Point { x: i64, y: i64 }
+let p = new Point { x: 10, y: 20 };
+let sum = p.x + p.y;  -- 30
+```
+
+### v0.19.1 - Enum MIR Support
+
+| 구성요소 | 설명 | 상태 |
+|----------|------|------|
+| MirInst::EnumVariant | 열거형 변형 생성 | 계획 |
+| Discriminant handling | 태그 값 관리 | 계획 |
+| Switch terminator | 패턴 매칭용 분기 | 계획 |
+| LLVM codegen | 태그 + 페이로드 레이아웃 | 계획 |
+
+**테스트 목표:**
+```bmb
+enum Option<T> { Some(T), None }
+let opt = Option::Some(42);
+```
+
+### v0.19.2 - Pattern Matching
+
+| 구성요소 | 설명 | 상태 |
+|----------|------|------|
+| Pattern compilation | 패턴 → 분기 변환 | 계획 |
+| Nested patterns | 중첩 패턴 지원 | 계획 |
+| Guard clauses | 조건부 매칭 | 계획 |
+| Exhaustiveness check | 완전성 검사 | 계획 |
+
+**테스트 목표:**
+```bmb
+match opt {
+    Option::Some(v) => v,
+    Option::None => 0,
+}
+```
+
+### v0.19.3 - Array Support
+
+| 구성요소 | 설명 | 상태 |
+|----------|------|------|
+| Array literal lowering | 배열 리터럴 MIR 변환 | 계획 |
+| Array indexing | 인덱스 접근 + 경계 검사 | 계획 |
+| Fixed-size arrays | 고정 크기 배열 | 계획 |
+
+**테스트 목표:**
+```bmb
+let arr = [1, 2, 3, 4, 5];
+let third = arr[2];  -- 3
+```
+
+### v0.19.4 - Method Dispatch
+
+| 구성요소 | 설명 | 상태 |
+|----------|------|------|
+| Method call MIR | 메서드 호출 변환 | 계획 |
+| Receiver resolution | 수신자 타입 해석 | 계획 |
+| Known-type methods | Option/Result 메서드 | 계획 |
+
+**테스트 목표:**
+```bmb
+let x = opt.is_some();
+let val = opt.unwrap_or(0);
+```
+
+### v0.19.5 - Integration Testing
+
+```bash
+# 모든 packages/bmb-* LLVM 빌드
+$ bmb build packages/bmb-option/src/lib.bmb --emit-ir
+$ bmb build packages/bmb-result/src/lib.bmb --emit-ir
+$ bmb build packages/bmb-core/src/lib.bmb --emit-ir
+
+# MIR 검증
+$ bmb check --mir packages/bmb-option/src/lib.bmb
+```
+
+### 기술적 세부사항
+
+**MIR 변경 (`bmb/src/mir/mod.rs`):**
+```rust
+pub enum MirInst {
+    // 기존...
+    StructInit { name: String, fields: Vec<(String, Operand)> },
+    FieldAccess { base: Operand, field: String },
+    EnumVariant { enum_name: String, variant: String, fields: Vec<Operand> },
+    ArrayLit { elements: Vec<Operand> },
+    ArrayIndex { base: Operand, index: Operand },
+}
+```
+
+**예상 LOC:**
+| 모듈 | 변경량 |
+|------|--------|
+| mir/mod.rs | +100-150 |
+| mir/lower.rs | +400-600 |
+| codegen/llvm.rs | +200-300 |
+| codegen/llvm_text.rs | +100-150 |
+
+---
+
+## v0.20 Extend (Language Extensions)
+
+> 목표: Self-Hosting에 필요한 언어 확장 (Closures, Traits, FFI)
+
+### v0.20.0 - Closures
+
+| 구성요소 | 설명 | 상태 |
+|----------|------|------|
+| Lambda syntax | `\|x\| x + 1` 람다 표현식 | 계획 |
+| Capture semantics | 값 캡처 vs 참조 캡처 | 계획 |
+| Closure type inference | 클로저 타입 추론 | 계획 |
+| MIR representation | 클로저 MIR 표현 | 계획 |
+
+**테스트 목표:**
+```bmb
+let add = |x| x + 1;
+let result = add(5);  -- 6
+
+let list = [1, 2, 3];
+let doubled = list.map(|x| x * 2);  -- [2, 4, 6]
+```
+
+### v0.20.1 - Trait Foundation
+
+| 구성요소 | 설명 | 상태 |
+|----------|------|------|
+| trait keyword | 트레이트 정의 문법 | 계획 |
+| impl blocks | 구현 블록 문법 | 계획 |
+| Method resolution | 트레이트 메서드 해석 | 계획 |
+| Basic traits | Clone, Debug, PartialEq | 계획 |
+
+**테스트 목표:**
+```bmb
+trait Show {
+    fn show(self) -> String;
+}
+
+impl Show for i64 {
+    fn show(self) -> String = int_to_string(self);
+}
+```
+
+### v0.20.2 - FFI Enhancement
+
+| 구성요소 | 설명 | 상태 |
+|----------|------|------|
+| extern "C" | C ABI 링킹 | 계획 |
+| ABI handling | 호출 규약 처리 | 계획 |
+| C library interop | libc 상호운용 | 계획 |
+| Pointer safety | 안전한 포인터 처리 | 계획 |
+
+**테스트 목표:**
+```bmb
+extern "C" fn malloc(size: usize) -> *mut u8;
+extern "C" fn free(ptr: *mut u8);
+```
+
+---
+
+## v0.21 Bootstrap (Bootstrap Enhancement)
+
+> 목표: Bootstrap 컴파일러에 Struct/Enum MIR 지원 추가
+
+### v0.21.0 - Bootstrap Struct Support
+
+| 구성요소 | 설명 | 상태 |
+|----------|------|------|
+| bootstrap/lowering.bmb | struct MIR 지원 추가 | 계획 |
+| bootstrap/llvm_ir.bmb | struct LLVM 코드젠 | 계획 |
+| Integration test | Rust compiler 결과 비교 | 계획 |
+
+### v0.21.1 - Bootstrap Enum Support
+
+| 구성요소 | 설명 | 상태 |
+|----------|------|------|
+| bootstrap/lowering.bmb | enum MIR 지원 추가 | 계획 |
+| bootstrap/llvm_ir.bmb | enum LLVM 코드젠 | 계획 |
+| Pattern matching | switch 분기 생성 | 계획 |
+
+### v0.21.2 - Equivalence Testing
+
+```bash
+# Rust compiler vs Bootstrap compiler 결과 비교
+$ bmb build test.bmb --emit-mir > rust_mir.txt
+$ ./bootstrap test.bmb > bootstrap_mir.txt
+$ diff rust_mir.txt bootstrap_mir.txt
+```
+
+---
+
+## v0.22 Mirror (Self-Hosting)
 
 > 목표: 모든 서브모듈 BMB로 재작성 + Stage 2 검증
 
@@ -1295,7 +1532,7 @@ $ gotgan publish bmb-action
 
 ---
 
-## v0.20 Showcase (주요 앱 시나리오 샘플)
+## v0.23 Showcase (주요 앱 시나리오 샘플)
 
 > 목표: 실제 도메인 샘플 애플리케이션 10개
 
@@ -1314,32 +1551,9 @@ $ gotgan publish bmb-action
 | 9 | **bmb-task-runner** | 태스크 러너 | bmb-async, bmb-channel, bmb-log |
 | 10 | **bmb-config-manager** | 설정 관리 | bmb-toml, bmb-yaml, bmb-config |
 
-### 각 샘플 구조
-
-```
-bmb-api-server/
-├── gotgan.toml
-├── src/
-│   ├── main.bmb
-│   ├── routes.bmb
-│   ├── models.bmb
-│   └── db.bmb
-├── tests/
-│   └── api_test.bmb
-└── README.md
-```
-
-### gotgan 등록
-
-```bash
-$ gotgan publish bmb-api-server
-$ gotgan publish bmb-cli-tool
-...
-```
-
 ---
 
-## v0.21 Launch (프로덕션 서비스 런칭)
+## v0.24 Launch (프로덕션 서비스 런칭)
 
 > 목표: 서브모듈을 실제 도메인 서비스로 배포
 
@@ -1494,20 +1708,23 @@ v1.0 이후 보장:
 └── 성능 비회귀 (벤치마크 기준 유지)
 ```
 
-### 릴리스 타임라인 (예상)
+### 릴리스 타임라인 (예상, REVISED)
 
 ```
-v0.13 Forge        ────▶ 2025 Q2
-v0.14 Foundation   ────▶ 2025 Q3
-v0.15 Stream       ────▶ 2025 Q3
-v0.16 Connect      ────▶ 2025 Q4
-v0.17 Parallel     ────▶ 2025 Q4
-v0.18 Persist      ────▶ 2026 Q1
-v0.19 Mirror       ────▶ 2026 Q1
-v0.20 Showcase     ────▶ 2026 Q2
-v0.21 Launch       ────▶ 2026 Q2
-v0.22 Velocity     ────▶ 2026 Q3
-v1.0-RC Golden     ────▶ 2026 Q4
+v0.13 Forge        ────▶ 2025 Q2 ✅
+v0.14 Foundation   ────▶ 2025 Q3 ✅
+v0.15 Generics     ────▶ 2025 Q3 ✅
+v0.16 Consolidate  ────▶ 2025 Q4 ✅
+v0.17 Module       ────▶ 2025 Q4 ✅
+v0.18 Methods      ────▶ 2026 Q1 ✅
+v0.19 Complete     ────▶ 2026 Q1 (MIR Completion)
+v0.20 Extend       ────▶ 2026 Q2 (Language Extensions)
+v0.21 Bootstrap    ────▶ 2026 Q2 (Bootstrap Enhancement)
+v0.22 Mirror       ────▶ 2026 Q3 (Self-Hosting)
+v0.23 Showcase     ────▶ 2026 Q3
+v0.24 Launch       ────▶ 2026 Q4
+v0.25 Velocity     ────▶ 2026 Q4
+v1.0-RC Golden     ────▶ 2027 Q1
 ```
 
 ---
