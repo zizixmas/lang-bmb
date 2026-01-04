@@ -161,6 +161,8 @@ impl TypeChecker {
                 Item::FnDef(_) | Item::ExternFn(_) => {}
                 // v0.5 Phase 4: Use statements are processed at module resolution time
                 Item::Use(_) => {}
+                // v0.20.1: Trait system not yet implemented in type checker
+                Item::TraitDef(_) | Item::ImplBlock(_) => {}
             }
         }
 
@@ -193,6 +195,8 @@ impl TypeChecker {
                         .insert(e.name.node.clone(), (param_tys, e.ret_ty.node.clone()));
                 }
                 Item::StructDef(_) | Item::EnumDef(_) | Item::Use(_) => {}
+                // v0.20.1: Trait system (not yet implemented)
+                Item::TraitDef(_) | Item::ImplBlock(_) => {}
             }
         }
 
@@ -201,6 +205,8 @@ impl TypeChecker {
             match item {
                 Item::FnDef(f) => self.check_fn(f)?,
                 Item::StructDef(_) | Item::EnumDef(_) | Item::Use(_) | Item::ExternFn(_) => {}
+                // v0.20.1: Trait system (not yet implemented)
+                Item::TraitDef(_) | Item::ImplBlock(_) => {}
             }
         }
 

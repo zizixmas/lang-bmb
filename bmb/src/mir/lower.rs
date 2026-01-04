@@ -20,7 +20,9 @@ pub fn lower_program(program: &Program) -> MirProgram {
         .filter_map(|item| match item {
             Item::FnDef(fn_def) => Some(lower_function(fn_def)),
             // Type definitions, use statements, and extern fns don't produce MIR functions
-            Item::StructDef(_) | Item::EnumDef(_) | Item::Use(_) | Item::ExternFn(_) => None,
+            // Type definitions, use statements, extern fns, traits, and impl blocks don't produce MIR functions
+            Item::StructDef(_) | Item::EnumDef(_) | Item::Use(_) | Item::ExternFn(_) |
+            Item::TraitDef(_) | Item::ImplBlock(_) => None,
         })
         .collect();
 

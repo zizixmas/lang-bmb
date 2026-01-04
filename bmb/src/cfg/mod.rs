@@ -76,6 +76,8 @@ impl CfgEvaluator {
             Item::EnumDef(e) => self.evaluate_attrs(&e.attributes),
             Item::Use(_) => true, // Use statements are always included
             Item::ExternFn(e) => self.evaluate_attrs(&e.attributes), // v0.13.0
+            Item::TraitDef(t) => self.evaluate_attrs(&t.attributes), // v0.20.1
+            Item::ImplBlock(i) => self.evaluate_attrs(&i.attributes), // v0.20.1
         }
     }
 

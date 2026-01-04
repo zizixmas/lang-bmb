@@ -48,6 +48,9 @@ extern {
         "?" => Token::Question,
         // v0.20.0: Closure syntax
         "|" => Token::Pipe,
+        // v0.20.1: Trait system
+        "trait" => Token::Trait,
+        "impl" => Token::Impl,
 
         "i32" => Token::TyI32,
         "i64" => Token::TyI64,
@@ -110,6 +113,8 @@ Item: Item = {
     <e:EnumDef> => Item::EnumDef(e),
     <u:UseStmt> => Item::Use(u),
     <e:ExternFnDef> => Item::ExternFn(e),
+    <t:TraitDef> => Item::TraitDef(t),
+    <i:ImplBlock> => Item::ImplBlock(i),
 };
 
 // External function declaration (v0.13.0)
@@ -149,6 +154,137 @@ ExternFnDef: ExternFn = {
         name,
         params,
         ret_ty,
+        span: Span::new(l, r),
+    },
+};
+
+// Trait definition (v0.20.1)
+// Syntax: trait Name { fn method(self) -> Type; }
+TraitDef: TraitDef = {
+    // With attributes and type params
+    <l:@L> <attrs:Attr+> <vis:Visibility> "trait" <name:Ident> <type_params:TypeParams> "{" <methods:TraitMethods> "}" <r:@R> => TraitDef {
+        attributes: attrs,
+        visibility: vis,
+        name,
+        type_params,
+        methods,
+        span: Span::new(l, r),
+    },
+    // With attributes, no type params
+    <l:@L> <attrs:Attr+> <vis:Visibility> "trait" <name:Ident> "{" <methods:TraitMethods> "}" <r:@R> => TraitDef {
+        attributes: attrs,
+        visibility: vis,
+        name,
+        type_params: vec![],
+        methods,
+        span: Span::new(l, r),
+    },
+    // Without attributes, with type params
+    <l:@L> <vis:Visibility> "trait" <name:Ident> <type_params:TypeParams> "{" <methods:TraitMethods> "}" <r:@R> => TraitDef {
+        attributes: vec![],
+        visibility: vis,
+        name,
+        type_params,
+        methods,
+        span: Span::new(l, r),
+    },
+    // Without attributes, no type params
+    <l:@L> <vis:Visibility> "trait" <name:Ident> "{" <methods:TraitMethods> "}" <r:@R> => TraitDef {
+        attributes: vec![],
+        visibility: vis,
+        name,
+        type_params: vec![],
+        methods,
+        span: Span::new(l, r),
+    },
+};
+
+TraitMethods: Vec<TraitMethod> = {
+    <v:TraitMethod*> => v,
+};
+
+// Trait method signature: fn name(params) -> Type;
+TraitMethod: TraitMethod = {
+    <l:@L> "fn" <name:Ident> "(" <params:Params> ")" "->" <ret_ty:SpannedType> ";" <r:@R> => TraitMethod {
+        name,
+        params,
+        ret_ty,
+        span: Span::new(l, r),
+    },
+};
+
+// Impl block (v0.20.1)
+// Syntax: impl Trait for Type { fn method(...) = body; }
+// Note: Uses ImplTargetType (named types only) to avoid ambiguity with refinement types
+ImplBlock: ImplBlock = {
+    // With attributes and type params
+    <l:@L> <attrs:Attr+> "impl" <type_params:TypeParams> <trait_name:Ident> "for" <target:ImplTargetType> "{" <methods:ImplMethods> "}" <r:@R> => ImplBlock {
+        attributes: attrs,
+        type_params,
+        trait_name,
+        target_type: target,
+        methods,
+        span: Span::new(l, r),
+    },
+    // With attributes, no type params
+    <l:@L> <attrs:Attr+> "impl" <trait_name:Ident> "for" <target:ImplTargetType> "{" <methods:ImplMethods> "}" <r:@R> => ImplBlock {
+        attributes: attrs,
+        type_params: vec![],
+        trait_name,
+        target_type: target,
+        methods,
+        span: Span::new(l, r),
+    },
+    // Without attributes, with type params
+    <l:@L> "impl" <type_params:TypeParams> <trait_name:Ident> "for" <target:ImplTargetType> "{" <methods:ImplMethods> "}" <r:@R> => ImplBlock {
+        attributes: vec![],
+        type_params,
+        trait_name,
+        target_type: target,
+        methods,
+        span: Span::new(l, r),
+    },
+    // Without attributes, no type params
+    <l:@L> "impl" <trait_name:Ident> "for" <target:ImplTargetType> "{" <methods:ImplMethods> "}" <r:@R> => ImplBlock {
+        attributes: vec![],
+        type_params: vec![],
+        trait_name,
+        target_type: target,
+        methods,
+        span: Span::new(l, r),
+    },
+};
+
+// Impl target type: named types and generics only (no primitives to avoid ambiguity)
+ImplTargetType: Spanned<Type> = {
+    // Generic type: Container<T>
+    <l:@L> <name:RawIdent> "<" <args:TypeArgList> ">" <r:@R> => Spanned::new(
+        Type::Generic { name, type_args: args },
+        Span::new(l, r)
+    ),
+    // Named type
+    <l:@L> <name:RawIdent> <r:@R> => Spanned::new(Type::Named(name), Span::new(l, r)),
+};
+
+ImplMethods: Vec<FnDef> = {
+    <v:ImplFnDef*> => v,
+};
+
+// Impl method: fn name(params) -> Type = body;
+// Similar to FnDef but simplified (no pre/post/contracts for now)
+ImplFnDef: FnDef = {
+    <l:@L> "fn" <name:Ident> "(" <params:Params> ")" "->" <ret_ty:SpannedType> "=" <body:SpannedExpr> ";" <r:@R> => FnDef {
+        attributes: vec![],
+        visibility: Visibility::Private,
+        name,
+        type_params: vec![],
+        params,
+        ret_name: None,
+        ret_ty,
+        pre: None,
+        post: None,
+        contracts: vec![],
+        body,
         span: Span::new(l, r),
     },
 };
@@ -533,6 +669,11 @@ Type: Type = {
         constraints,
     },
     // Plain types (without refinement)
+    PlainType,
+};
+
+// Plain types without refinement (used in impl targets to avoid ambiguity)
+PlainType: Type = {
     "i32" => Type::I32,
     "i64" => Type::I64,
     "f64" => Type::F64,
@@ -548,6 +689,11 @@ Type: Type = {
     <name:RawIdent> "<" <args:TypeArgList> ">" => Type::Generic { name, type_args: args },
     // Named type or type variable (resolved later by type checker)
     <name:RawIdent> => Type::Named(name),
+};
+
+// Spanned plain type (for impl target)
+SpannedPlainType: Spanned<Type> = {
+    <l:@L> <t:PlainType> <r:@R> => Spanned::new(t, Span::new(l, r)),
 };
 
 // Expressions with span

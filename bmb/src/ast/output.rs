@@ -5,7 +5,7 @@
 use super::expr::{BinOp, Expr, LiteralPattern, Pattern, RangeKind, StateKind, UnOp};
 use super::types::Type;
 use super::{
-    EnumDef, ExternFn, FnDef, Item, Program, StructDef, UseStmt, Visibility,
+    EnumDef, ExternFn, FnDef, ImplBlock, Item, Program, StructDef, TraitDef, UseStmt, Visibility,
 };
 
 /// Format AST as S-expression (Lisp-like notation)
@@ -30,6 +30,8 @@ fn format_item(item: &Item, level: usize) -> String {
         Item::EnumDef(e) => format_enum_def(e, level),
         Item::ExternFn(e) => format_extern_fn(e, level),
         Item::Use(u) => format_use_stmt(u, level),
+        Item::TraitDef(t) => format_trait_def(t, level),
+        Item::ImplBlock(i) => format_impl_block(i, level),
     }
 }
 
@@ -187,6 +189,48 @@ fn format_use_stmt(u: &UseStmt, level: usize) -> String {
         .collect::<Vec<_>>()
         .join("::");
     format!("{}(use {})\n", ind, path_str)
+}
+
+// v0.20.1: Trait definition formatting
+fn format_trait_def(t: &TraitDef, level: usize) -> String {
+    let ind = indent(level);
+    let methods = t
+        .methods
+        .iter()
+        .map(|m| {
+            let params = m
+                .params
+                .iter()
+                .map(|p| format!("({} {})", p.name.node, format_type(&p.ty.node)))
+                .collect::<Vec<_>>()
+                .join(" ");
+            format!("{}  (fn {} ({}) -> {})", ind, m.name.node, params, format_type(&m.ret_ty.node))
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "{}(trait {}\n{})\n",
+        ind, t.name.node, methods
+    )
+}
+
+// v0.20.1: Impl block formatting
+fn format_impl_block(i: &ImplBlock, level: usize) -> String {
+    let ind = indent(level);
+    let methods = i
+        .methods
+        .iter()
+        .map(|m| format_fn_def(m, level + 1))
+        .collect::<Vec<_>>()
+        .join("");
+    format!(
+        "{}(impl {} for {}\n{}{})\n",
+        ind,
+        i.trait_name.node,
+        format_type(&i.target_type.node),
+        methods,
+        ind
+    )
 }
 
 fn format_type(ty: &Type) -> String {

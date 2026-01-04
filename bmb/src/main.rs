@@ -682,6 +682,31 @@ fn format_program(program: &bmb::ast::Program) -> String {
                 output.push_str(&params.join(", "));
                 output.push_str(&format!(") -> {};", format_type(&e.ret_ty.node)));
             }
+            // v0.20.1: Format trait definitions
+            Item::TraitDef(t) => {
+                if t.visibility == Visibility::Public {
+                    output.push_str("pub ");
+                }
+                output.push_str(&format!("trait {} {{\n", t.name.node));
+                for method in &t.methods {
+                    let params: Vec<_> = method.params.iter()
+                        .map(|p| format!("{}: {}", p.name.node, format_type(&p.ty.node)))
+                        .collect();
+                    output.push_str(&format!("    fn {}({}) -> {};\n",
+                        method.name.node, params.join(", "), format_type(&method.ret_ty.node)));
+                }
+                output.push_str("}");
+            }
+            // v0.20.1: Format impl blocks
+            Item::ImplBlock(i) => {
+                output.push_str(&format!("impl {} for {} {{\n", i.trait_name.node, format_type(&i.target_type.node)));
+                for method in &i.methods {
+                    output.push_str("    ");
+                    output.push_str(&format_fn_def(method));
+                    output.push('\n');
+                }
+                output.push_str("}");
+            }
         }
     }
 

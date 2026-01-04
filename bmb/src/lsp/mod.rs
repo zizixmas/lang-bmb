@@ -66,6 +66,8 @@ enum SymbolKind {
     Enum,
     Variable,
     Parameter,
+    Trait,   // v0.20.1
+    Method,  // v0.20.1
 }
 
 /// Document state
@@ -183,6 +185,25 @@ impl Backend {
                         kind: SymbolKind::Function,
                         span: e.name.span,
                     });
+                }
+                // v0.20.1: Trait definitions
+                Item::TraitDef(t) => {
+                    definitions.push(SymbolDef {
+                        name: t.name.node.clone(),
+                        kind: SymbolKind::Trait,
+                        span: t.name.span,
+                    });
+                }
+                // v0.20.1: Impl blocks - register methods
+                Item::ImplBlock(i) => {
+                    for method in &i.methods {
+                        definitions.push(SymbolDef {
+                            name: method.name.node.clone(),
+                            kind: SymbolKind::Method,
+                            span: method.name.span,
+                        });
+                        self.collect_expr_refs(&method.body.node, &mut references);
+                    }
                 }
             }
         }
@@ -823,6 +844,29 @@ fn format_program(program: &Program) -> String {
                     .collect();
                 output.push_str(&params.join(", "));
                 output.push_str(&format!(") -> {};", format_type(&e.ret_ty.node)));
+            }
+            // v0.20.1: Format trait definitions
+            Item::TraitDef(t) => {
+                if t.visibility == Visibility::Public {
+                    output.push_str("pub ");
+                }
+                output.push_str(&format!("trait {} {{\n", t.name.node));
+                for method in &t.methods {
+                    let params: Vec<_> = method.params.iter()
+                        .map(|p| format!("{}: {}", p.name.node, format_type(&p.ty.node)))
+                        .collect();
+                    output.push_str(&format!("    fn {}({}) -> {};\n",
+                        method.name.node, params.join(", "), format_type(&method.ret_ty.node)));
+                }
+                output.push_str("}");
+            }
+            // v0.20.1: Format impl blocks
+            Item::ImplBlock(i) => {
+                output.push_str(&format!("impl {} for {} {{\n", i.trait_name.node, format_type(&i.target_type.node)));
+                for method in &i.methods {
+                    output.push_str(&format!("    {}\n", format_fn_def(method).trim()));
+                }
+                output.push_str("}");
             }
         }
     }

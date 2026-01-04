@@ -79,6 +79,9 @@ impl Interpreter {
                 crate::ast::Item::Use(_) => {}
                 // v0.13.0: Extern functions are handled at compile time (FFI)
                 crate::ast::Item::ExternFn(_) => {}
+                // v0.20.1: Trait system not yet supported in interpreter
+                crate::ast::Item::TraitDef(_) => {}
+                crate::ast::Item::ImplBlock(_) => {}
             }
         }
     }
@@ -105,6 +108,8 @@ impl Interpreter {
                 crate::ast::Item::Use(_) => Ok(Value::Unit),
                 // v0.13.0: Extern functions don't produce values (FFI declarations)
                 crate::ast::Item::ExternFn(_) => Ok(Value::Unit),
+                // v0.20.1: Trait system doesn't produce values
+                crate::ast::Item::TraitDef(_) | crate::ast::Item::ImplBlock(_) => Ok(Value::Unit),
             }
         } else {
             Ok(Value::Unit)

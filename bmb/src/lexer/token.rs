@@ -74,6 +74,11 @@ pub enum Token {
     // v0.13.2: Error propagation
     #[token("try")]
     Try,
+    // v0.20.1: Trait system
+    #[token("trait")]
+    Trait,
+    #[token("impl")]
+    Impl,
 
     // Type keywords
     #[token("i32")]
@@ -212,6 +217,8 @@ impl std::fmt::Display for Token {
             Token::It => write!(f, "it"),
             Token::Extern => write!(f, "extern"),
             Token::Try => write!(f, "try"),
+            Token::Trait => write!(f, "trait"),
+            Token::Impl => write!(f, "impl"),
             Token::TyI32 => write!(f, "i32"),
             Token::TyI64 => write!(f, "i64"),
             Token::TyF64 => write!(f, "f64"),

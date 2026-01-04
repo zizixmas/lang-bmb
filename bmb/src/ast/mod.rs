@@ -42,6 +42,10 @@ pub enum Item {
     Use(UseStmt),
     /// External function declaration (v0.13.0): extern fn name(...) -> Type;
     ExternFn(ExternFn),
+    /// Trait definition (v0.20.1): trait Name { fn method(...) -> Type; }
+    TraitDef(TraitDef),
+    /// Impl block (v0.20.1): impl Trait for Type { ... }
+    ImplBlock(ImplBlock),
 }
 
 /// Use statement (v0.5 Phase 4)
@@ -71,6 +75,56 @@ pub struct ExternFn {
     pub params: Vec<Param>,
     /// Return type
     pub ret_ty: Spanned<Type>,
+    /// Span
+    pub span: Span,
+}
+
+/// Trait definition (v0.20.1)
+/// Syntax: trait Name { fn method(self) -> Type; }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TraitDef {
+    /// Attributes
+    pub attributes: Vec<Attribute>,
+    /// Visibility
+    pub visibility: Visibility,
+    /// Trait name
+    pub name: Spanned<String>,
+    /// Type parameters (if any): trait Container<T> { ... }
+    pub type_params: Vec<TypeParam>,
+    /// Trait method signatures (without bodies)
+    pub methods: Vec<TraitMethod>,
+    /// Span
+    pub span: Span,
+}
+
+/// Trait method signature (v0.20.1)
+/// Method declaration in a trait (without body)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TraitMethod {
+    /// Method name
+    pub name: Spanned<String>,
+    /// Parameters (first is typically `self`)
+    pub params: Vec<Param>,
+    /// Return type
+    pub ret_ty: Spanned<Type>,
+    /// Span
+    pub span: Span,
+}
+
+/// Impl block (v0.20.1)
+/// Syntax: impl Trait for Type { fn method(self) -> Type = body; }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImplBlock {
+    /// Attributes
+    pub attributes: Vec<Attribute>,
+    /// Type parameters (if any): impl<T> Trait for Container<T>
+    pub type_params: Vec<TypeParam>,
+    /// Trait being implemented
+    pub trait_name: Spanned<String>,
+    /// Target type (the type implementing the trait)
+    pub target_type: Spanned<Type>,
+    /// Method implementations
+    pub methods: Vec<FnDef>,
     /// Span
     pub span: Span,
 }
