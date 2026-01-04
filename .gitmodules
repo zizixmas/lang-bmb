@@ -22,3 +22,6 @@
 [submodule "ecosystem/lang-bmb-site"]
 	path = ecosystem/lang-bmb-site
 	url = https://github.com/lang-bmb/lang-bmb-site
+[submodule "ecosystem/gotgan-packages"]
+	path = ecosystem/gotgan-packages
+	url = https://github.com/lang-bmb/gotgan-packages

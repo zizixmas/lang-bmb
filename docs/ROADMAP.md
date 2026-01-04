@@ -74,11 +74,37 @@ v0.MAJOR.MINOR
 |------------|------|-----------|------------|-------------|
 | lang-bmb | 메인 컴파일러 | v0.1 ✅ | v0.22 | - |
 | gotgan | 패키지 매니저 | v0.8 ✅ | v0.22 | gotgan.bmb.dev |
+| gotgan-packages | 추가 패키지 저장소 | - | v0.26+ | gotgan.bmb.dev |
 | action-bmb | GitHub Action | v0.7 ✅ | v0.22 | - |
 | bmb-samples | 예제 프로그램 | - | v0.23 | - |
 | benchmark-bmb | 표준 벤치마크 | v0.9 ✅ | v0.15 | bench.bmb.dev |
 | playground | 온라인 플레이그라운드 | - | v0.24 | play.bmb.dev |
 | lang-bmb-site | 공식 웹사이트 | - | v0.24 | bmb.dev |
+
+### gotgan-packages 가이드라인
+
+> stdlib 외 모든 패키지는 gotgan-packages에서 개발 및 관리
+
+| 원칙 | 설명 |
+|------|------|
+| **패키지 분리** | stdlib = 컴파일러 내장, gotgan-packages = 추가 라이브러리 |
+| **재사용 코드 패키지화** | 개발 중 재사용 코드는 패키지로 분리하여 정리 |
+| **gotgan 게시** | 완성된 패키지는 gotgan 레지스트리에 게시 |
+| **Rust 마이그레이션** | 인기 Rust 라이브러리 상위 100+, 200+ BMB 포팅 예정 |
+
+### Rust 인기 라이브러리 마이그레이션 계획
+
+| 단계 | 수량 | 대상 라이브러리 (crates.io 상위) |
+|------|------|----------------------------------|
+| Phase 1 | 20개 | serde, tokio, rand, regex, clap, log, thiserror, anyhow, chrono, reqwest |
+| Phase 2 | 30개 | itertools, rayon, parking_lot, crossbeam, bytes, uuid, once_cell, tracing |
+| Phase 3 | 50개 | async-trait, futures, hyper, tower, axum, sqlx, sea-orm, diesel |
+| Phase 4 | 100+개 | 나머지 인기 라이브러리 순차 마이그레이션 |
+
+**마이그레이션 원칙**:
+- API 호환성 유지 (Rust 사용자 친숙함)
+- BMB 계약 시스템 적극 활용 (타입 안전성 강화)
+- 성능 동등 또는 개선 목표
 
 ---
 
