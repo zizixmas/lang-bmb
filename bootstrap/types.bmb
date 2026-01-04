@@ -24,6 +24,7 @@
 -- - v0.30.5: Add generic type application encoding (Vec<T>, Option<T>, etc.)
 -- - v0.30.6: Add type argument tracking (string-based full type info)
 -- - v0.30.7: Add type substitution for generic instantiation
+-- - v0.30.8: Add generic instantiation integration (validate, resolve, encode)
 --
 -- LIMITATIONS:
 -- - Fixed max 64 variables in scope
@@ -321,6 +322,63 @@ fn subst_build_from(tparams: String, targs: String, ppos: i64, apos: i64, result
         let next_ppos = if pend >= tparams.len() then tparams.len() else pend + 1;
         let next_apos = if aend >= targs.len() then targs.len() else aend + 1;
         subst_build_from(tparams, targs, next_ppos, next_apos, new_result);
+
+-- ============================================================================
+-- v0.30.8: Generic Instantiation Integration
+-- ============================================================================
+-- Higher-level functions that integrate substitution with type checking
+-- These bridge generic type definitions and their usage
+
+-- Instantiate a generic type with concrete type arguments
+-- base: "Box", tparams: "T", targs: "i64" -> creates "Box:i64" info with subst
+fn instantiate_generic(base: String, tparams: String, targs: String) -> String =
+    let subst = subst_from_params_args(tparams, targs);
+    let info = gen_type_pack(base, targs);
+    info;
+
+-- Get the substitution for a generic instantiation
+fn get_instantiation_subst(tparams: String, targs: String) -> String =
+    subst_from_params_args(tparams, targs);
+
+-- Resolve a field's type using substitution
+-- field_type: "T" or "i64" or "Vec:T"
+-- subst: "T=i64"
+-- Returns: resolved type name string
+fn resolve_field_type(field_type: String, subst: String) -> String =
+    -- Check if it's a generic type (contains colon)
+    let colon = gen_find_colon(field_type, 0);
+    if colon < 0 then
+        -- Simple type: apply direct substitution
+        subst_apply(subst, field_type)
+    else
+        -- Generic type: apply to the whole thing
+        subst_apply_gen(subst, field_type);
+
+-- Check if type arguments match type parameter count
+fn check_arity(tparams: String, targs: String) -> bool =
+    let param_count = if tparams.len() == 0 then 0
+                      else gen_count_args(tparams, 0, 1);
+    let arg_count = if targs.len() == 0 then 0
+                    else gen_count_args(targs, 0, 1);
+    param_count == arg_count;
+
+-- Validate that a type application is well-formed
+-- Returns empty string if valid, error message otherwise
+fn validate_type_app(base: String, tparams: String, targs: String) -> String =
+    if check_arity(tparams, targs) then ""
+    else "ERR:Type argument count mismatch";
+
+-- Create instantiated type i64 encoding
+-- Uses type_generic_app with hash of the base name
+fn encode_instantiated_type(base: String) -> i64 =
+    type_generic_app(name_hash_mod(base, 1000));
+
+-- Full instantiation: validate, create subst, return encoded type
+-- Returns type_error() if validation fails
+fn instantiate_type(base: String, tparams: String, targs: String) -> i64 =
+    let err = validate_type_app(base, tparams, targs);
+    if err.len() > 0 then type_error()
+    else encode_instantiated_type(base);
 
 -- Extract type kind from encoded type
 fn type_kind(ty: i64) -> i64 = ty / 1000;
@@ -1348,6 +1406,75 @@ fn test_subst_from_params() -> i64 =
 
     r1 + r2 + r3 + r4 + r5 + r6;
 
+-- v0.30.8: Instantiation integration tests
+fn test_instantiate_generic() -> i64 =
+    -- Basic instantiation: Box<i64>
+    let info1 = instantiate_generic("Box", "T", "i64");
+    let r1 = if gen_type_base(info1) == "Box" then 1 else 0;
+    let r2 = if gen_type_arg_at(info1, 0) == "i64" then 1 else 0;
+
+    -- Multi-param: Map<String, i64>
+    let info2 = instantiate_generic("Map", "K,V", "String,i64");
+    let r3 = if gen_type_base(info2) == "Map" then 1 else 0;
+    let r4 = if gen_type_arg_at(info2, 0) == "String" then 1 else 0;
+    let r5 = if gen_type_arg_at(info2, 1) == "i64" then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5;
+
+fn test_resolve_field_type() -> i64 =
+    let subst = "T=i64,U=String";
+
+    -- Simple type param resolution
+    let r1 = if resolve_field_type("T", subst) == "i64" then 1 else 0;
+    let r2 = if resolve_field_type("U", subst) == "String" then 1 else 0;
+
+    -- Non-param type stays unchanged
+    let r3 = if resolve_field_type("bool", subst) == "bool" then 1 else 0;
+    let r4 = if resolve_field_type("i32", subst) == "i32" then 1 else 0;
+
+    -- Generic field type: Vec:T -> Vec:i64
+    let vec_t = gen_type_pack("Vec", "T");
+    let resolved = resolve_field_type(vec_t, subst);
+    let r5 = if gen_type_base(resolved) == "Vec" then 1 else 0;
+    let r6 = if gen_type_arg_at(resolved, 0) == "i64" then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5 + r6;
+
+fn test_check_arity() -> i64 =
+    -- Matching arity
+    let r1 = if check_arity("T", "i64") then 1 else 0;
+    let r2 = if check_arity("T,U", "i64,String") then 1 else 0;
+    let r3 = if check_arity("A,B,C", "i64,bool,String") then 1 else 0;
+
+    -- Empty params and args
+    let r4 = if check_arity("", "") then 1 else 0;
+
+    -- Mismatched arity
+    let r5 = if check_arity("T", "i64,String") then 0 else 1;
+    let r6 = if check_arity("T,U", "i64") then 0 else 1;
+
+    r1 + r2 + r3 + r4 + r5 + r6;
+
+fn test_instantiate_type() -> i64 =
+    -- Valid instantiation
+    let ty1 = instantiate_type("Box", "T", "i64");
+    let r1 = if is_generic_app(ty1) then 1 else 0;
+    let r2 = if is_error(ty1) then 0 else 1;
+
+    -- Another valid instantiation
+    let ty2 = instantiate_type("Map", "K,V", "String,i64");
+    let r3 = if is_generic_app(ty2) then 1 else 0;
+
+    -- Invalid: arity mismatch
+    let ty3 = instantiate_type("Box", "T", "i64,String");
+    let r4 = if is_error(ty3) then 1 else 0;
+
+    -- Invalid: too few args
+    let ty4 = instantiate_type("Map", "K,V", "String");
+    let r5 = if is_error(ty4) then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5;
+
 -- Main test runner
 fn main() -> i64 =
     let u0 = println(777);  -- Start marker
@@ -1445,10 +1572,23 @@ fn main() -> i64 =
     let t29 = test_subst_from_params();
     let p29 = println(t29);  -- Expected: 6
 
+    -- v0.30.8: Instantiation integration tests
+    let t30 = test_instantiate_generic();
+    let p30 = println(t30);  -- Expected: 5
+
+    let t31 = test_resolve_field_type();
+    let p31 = println(t31);  -- Expected: 6
+
+    let t32 = test_check_arity();
+    let p32 = println(t32);  -- Expected: 6
+
+    let t33 = test_instantiate_type();
+    let p33 = println(t33);  -- Expected: 5
+
     let u1 = println(888);  -- Separator
 
-    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29;
-    let u2 = println(total);  -- Expected: 163
+    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33;
+    let u2 = println(total);  -- Expected: 185
 
     let u3 = println(999);  -- End marker
     total;

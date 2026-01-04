@@ -165,10 +165,11 @@ Gap to Close:
 - ✅ Generic type application encoding (v0.30.5: kind=11, type_vec, type_option)
 - ✅ Type argument tracking (v0.30.6: gen_type_pack, gen_type_arg_at)
 - ✅ Type substitution (v0.30.7: subst_apply, subst_apply_gen, subst_from_params_args)
+- ✅ Generic instantiation integration (v0.30.8: instantiate_type, resolve_field_type)
 
 ### What Bootstrap CANNOT Do Yet
 
-- ⚠️ Generic type instantiation (substitution ready, integration pending)
+- ⚠️ Generic type checking (instantiation ready, full integration pending)
 - ❌ Trait implementation dispatch
 - ❌ Closure capture and codegen
 - ❌ FFI linking

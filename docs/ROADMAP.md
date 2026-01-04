@@ -250,6 +250,15 @@ v0.MAJOR.MINOR
 - `subst_from_params_args`: Build substitution from type params and args
 - 5 new test functions, 28 assertions (163 total in types.bmb)
 
+**v0.30.8 Completed (2026-01-04)**:
+- `instantiate_generic`: Create instantiated type info (Box, T, i64 → Box:i64)
+- `get_instantiation_subst`: Build substitution for instantiation
+- `resolve_field_type`: Resolve field types using substitution (T → i64, Vec:T → Vec:i64)
+- `check_arity`: Validate type argument count matches parameters
+- `validate_type_app`: Check well-formedness of type applications
+- `instantiate_type`: Full instantiation with validation and encoding
+- 4 new test functions, 22 assertions (185 total in types.bmb)
+
 **Deliverables**:
 - Bootstrap compiler can type-check generic code
 - Trait dispatch works in bootstrap
