@@ -105,7 +105,7 @@ v0.MAJOR.MINOR
 | v0.25 | **Query** | AI Query System (RFC-0001) | ✅ 완료 (v0.25.0-1) |
 | v0.26 | **Launch** | 서브모듈 완성 + 서비스 런칭 | ✅ 완료 (v0.26.0) |
 | v0.27 | **Registry** | gotgan 로컬 레지스트리 | ✅ 완료 (v0.27.0) |
-| v0.28 | **Benchmark** | C/Rust/BMB 벤치마크 스위트 완성 | 계획 |
+| v0.28 | **Benchmark** | C/Rust/BMB 벤치마크 스위트 완성 | ✅ 완료 (v0.28.0) |
 | v0.29 | **Velocity** | C/Rust 성능 추월 스프린트 | 계획 |
 | v0.30 | **Pure** | Rust 코드 완전 제거 (Self-Hosting 완료) | 계획 |
 | v0.31 | **Docs** | 문서화 완성 + 웹사이트 런칭 | 계획 |
@@ -2230,23 +2230,34 @@ jobs:
 
 ---
 
-## v0.28 Benchmark (C/Rust/BMB 벤치마크 스위트)
+## v0.28 Benchmark (C/Rust/BMB 벤치마크 스위트) ✅
 
 > 목표: 업계 표준 벤치마크 완성 + 계약 기반 최적화 검증
+> **완료**: 2026-01-04 | 12개 벤치마크, 3개 언어 (C, Rust, BMB)
 
 ### 벤치마크 스위트 완성
 
-| Category | Benchmark | C | Rust | BMB | 상태 |
-|----------|-----------|---|------|-----|------|
-| Compute | fibonacci | ✅ | ✅ | ✅ | 완료 |
-| Compute | n-body | ✅ | ✅ | 🔧 | 진행중 |
-| Compute | mandelbrot | ✅ | ✅ | ⬜ | 계획 |
-| Compute | spectral-norm | ✅ | ✅ | ⬜ | 계획 |
-| Compute | binary-trees | ✅ | ✅ | ⬜ | 계획 |
-| Contract | bounds-check | ✅ | ✅ | ✅ | 완료 |
-| Contract | null-check | ✅ | ✅ | ⬜ | 계획 |
-| Real | json-parse | ✅ | ✅ | ⬜ | 계획 |
-| Real | http-server | ✅ | ✅ | ⬜ | 계획 |
+| Category | Benchmark | C | Rust | BMB | Description |
+|----------|-----------|---|------|-----|-------------|
+| Compute | fibonacci | ✅ | ✅ | ✅ | Recursive function calls, integer ops |
+| Compute | n_body | ✅ | ✅ | ✅ | N-body simulation (fixed-point) |
+| Compute | mandelbrot | ✅ | ✅ | ✅ | Fractal generation, fixed-point math |
+| Compute | spectral_norm | ✅ | ✅ | ✅ | Matrix operations, linear algebra |
+| Compute | binary_trees | ✅ | ✅ | ✅ | Memory allocation, recursion |
+| Compute | fannkuch | ✅ | ✅ | ✅ | Permutation generation, array ops |
+| Contract | bounds_check | ✅ | ✅ | ✅ | pre로 경계검사 제거 (10-30% 향상) |
+| Contract | null_check | ✅ | ✅ | ✅ | Option<T> + contracts로 null 검사 제거 |
+| Contract | purity_opt | ✅ | ✅ | ✅ | 순수성 기반 CSE, 메모이제이션 |
+| Contract | aliasing | ✅ | ✅ | ✅ | 소유권으로 aliasing 증명 → SIMD 활성화 |
+| Real | json_parse | ✅ | ✅ | ✅ | JSON 파싱, 문자열 처리 |
+| Real | sorting | ✅ | ✅ | ✅ | 정렬 알고리즘 비교 |
+
+### 구현 내용
+
+- **Rust 구현 추가**: 12개 벤치마크에 Rust 버전 완성
+- **Runner 업데이트**: Rust 컴파일 지원 (rustc -C opt-level=3 -C lto=fat)
+- **GitHub Actions CI**: 자동화된 벤치마크 실행 및 회귀 감지
+- **문서화**: README.md v0.3 업데이트
 
 ### 벤치마크 인프라
 
@@ -2483,8 +2494,8 @@ v1.0 이후 보장:
 v0.13-v0.24   ────▶ 2025-2026 Q1 ✅ (언어 완성 + Bootstrap)
 v0.25 Query   ────▶ 2026 Q1 ✅ (AI Query System)
 v0.26 Launch  ────▶ 2026 Q1 ✅ (서브모듈 완성)
-v0.27 Registry ───▶ 2026 Q2 (로컬 레지스트리)
-v0.28 Benchmark ──▶ 2026 Q3 (벤치마크 스위트)
+v0.27 Registry ───▶ 2026 Q1 ✅ (로컬 레지스트리)
+v0.28 Benchmark ──▶ 2026 Q1 ✅ (벤치마크 스위트)
 v0.29 Velocity ───▶ 2026 Q3 (성능 최적화)
 v0.30 Pure ★  ────▶ 2026 Q4 (Rust 완전 제거)
 v0.31 Docs    ────▶ 2027 Q1 (문서화 완성)
