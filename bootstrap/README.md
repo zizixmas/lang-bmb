@@ -48,7 +48,7 @@ Recursive descent parser that validates BMB syntax.
 999 (end marker)
 ```
 
-### parser_ast.bmb (45KB) - v0.30.1
+### parser_ast.bmb (48KB) - v0.30.2
 Parser that produces S-expression AST representation.
 
 **Features (v0.22):**
@@ -65,6 +65,13 @@ Parser that produces S-expression AST representation.
 - Generic types in return: `fn bar() -> Option<i64>`
 - Generic types in struct fields: `struct Foo { items: Vec<i64> }`
 
+**Features (v0.30.2):**
+- Type parameter declarations: `struct Box<T> { value: T }`
+- Multi-param generics: `struct Pair<K, V> { key: K, val: V }`
+- Generic enum definitions: `enum Option<T> { Some(T), None }`
+- Generic function definitions: `fn identity<T>(x: T) -> T = x;`
+- 39 tests (6 new for type parameter parsing)
+
 **AST Format:**
 ```lisp
 (program
@@ -72,6 +79,7 @@ Parser that produces S-expression AST representation.
   (struct <name> (fields (field <fname> type)...))
   (enum <name> (variants (variant <vname>) (variant <vname> type)...))
   (type_app <TypeName> (Arg1 Arg2 ...)))  ; v0.30.1: Generic type application
+  (type_params <T> <U> ...))              ; v0.30.2: Type parameter declarations
 
 ; Examples:
 (fn <add> (params (p <x> i64) (p <y> i64)) i64 (op + (var <x>) (var <y>)))
@@ -79,7 +87,10 @@ Parser that produces S-expression AST representation.
 (let <name> (value) (body))
 (call <name> (arg1) (arg2)...)
 (struct <Point> (fields (field <x> i64) (field <y> i64)))
+(struct <Box> (type_params <T>) (fields (field <value> T)))  ; v0.30.2
 (enum <Option> (variants (variant <Some> i64) (variant <None>)))
+(enum <Option> (type_params <T>) (variants (variant <Some> T) (variant <None>)))  ; v0.30.2
+(fn <identity> (type_params <T>) (params (p <x> T)) T (var <x>))  ; v0.30.2
 (new <Point> (x (int 10)) (y (int 20)))
 (field (var <p>) <x>)
 (match (var <x>) (arms (arm (pattern <Some> <v>) (var <v>)) (arm (pattern <None>) (int 0))))

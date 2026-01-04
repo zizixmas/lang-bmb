@@ -159,6 +159,7 @@ Gap to Close:
 - ✅ Support function calls
 - ✅ Basic struct and enum operations
 - ✅ Parse generic type applications (v0.30.1: Vec<T>, Map<K,V>)
+- ✅ Parse type parameter declarations (v0.30.2: struct Foo<T>, fn bar<T>)
 
 ### What Bootstrap CANNOT Do Yet
 
