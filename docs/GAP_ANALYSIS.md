@@ -174,6 +174,7 @@ Gap to Close:
 - ✅ Enum registry (v0.30.14: enum_reg_add, enum_reg_lookup, enum_reg_variant_type)
 - ✅ Function registry (v0.30.15: fn_reg_add, fn_reg_lookup, fn_reg_return_type)
 - ✅ Type environment (v0.30.16: tenv_new, tenv_add_*, tenv_*_field_type)
+- ✅ Call site type checking (v0.30.17: tenv_check_fn_call, tenv_infer_fn_call)
 
 ### What Bootstrap CANNOT Do Yet
 
@@ -288,11 +289,11 @@ $ diff stage2/bmb stage3/bmb
 
 v0.30 "Pure" represents the culmination of the BMB self-hosting journey. With Stage 1/2 verification complete and the bootstrap covering the full compilation pipeline, the remaining work is substantial but achievable within the 2026 Q4 timeline.
 
-**Key Metrics** (as of v0.30.16):
+**Key Metrics** (as of v0.30.17):
 - Rust code to remove: ~21,783 LOC
 - BMB bootstrap code: ~9,924 LOC (46% coverage)
 - Gap to close: ~12,916 LOC additional BMB
-- Bootstrap tests passing: 389 tests (types.bmb)
+- Bootstrap tests passing: 406 tests (types.bmb)
 - Estimated effort: 6-9 months
 
 ---

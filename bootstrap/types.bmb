@@ -1739,6 +1739,63 @@ fn tenv_resolve_tparam(tenv: String, name: String) -> i64 =
     tparam_resolve(tparams, name);
 
 -- ============================================================================
+-- v0.30.17: Generic Call Site Type Checking
+-- ============================================================================
+-- Type check function calls, struct instantiation, and pattern matching
+-- through the unified type environment
+
+-- Check generic function call with explicit type arguments
+fn tenv_check_fn_call(tenv: String, fn_name: String, targs: String, arg_types: String) -> String =
+    let fn_reg = tenv_get_fn_reg(tenv);
+    let sig = fn_reg_lookup(fn_reg, fn_name);
+    if sig.len() == 0 then ""
+    else gen_fn_check_call(sig, targs, arg_types);
+
+-- Infer and check generic function call
+fn tenv_infer_fn_call(tenv: String, fn_name: String, arg_types: String) -> String =
+    let fn_reg = tenv_get_fn_reg(tenv);
+    let sig = fn_reg_lookup(fn_reg, fn_name);
+    if sig.len() == 0 then ""
+    else gen_fn_infer_call(sig, arg_types);
+
+-- Check struct field access with type arguments
+fn tenv_check_field_access(tenv: String, struct_name: String, targs: String, field_name: String) -> String =
+    tenv_struct_field_type(tenv, struct_name, targs, field_name);
+
+-- Check enum pattern in match expression
+fn tenv_check_match_variant(tenv: String, enum_name: String, targs: String, variant_name: String) -> String =
+    tenv_enum_variant_type(tenv, enum_name, targs, variant_name);
+
+-- Extract type for a field from "field1:type1,field2:type2" format
+fn tenv_extract_field_type(field_types: String, field_name: String) -> String =
+    if field_types.len() == 0 then ""
+    else tenv_extract_field_from(field_types, field_name, 0);
+
+fn tenv_extract_field_from(s: String, name: String, pos: i64) -> String =
+    if pos >= s.len() then ""
+    else
+        let colon = tenv_find_colon(s, pos);
+        if colon < 0 then ""
+        else
+            let field_name = s.slice(pos, colon);
+            let comma = tenv_find_comma_from(s, colon);
+            let type_end = if comma < 0 then s.len() else comma;
+            let type_str = s.slice(colon + 1, type_end);
+            if field_name == name then type_str
+            else if comma < 0 then ""
+            else tenv_extract_field_from(s, name, comma + 1);
+
+fn tenv_find_colon(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then -1
+    else if s.char_at(pos) == 58 then pos
+    else tenv_find_colon(s, pos + 1);
+
+fn tenv_find_comma_from(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then -1
+    else if s.char_at(pos) == 44 then pos
+    else tenv_find_comma_from(s, pos + 1);
+
+-- ============================================================================
 -- Test Functions
 -- ============================================================================
 
@@ -3136,6 +3193,97 @@ fn test_tenv_tparam_ops() -> i64 =
 
     r1 + r2 + r3 + r4 + r5;
 
+-- Test tenv_check_fn_call and tenv_infer_fn_call
+fn test_tenv_fn_call() -> i64 =
+    -- Setup: add a generic function identity<T>(T) -> T
+    let tenv1 = tenv_add_fn(tenv_new(), "identity|T|T|T");
+    -- Add a non-generic function: add(i64, i64) -> i64
+    let tenv2 = tenv_add_fn(tenv1, "add||i64,i64|i64");
+
+    -- Test explicit type args
+    let ret1 = tenv_check_fn_call(tenv2, "identity", "i64", "i64");
+    let r1 = if ret1 == "i64" then 1 else 0;
+
+    let ret2 = tenv_check_fn_call(tenv2, "identity", "String", "String");
+    let r2 = if ret2 == "String" then 1 else 0;
+
+    -- Test non-generic function
+    let ret3 = tenv_check_fn_call(tenv2, "add", "", "i64,i64");
+    let r3 = if ret3 == "i64" then 1 else 0;
+
+    -- Test inference
+    let ret4 = tenv_infer_fn_call(tenv2, "identity", "i64");
+    let r4 = if ret4 == "i64" then 1 else 0;
+
+    -- Test wrong arity (should fail)
+    let ret5 = tenv_check_fn_call(tenv2, "identity", "i64", "i64,i64");
+    let r5 = if ret5 == "" then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5;
+
+-- Test tenv_check_field_access
+fn test_tenv_field_access() -> i64 =
+    -- Setup: add Box<T> { value: T }
+    let tenv1 = tenv_add_struct(tenv_new(), "Box|T|value:T");
+    -- Add Pair<A,B> { first: A, second: B }
+    let tenv2 = tenv_add_struct(tenv1, "Pair|A,B|first:A,second:B");
+
+    -- Test field access with type args
+    let f1 = tenv_check_field_access(tenv2, "Box", "i64", "value");
+    let r1 = if f1 == "i64" then 1 else 0;
+
+    let f2 = tenv_check_field_access(tenv2, "Pair", "String,i64", "first");
+    let r2 = if f2 == "String" then 1 else 0;
+
+    let f3 = tenv_check_field_access(tenv2, "Pair", "String,i64", "second");
+    let r3 = if f3 == "i64" then 1 else 0;
+
+    -- Test non-existent field
+    let f4 = tenv_check_field_access(tenv2, "Box", "i64", "nonexistent");
+    let r4 = if f4 == "" then 1 else 0;
+
+    r1 + r2 + r3 + r4;
+
+-- Test tenv_check_match_variant
+fn test_tenv_match_variant() -> i64 =
+    -- Setup: add Option<T> { Some(T), None }
+    let tenv1 = tenv_add_enum(tenv_new(), "Option|T|Some:T,None");
+    -- Add Result<T,E> { Ok(T), Err(E) }
+    let tenv2 = tenv_add_enum(tenv1, "Result|T,E|Ok:T,Err:E");
+
+    -- Test variant type lookup
+    let v1 = tenv_check_match_variant(tenv2, "Option", "i64", "Some");
+    let r1 = if v1 == "i64" then 1 else 0;
+
+    let v2 = tenv_check_match_variant(tenv2, "Option", "String", "None");
+    let r2 = if v2 == "" then 1 else 0;
+
+    let v3 = tenv_check_match_variant(tenv2, "Result", "i64,String", "Ok");
+    let r3 = if v3 == "i64" then 1 else 0;
+
+    let v4 = tenv_check_match_variant(tenv2, "Result", "i64,String", "Err");
+    let r4 = if v4 == "String" then 1 else 0;
+
+    r1 + r2 + r3 + r4;
+
+-- Test tenv_extract_field_type
+fn test_tenv_extract_field() -> i64 =
+    let fields = "x:i64,y:String,z:bool";
+
+    let t1 = tenv_extract_field_type(fields, "x");
+    let r1 = if t1 == "i64" then 1 else 0;
+
+    let t2 = tenv_extract_field_type(fields, "y");
+    let r2 = if t2 == "String" then 1 else 0;
+
+    let t3 = tenv_extract_field_type(fields, "z");
+    let r3 = if t3 == "bool" then 1 else 0;
+
+    let t4 = tenv_extract_field_type(fields, "w");
+    let r4 = if t4 == "" then 1 else 0;
+
+    r1 + r2 + r3 + r4;
+
 -- Main test runner
 fn main() -> i64 =
     let u0 = println(777);  -- Start marker
@@ -3398,10 +3546,22 @@ fn main() -> i64 =
     let t81 = test_tenv_tparam_ops();
     let p81 = println(t81);  -- Expected: 5
 
+    let t82 = test_tenv_fn_call();
+    let p82 = println(t82);  -- Expected: 5
+
+    let t83 = test_tenv_field_access();
+    let p83 = println(t83);  -- Expected: 4
+
+    let t84 = test_tenv_match_variant();
+    let p84 = println(t84);  -- Expected: 4
+
+    let t85 = test_tenv_extract_field();
+    let p85 = println(t85);  -- Expected: 4
+
     let u1 = println(888);  -- Separator
 
-    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33 + t34 + t35 + t36 + t37 + t38 + t39 + t40 + t41 + t42 + t43 + t44 + t45 + t46 + t47 + t48 + t49 + t50 + t51 + t52 + t53 + t54 + t55 + t56 + t57 + t58 + t59 + t60 + t61 + t62 + t63 + t64 + t65 + t66 + t67 + t68 + t69 + t70 + t71 + t72 + t73 + t74 + t75 + t76 + t77 + t78 + t79 + t80 + t81;
-    let u2 = println(total);  -- Expected: 389
+    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33 + t34 + t35 + t36 + t37 + t38 + t39 + t40 + t41 + t42 + t43 + t44 + t45 + t46 + t47 + t48 + t49 + t50 + t51 + t52 + t53 + t54 + t55 + t56 + t57 + t58 + t59 + t60 + t61 + t62 + t63 + t64 + t65 + t66 + t67 + t68 + t69 + t70 + t71 + t72 + t73 + t74 + t75 + t76 + t77 + t78 + t79 + t80 + t81 + t82 + t83 + t84 + t85;
+    let u2 = println(total);  -- Expected: 406
 
     let u3 = println(999);  -- End marker
     total;

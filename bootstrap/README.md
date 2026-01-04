@@ -121,7 +121,7 @@ Comprehensive test suite with 15 test categories.
 14. Deep nesting
 15. Nested function calls
 
-### types.bmb (100KB) - v0.30.16
+### types.bmb (100KB) - v0.30.17
 Type checker foundation for BMB.
 
 **Features:**
@@ -247,6 +247,14 @@ Type checker foundation for BMB.
 - `tenv_struct_field_type`, `tenv_enum_variant_type`, `tenv_fn_return_type`: Type resolution
 - `tenv_has_tparam`, `tenv_resolve_tparam`: Type parameter operations
 
+**Features (v0.30.17):**
+- Generic call site type checking through type environment
+- `tenv_check_fn_call`: Check generic function call with explicit type args
+- `tenv_infer_fn_call`: Infer and check generic function call
+- `tenv_check_field_access`: Check struct field access with type args
+- `tenv_check_match_variant`: Check enum pattern in match expression
+- `tenv_extract_field_type`: Extract field type from packed field:type string
+
 **Test output:**
 ```
 777 (start marker)
@@ -331,8 +339,12 @@ Type checker foundation for BMB.
 3  (tenv enum variant tests)
 3  (tenv fn return tests)
 5  (tenv tparam ops tests)
+5  (tenv fn call tests)
+4  (tenv field access tests)
+4  (tenv match variant tests)
+4  (tenv extract field tests)
 888 (separator)
-389 (total passed)
+406 (total passed)
 999 (end marker)
 ```
 

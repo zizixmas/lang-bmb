@@ -303,6 +303,12 @@ v0.MAJOR.MINOR
 - `enum_reg_count`, `enum_reg_is_generic`: Registry utilities
 - 5 new test functions, 19 assertions (335 total in types.bmb)
 
+**v0.30.17 Completed (2026-01-04)**:
+- Generic call site type checking through type environment
+- tenv_check_fn_call, tenv_infer_fn_call for function calls
+- tenv_check_field_access, tenv_check_match_variant for data types
+- Total: 406 tests passing
+
 **v0.30.16 Completed (2026-01-04)**:
 - Unified type environment for all registries
 - Type parameter, struct, enum, function registry integration
