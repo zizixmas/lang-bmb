@@ -170,6 +170,7 @@ Gap to Close:
 - ✅ Generic type inference (v0.30.10: infer_from_pair_list, gen_fn_infer_call)
 - ✅ Generic struct definitions (v0.30.11: gen_struct_pack, gen_struct_resolve_field)
 - ✅ Struct registry (v0.30.12: struct_reg_add, struct_reg_lookup, struct_reg_field_type)
+- ✅ Generic enum definitions (v0.30.13: gen_enum_pack, gen_enum_resolve_variant)
 
 ### What Bootstrap CANNOT Do Yet
 
@@ -288,7 +289,7 @@ v0.30 "Pure" represents the culmination of the BMB self-hosting journey. With St
 - Rust code to remove: ~21,783 LOC
 - BMB bootstrap code: ~9,924 LOC (46% coverage)
 - Gap to close: ~12,916 LOC additional BMB
-- Bootstrap tests passing: 373 tests
+- Bootstrap tests passing: 404 tests
 - Estimated effort: 6-9 months
 
 ---

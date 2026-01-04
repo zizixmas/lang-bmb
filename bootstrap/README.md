@@ -121,7 +121,7 @@ Comprehensive test suite with 15 test categories.
 14. Deep nesting
 15. Nested function calls
 
-### types.bmb (90KB) - v0.30.12
+### types.bmb (95KB) - v0.30.13
 Type checker foundation for BMB.
 
 **Features:**
@@ -213,6 +213,14 @@ Type checker foundation for BMB.
 - `struct_reg_field_type`: Resolve field type with type arguments through registry lookup
 - `struct_reg_count`, `struct_reg_is_generic`: Registry utilities
 
+**Features (v0.30.13):**
+- Generic enum definitions: Represent and resolve generic enums
+- Format: `"EnumName|tparams|variant1:type1,variant2,variant3:type3"` (e.g., `"Option|T|Some:T,None"`)
+- `gen_enum_pack`, `gen_enum_name`, `gen_enum_tparams`, `gen_enum_variants`: Pack/unpack
+- `gen_enum_variant_type`, `gen_enum_has_variant`: Variant type lookup
+- `gen_enum_resolve_variant`: Resolve variant type with type arguments (Option<i64>.Some → i64)
+- `gen_enum_is_generic`, `gen_enum_variant_count`, `gen_enum_variant_name_at`: Utilities
+
 **Test output:**
 ```
 777 (start marker)
@@ -271,8 +279,15 @@ Type checker foundation for BMB.
 2  (struct reg has tests)
 6  (struct reg field type tests)
 3  (struct reg is generic tests)
+6  (gen enum pack tests)
+5  (gen enum variant type tests)
+5  (gen enum has variant tests)
+5  (gen enum resolve variant tests)
+2  (gen enum is generic tests)
+3  (gen enum variant count tests)
+5  (gen enum variant name at tests)
 888 (separator)
-285 (total passed)
+316 (total passed)
 999 (end marker)
 ```
 

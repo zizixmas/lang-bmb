@@ -1300,6 +1300,136 @@ fn struct_reg_is_generic(reg: String, name: String) -> bool =
     else gen_struct_is_generic(def);
 
 -- ============================================================================
+-- v0.30.13: Generic Enum Definitions
+-- ============================================================================
+-- Format: "EnumName|tparams|variant1:type1,variant2,variant3:type3"
+-- Variant with payload: "Some:T"
+-- Variant without payload: "None" (no colon)
+
+-- Pack generic enum definition
+fn gen_enum_pack(name: String, tparams: String, variants: String) -> String =
+    name + "|" + tparams + "|" + variants;
+
+-- Extract enum name from definition
+fn gen_enum_name(def: String) -> String =
+    let pipe1 = find_pipe(def, 0);
+    if pipe1 < 0 then def
+    else def.slice(0, pipe1);
+
+-- Extract type parameters from definition
+fn gen_enum_tparams(def: String) -> String =
+    let pipe1 = find_nth_pipe(def, 0, 0, 0);
+    let pipe2 = find_nth_pipe(def, 1, 0, 0);
+    if pipe1 < 0 or pipe2 < 0 then ""
+    else def.slice(pipe1 + 1, pipe2);
+
+-- Extract variants string from definition
+fn gen_enum_variants(def: String) -> String =
+    let pipe2 = find_nth_pipe(def, 1, 0, 0);
+    if pipe2 < 0 then ""
+    else def.slice(pipe2 + 1, def.len());
+
+-- Extract variant entry (variant or variant:type)
+fn gen_enum_extract_entry(s: String, pos: i64) -> String =
+    let comma = infer_find_comma(s, pos);
+    if comma < 0 then s.slice(pos, s.len())
+    else s.slice(pos, comma);
+
+-- Find next variant position
+fn gen_enum_next_pos(s: String, pos: i64) -> i64 =
+    let comma = infer_find_comma(s, pos);
+    if comma < 0 then 0 - 1
+    else comma + 1;
+
+-- Get variant payload type by name (empty string if no payload or not found)
+fn gen_enum_variant_type(variants: String, variant_name: String) -> String =
+    if variants.len() == 0 then ""
+    else gen_enum_variant_type_from(variants, variant_name, 0);
+
+fn gen_enum_variant_type_from(variants: String, target: String, start: i64) -> String =
+    if start >= variants.len() then ""
+    else
+        let entry = gen_enum_extract_entry(variants, start);
+        if entry.len() == 0 then ""
+        else
+            let colon = gen_struct_find_colon(entry, 0);
+            let vname = if colon < 0 then entry else entry.slice(0, colon);
+            if vname == target then
+                if colon < 0 then ""
+                else entry.slice(colon + 1, entry.len())
+            else
+                let next = gen_enum_next_pos(variants, start);
+                if next < 0 then ""
+                else gen_enum_variant_type_from(variants, target, next);
+
+-- Check if variant exists in enum
+fn gen_enum_has_variant(variants: String, variant_name: String) -> bool =
+    if variants.len() == 0 then false
+    else gen_enum_has_variant_from(variants, variant_name, 0);
+
+fn gen_enum_has_variant_from(variants: String, target: String, start: i64) -> bool =
+    if start >= variants.len() then false
+    else
+        let entry = gen_enum_extract_entry(variants, start);
+        if entry.len() == 0 then false
+        else
+            let colon = gen_struct_find_colon(entry, 0);
+            let vname = if colon < 0 then entry else entry.slice(0, colon);
+            if vname == target then true
+            else
+                let next = gen_enum_next_pos(variants, start);
+                if next < 0 then false
+                else gen_enum_has_variant_from(variants, target, next);
+
+-- Resolve variant type with type arguments
+fn gen_enum_resolve_variant(def: String, targs: String, variant_name: String) -> String =
+    let tparams = gen_enum_tparams(def);
+    let variants = gen_enum_variants(def);
+    let vtype = gen_enum_variant_type(variants, variant_name);
+    if vtype.len() == 0 then ""
+    else
+        let subst = subst_from_params_args(tparams, targs);
+        resolve_field_type(vtype, subst);
+
+-- Check if enum is generic (has type parameters)
+fn gen_enum_is_generic(def: String) -> bool =
+    let tparams = gen_enum_tparams(def);
+    tparams.len() > 0;
+
+-- Count variants in enum
+fn gen_enum_variant_count(def: String) -> i64 =
+    let variants = gen_enum_variants(def);
+    if variants.len() == 0 then 0
+    else gen_enum_variant_count_from(variants, 0, 0);
+
+fn gen_enum_variant_count_from(variants: String, start: i64, count: i64) -> i64 =
+    if start >= variants.len() then count + 1
+    else
+        let next = gen_enum_next_pos(variants, start);
+        if next < 0 then count + 1
+        else gen_enum_variant_count_from(variants, next, count + 1);
+
+-- Get variant name by index
+fn gen_enum_variant_name_at(def: String, index: i64) -> String =
+    let variants = gen_enum_variants(def);
+    if variants.len() == 0 then ""
+    else gen_enum_variant_name_at_from(variants, index, 0, 0);
+
+fn gen_enum_variant_name_at_from(variants: String, target: i64, current: i64, start: i64) -> String =
+    if start >= variants.len() then ""
+    else
+        let entry = gen_enum_extract_entry(variants, start);
+        if entry.len() == 0 then ""
+        else
+            let colon = gen_struct_find_colon(entry, 0);
+            let vname = if colon < 0 then entry else entry.slice(0, colon);
+            if current == target then vname
+            else
+                let next = gen_enum_next_pos(variants, start);
+                if next < 0 then ""
+                else gen_enum_variant_name_at_from(variants, target, current + 1, next);
+
+-- ============================================================================
 -- Test Functions
 -- ============================================================================
 
@@ -2253,6 +2383,105 @@ fn test_struct_reg_is_generic() -> i64 =
 
     r1 + r2 + r3;
 
+-- v0.30.13: Generic enum tests
+
+-- Test gen_enum_pack and gen_enum_name/tparams/variants
+fn test_gen_enum_pack() -> i64 =
+    -- Option<T> with Some:T and None
+    let opt = gen_enum_pack("Option", "T", "Some:T,None");
+    let r1 = if gen_enum_name(opt) == "Option" then 1 else 0;
+    let r2 = if gen_enum_tparams(opt) == "T" then 1 else 0;
+    let r3 = if gen_enum_variants(opt) == "Some:T,None" then 1 else 0;
+
+    -- Result<T,E> with Ok:T and Err:E
+    let res = gen_enum_pack("Result", "T,E", "Ok:T,Err:E");
+    let r4 = if gen_enum_name(res) == "Result" then 1 else 0;
+    let r5 = if gen_enum_tparams(res) == "T,E" then 1 else 0;
+    let r6 = if gen_enum_variants(res) == "Ok:T,Err:E" then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5 + r6;
+
+-- Test gen_enum_variant_type
+fn test_gen_enum_variant_type() -> i64 =
+    let variants = "Some:T,None,Err:String";
+
+    let r1 = if gen_enum_variant_type(variants, "Some") == "T" then 1 else 0;
+    let r2 = if gen_enum_variant_type(variants, "None") == "" then 1 else 0;
+    let r3 = if gen_enum_variant_type(variants, "Err") == "String" then 1 else 0;
+    let r4 = if gen_enum_variant_type(variants, "Missing") == "" then 1 else 0;
+    let r5 = if gen_enum_variant_type("", "Some") == "" then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5;
+
+-- Test gen_enum_has_variant
+fn test_gen_enum_has_variant() -> i64 =
+    let variants = "Some:T,None,Err:E";
+
+    let r1 = if gen_enum_has_variant(variants, "Some") then 1 else 0;
+    let r2 = if gen_enum_has_variant(variants, "None") then 1 else 0;
+    let r3 = if gen_enum_has_variant(variants, "Err") then 1 else 0;
+    let r4 = if not gen_enum_has_variant(variants, "Missing") then 1 else 0;
+    let r5 = if not gen_enum_has_variant("", "Some") then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5;
+
+-- Test gen_enum_resolve_variant
+fn test_gen_enum_resolve_variant() -> i64 =
+    -- Option<T>: Some:T,None
+    let opt = gen_enum_pack("Option", "T", "Some:T,None");
+
+    -- Option<i64>.Some → i64
+    let r1 = if gen_enum_resolve_variant(opt, "i64", "Some") == "i64" then 1 else 0;
+    -- Option<String>.Some → String
+    let r2 = if gen_enum_resolve_variant(opt, "String", "Some") == "String" then 1 else 0;
+    -- Option<i64>.None → "" (no payload)
+    let r3 = if gen_enum_resolve_variant(opt, "i64", "None") == "" then 1 else 0;
+
+    -- Result<T,E>: Ok:T,Err:E
+    let res = gen_enum_pack("Result", "T,E", "Ok:T,Err:E");
+    -- Result<i64,String>.Ok → i64
+    let r4 = if gen_enum_resolve_variant(res, "i64,String", "Ok") == "i64" then 1 else 0;
+    -- Result<i64,String>.Err → String
+    let r5 = if gen_enum_resolve_variant(res, "i64,String", "Err") == "String" then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5;
+
+-- Test gen_enum_is_generic
+fn test_gen_enum_is_generic() -> i64 =
+    let opt = gen_enum_pack("Option", "T", "Some:T,None");
+    let simple = gen_enum_pack("Status", "", "Active,Inactive");
+
+    let r1 = if gen_enum_is_generic(opt) then 1 else 0;
+    let r2 = if not gen_enum_is_generic(simple) then 1 else 0;
+
+    r1 + r2;
+
+-- Test gen_enum_variant_count
+fn test_gen_enum_variant_count() -> i64 =
+    let opt = gen_enum_pack("Option", "T", "Some:T,None");
+    let res = gen_enum_pack("Result", "T,E", "Ok:T,Err:E");
+    let tri = gen_enum_pack("Tri", "", "A,B,C");
+
+    let r1 = if gen_enum_variant_count(opt) == 2 then 1 else 0;
+    let r2 = if gen_enum_variant_count(res) == 2 then 1 else 0;
+    let r3 = if gen_enum_variant_count(tri) == 3 then 1 else 0;
+
+    r1 + r2 + r3;
+
+-- Test gen_enum_variant_name_at
+fn test_gen_enum_variant_name_at() -> i64 =
+    let opt = gen_enum_pack("Option", "T", "Some:T,None");
+
+    let r1 = if gen_enum_variant_name_at(opt, 0) == "Some" then 1 else 0;
+    let r2 = if gen_enum_variant_name_at(opt, 1) == "None" then 1 else 0;
+    let r3 = if gen_enum_variant_name_at(opt, 2) == "" then 1 else 0;
+
+    let res = gen_enum_pack("Result", "T,E", "Ok:T,Err:E");
+    let r4 = if gen_enum_variant_name_at(res, 0) == "Ok" then 1 else 0;
+    let r5 = if gen_enum_variant_name_at(res, 1) == "Err" then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5;
+
 -- Main test runner
 fn main() -> i64 =
     let u0 = println(777);  -- Start marker
@@ -2433,10 +2662,32 @@ fn main() -> i64 =
     let t55 = test_struct_reg_is_generic();
     let p55 = println(t55);  -- Expected: 3
 
+    -- v0.30.13: Generic enum tests
+    let t56 = test_gen_enum_pack();
+    let p56 = println(t56);  -- Expected: 6
+
+    let t57 = test_gen_enum_variant_type();
+    let p57 = println(t57);  -- Expected: 5
+
+    let t58 = test_gen_enum_has_variant();
+    let p58 = println(t58);  -- Expected: 5
+
+    let t59 = test_gen_enum_resolve_variant();
+    let p59 = println(t59);  -- Expected: 5
+
+    let t60 = test_gen_enum_is_generic();
+    let p60 = println(t60);  -- Expected: 2
+
+    let t61 = test_gen_enum_variant_count();
+    let p61 = println(t61);  -- Expected: 3
+
+    let t62 = test_gen_enum_variant_name_at();
+    let p62 = println(t62);  -- Expected: 5
+
     let u1 = println(888);  -- Separator
 
-    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33 + t34 + t35 + t36 + t37 + t38 + t39 + t40 + t41 + t42 + t43 + t44 + t45 + t46 + t47 + t48 + t49 + t50 + t51 + t52 + t53 + t54 + t55;
-    let u2 = println(total);  -- Expected: 285
+    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33 + t34 + t35 + t36 + t37 + t38 + t39 + t40 + t41 + t42 + t43 + t44 + t45 + t46 + t47 + t48 + t49 + t50 + t51 + t52 + t53 + t54 + t55 + t56 + t57 + t58 + t59 + t60 + t61 + t62;
+    let u2 = println(total);  -- Expected: 316
 
     let u3 = println(999);  -- End marker
     total;

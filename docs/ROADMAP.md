@@ -289,6 +289,13 @@ v0.MAJOR.MINOR
 - `struct_reg_count`, `struct_reg_is_generic`: Registry utilities
 - 5 new test functions, 20 assertions (285 total in types.bmb)
 
+**v0.30.13 Completed (2026-01-04)**:
+- `gen_enum_pack`, `gen_enum_name`, `gen_enum_tparams`, `gen_enum_variants`: Pack/unpack
+- `gen_enum_variant_type`, `gen_enum_has_variant`: Variant type lookup
+- `gen_enum_resolve_variant`: Resolve variant type with type arguments (Option<i64>.Some → i64)
+- `gen_enum_is_generic`, `gen_enum_variant_count`, `gen_enum_variant_name_at`: Utilities
+- 7 new test functions, 31 assertions (316 total in types.bmb)
+
 **Deliverables**:
 - Bootstrap compiler can type-check generic code
 - Trait dispatch works in bootstrap
