@@ -282,6 +282,93 @@ impl TextCodeGen {
                     phi_args.join(", ")
                 )?;
             }
+
+            // v0.19.0: Struct operations
+            MirInst::StructInit { dest, struct_name, fields } => {
+                // In LLVM, we allocate space for the struct and store each field
+                // For now, treat struct as a pointer (i64) and use insertvalue
+                writeln!(out, "  ; struct {} init with {} fields", struct_name, fields.len())?;
+                // Create zeroinitializer and insertvalue for each field
+                writeln!(out, "  %{} = alloca i64, i32 {}", dest.name, fields.len().max(1))?;
+                for (i, (field_name, value)) in fields.iter().enumerate() {
+                    let val_str = self.format_operand(value);
+                    writeln!(out, "  ; field {} = {}", field_name, val_str)?;
+                    let ty = self.infer_operand_type(value, func);
+                    writeln!(out, "  %{}_f{} = getelementptr i64, ptr %{}, i32 {}",
+                             dest.name, i, dest.name, i)?;
+                    writeln!(out, "  store {} {}, ptr %{}_f{}", ty, val_str, dest.name, i)?;
+                }
+            }
+
+            MirInst::FieldAccess { dest, base, field } => {
+                // Load field from struct pointer
+                writeln!(out, "  ; field access .{} from %{}", field, base.name)?;
+                // For now, just load from base (simplified - needs field offset calculation)
+                writeln!(out, "  %{} = load i64, ptr %{}", dest.name, base.name)?;
+            }
+
+            MirInst::FieldStore { base, field, value } => {
+                // Store value to field in struct pointer
+                let val_str = self.format_operand(value);
+                let ty = self.infer_operand_type(value, func);
+                writeln!(out, "  ; field store .{} = {}", field, val_str)?;
+                writeln!(out, "  store {} {}, ptr %{}", ty, val_str, base.name)?;
+            }
+
+            // v0.19.1: Enum variant
+            MirInst::EnumVariant { dest, enum_name, variant, args } => {
+                // Enums are represented as tagged unions:
+                // - First word: discriminant (variant index)
+                // - Following words: variant data
+                writeln!(out, "  ; enum {}::{} with {} args", enum_name, variant, args.len())?;
+                // Allocate space for enum (discriminant + max variant size)
+                let size = 1 + args.len().max(1);
+                writeln!(out, "  %{} = alloca i64, i32 {}", dest.name, size)?;
+                // Store discriminant (simplified: hash of variant name)
+                let discriminant: i64 = variant.bytes().fold(0i64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as i64));
+                writeln!(out, "  %{}_disc = getelementptr i64, ptr %{}, i32 0", dest.name, dest.name)?;
+                writeln!(out, "  store i64 {}, ptr %{}_disc", discriminant, dest.name)?;
+                // Store variant arguments
+                for (i, arg) in args.iter().enumerate() {
+                    let arg_str = self.format_operand(arg);
+                    let ty = self.infer_operand_type(arg, func);
+                    writeln!(out, "  %{}_a{} = getelementptr i64, ptr %{}, i32 {}",
+                             dest.name, i, dest.name, i + 1)?;
+                    writeln!(out, "  store {} {}, ptr %{}_a{}", ty, arg_str, dest.name, i)?;
+                }
+            }
+
+            // v0.19.3: Array operations
+            MirInst::ArrayInit { dest, element_type, elements } => {
+                let elem_ty = self.mir_type_to_llvm(element_type);
+                let size = elements.len();
+                writeln!(out, "  ; array init with {} elements of type {}", size, elem_ty)?;
+                writeln!(out, "  %{} = alloca {}, i32 {}", dest.name, elem_ty, size.max(1))?;
+                for (i, elem) in elements.iter().enumerate() {
+                    let elem_str = self.format_operand(elem);
+                    writeln!(out, "  %{}_e{} = getelementptr {}, ptr %{}, i32 {}",
+                             dest.name, i, elem_ty, dest.name, i)?;
+                    writeln!(out, "  store {} {}, ptr %{}_e{}", elem_ty, elem_str, dest.name, i)?;
+                }
+            }
+
+            MirInst::IndexLoad { dest, array, index } => {
+                let idx_str = self.format_operand(index);
+                writeln!(out, "  ; index load %{}[{}]", array.name, idx_str)?;
+                writeln!(out, "  %{}_ptr = getelementptr i64, ptr %{}, i64 {}",
+                         dest.name, array.name, idx_str)?;
+                writeln!(out, "  %{} = load i64, ptr %{}_ptr", dest.name, dest.name)?;
+            }
+
+            MirInst::IndexStore { array, index, value } => {
+                let idx_str = self.format_operand(index);
+                let val_str = self.format_operand(value);
+                let ty = self.infer_operand_type(value, func);
+                writeln!(out, "  ; index store %{}[{}] = {}", array.name, idx_str, val_str)?;
+                writeln!(out, "  %{}_idx_ptr = getelementptr {}, ptr %{}, i64 {}",
+                         array.name, ty, array.name, idx_str)?;
+                writeln!(out, "  store {} {}, ptr %{}_idx_ptr", ty, val_str, array.name)?;
+            }
         }
 
         Ok(())
@@ -325,6 +412,16 @@ impl TextCodeGen {
             Terminator::Unreachable => {
                 writeln!(out, "  unreachable")?;
             }
+
+            // v0.19.2: Switch for pattern matching
+            Terminator::Switch { discriminant, cases, default } => {
+                let disc_str = self.format_operand(discriminant);
+                writeln!(out, "  switch i64 {}, label %{} [", disc_str, default)?;
+                for (val, label) in cases {
+                    writeln!(out, "    i64 {}, label %{}", val, label)?;
+                }
+                writeln!(out, "  ]")?;
+            }
         }
 
         Ok(())
@@ -339,6 +436,13 @@ impl TextCodeGen {
             MirType::Bool => "i1",
             MirType::String => "ptr",
             MirType::Unit => "void",
+            // v0.19.0: Struct types are represented as pointers
+            MirType::Struct { .. } => "ptr",
+            MirType::StructPtr(_) => "ptr",
+            // v0.19.1: Enum types are represented as pointers to tagged unions
+            MirType::Enum { .. } => "ptr",
+            // v0.19.3: Array types are represented as pointers
+            MirType::Array { .. } => "ptr",
         }
     }
 

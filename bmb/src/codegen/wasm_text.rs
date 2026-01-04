@@ -625,6 +625,111 @@ impl WasmCodeGen {
                 // For now, just emit a placeholder
                 writeln!(out, "    ;; PHI node for {} (requires CFG conversion)", dest.name)?;
             }
+
+            // v0.19.0: Struct operations
+            MirInst::StructInit { dest, struct_name, fields } => {
+                // In WASM, structs are stored in linear memory
+                // For now, allocate space on the stack and store field values
+                writeln!(out, "    ;; struct {} init with {} fields", struct_name, fields.len())?;
+                // Allocate memory (simplified: just store pointer in local)
+                writeln!(out, "    i32.const 0  ;; TODO: proper memory allocation")?;
+                writeln!(out, "    local.set ${}", dest.name)?;
+                for (i, (field_name, value)) in fields.iter().enumerate() {
+                    writeln!(out, "    ;; field {} at offset {}", field_name, i * 8)?;
+                    // Get base pointer
+                    writeln!(out, "    local.get ${}", dest.name)?;
+                    // Add offset
+                    writeln!(out, "    i32.const {}", i * 8)?;
+                    writeln!(out, "    i32.add")?;
+                    // Get value
+                    self.emit_operand(out, value)?;
+                    // Store (simplified: assume i64)
+                    writeln!(out, "    i64.store")?;
+                }
+            }
+
+            MirInst::FieldAccess { dest, base, field } => {
+                // Load field from struct in linear memory
+                writeln!(out, "    ;; field access .{} from ${}", field, base.name)?;
+                // Get base pointer (simplified: just load from base)
+                writeln!(out, "    local.get ${}", base.name)?;
+                writeln!(out, "    i64.load")?;
+                writeln!(out, "    local.set ${}", dest.name)?;
+            }
+
+            MirInst::FieldStore { base, field, value } => {
+                // Store value to field in struct
+                writeln!(out, "    ;; field store .{}", field)?;
+                writeln!(out, "    local.get ${}", base.name)?;
+                self.emit_operand(out, value)?;
+                writeln!(out, "    i64.store")?;
+            }
+
+            // v0.19.1: Enum variant
+            MirInst::EnumVariant { dest, enum_name, variant, args } => {
+                // Enums are represented as tagged unions in linear memory
+                writeln!(out, "    ;; enum {}::{} with {} args", enum_name, variant, args.len())?;
+                // Calculate discriminant (simplified: hash of variant name)
+                let discriminant: i64 = variant.bytes().fold(0i64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as i64));
+                // Allocate memory (simplified: just use a constant address)
+                writeln!(out, "    i32.const 0  ;; TODO: proper memory allocation")?;
+                writeln!(out, "    local.set ${}", dest.name)?;
+                // Store discriminant at offset 0
+                writeln!(out, "    local.get ${}", dest.name)?;
+                writeln!(out, "    i64.const {}", discriminant)?;
+                writeln!(out, "    i64.store")?;
+                // Store variant arguments at subsequent offsets
+                for (i, arg) in args.iter().enumerate() {
+                    writeln!(out, "    local.get ${}", dest.name)?;
+                    writeln!(out, "    i32.const {}", (i + 1) * 8)?;
+                    writeln!(out, "    i32.add")?;
+                    self.emit_operand(out, arg)?;
+                    writeln!(out, "    i64.store")?;
+                }
+            }
+
+            // v0.19.3: Array operations
+            MirInst::ArrayInit { dest, element_type: _, elements } => {
+                writeln!(out, "    ;; array init with {} elements", elements.len())?;
+                // Allocate memory for array (simplified: use constant address)
+                let size = elements.len() * 8; // 8 bytes per element
+                writeln!(out, "    i32.const 0  ;; TODO: proper memory allocation for {} bytes", size)?;
+                writeln!(out, "    local.set ${}", dest.name)?;
+                // Store each element
+                for (i, elem) in elements.iter().enumerate() {
+                    writeln!(out, "    local.get ${}", dest.name)?;
+                    writeln!(out, "    i32.const {}", i * 8)?;
+                    writeln!(out, "    i32.add")?;
+                    self.emit_operand(out, elem)?;
+                    writeln!(out, "    i64.store")?;
+                }
+            }
+
+            MirInst::IndexLoad { dest, array, index } => {
+                writeln!(out, "    ;; index load")?;
+                // Calculate address: array_base + index * 8
+                writeln!(out, "    local.get ${}", array.name)?;
+                self.emit_operand(out, index)?;
+                writeln!(out, "    i32.wrap_i64")?;  // Convert i64 index to i32
+                writeln!(out, "    i32.const 8")?;
+                writeln!(out, "    i32.mul")?;
+                writeln!(out, "    i32.add")?;
+                writeln!(out, "    i64.load")?;
+                writeln!(out, "    local.set ${}", dest.name)?;
+            }
+
+            MirInst::IndexStore { array, index, value } => {
+                writeln!(out, "    ;; index store")?;
+                // Calculate address: array_base + index * 8
+                writeln!(out, "    local.get ${}", array.name)?;
+                self.emit_operand(out, index)?;
+                writeln!(out, "    i32.wrap_i64")?;  // Convert i64 index to i32
+                writeln!(out, "    i32.const 8")?;
+                writeln!(out, "    i32.mul")?;
+                writeln!(out, "    i32.add")?;
+                self.emit_operand(out, value)?;
+                writeln!(out, "    i64.store")?;
+            }
         }
 
         Ok(())
@@ -691,6 +796,20 @@ impl WasmCodeGen {
             Terminator::Unreachable => {
                 writeln!(out, "    unreachable")?;
             }
+
+            // v0.19.2: Switch for pattern matching using br_table
+            Terminator::Switch { discriminant, cases, default } => {
+                self.emit_operand(out, discriminant)?;
+                writeln!(out, "    (block ${}", default)?;
+                // Generate cascading if-else for now (br_table needs contiguous indices)
+                for (val, label) in cases {
+                    writeln!(out, "      (i64.const {})", val)?;
+                    writeln!(out, "      i64.eq")?;
+                    writeln!(out, "      (br_if ${})", label)?;
+                    self.emit_operand(out, discriminant)?;
+                }
+                writeln!(out, "      (br ${}))", default)?;
+            }
         }
 
         Ok(())
@@ -722,6 +841,13 @@ impl WasmCodeGen {
             MirType::Bool => "i32",  // WASM has no boolean, use i32
             MirType::String => "i32", // Pointer (memory offset)
             MirType::Unit => "i32",   // No void in WASM params/returns
+            // v0.19.0: Struct types are represented as pointers (i32 in WASM)
+            MirType::Struct { .. } => "i32",
+            MirType::StructPtr(_) => "i32",
+            // v0.19.1: Enum types are represented as pointers (i32 in WASM)
+            MirType::Enum { .. } => "i32",
+            // v0.19.3: Array types are represented as pointers (i32 in WASM)
+            MirType::Array { .. } => "i32",
         }
     }
 
@@ -742,6 +868,13 @@ impl WasmCodeGen {
             MirType::Bool => "i32.const 0",
             MirType::String => "i32.const 0",
             MirType::Unit => "",
+            // v0.19.0: Struct pointers default to null (0)
+            MirType::Struct { .. } => "i32.const 0",
+            MirType::StructPtr(_) => "i32.const 0",
+            // v0.19.1: Enum pointers default to null (0)
+            MirType::Enum { .. } => "i32.const 0",
+            // v0.19.3: Array pointers default to null (0)
+            MirType::Array { .. } => "i32.const 0",
         }
     }
 
@@ -835,6 +968,43 @@ impl WasmCodeGen {
                     MirType::I64
                 };
                 Some((dest.name.clone(), ty))
+            }
+            // v0.19.0: Struct operations
+            MirInst::StructInit { dest, struct_name, fields } => {
+                Some((dest.name.clone(), MirType::Struct {
+                    name: struct_name.clone(),
+                    fields: fields.iter().map(|(n, _)| (n.clone(), Box::new(MirType::I64))).collect(),
+                }))
+            }
+            MirInst::FieldAccess { dest, .. } => {
+                // Field access result type defaults to i64
+                Some((dest.name.clone(), MirType::I64))
+            }
+            MirInst::FieldStore { .. } => {
+                // Field store has no destination
+                None
+            }
+            // v0.19.1: Enum variant
+            MirInst::EnumVariant { dest, enum_name, .. } => {
+                Some((dest.name.clone(), MirType::Enum {
+                    name: enum_name.clone(),
+                    variants: vec![],  // Simplified: don't track variants here
+                }))
+            }
+            // v0.19.3: Array operations
+            MirInst::ArrayInit { dest, element_type, elements } => {
+                Some((dest.name.clone(), MirType::Array {
+                    element_type: Box::new(element_type.clone()),
+                    size: Some(elements.len()),
+                }))
+            }
+            MirInst::IndexLoad { dest, .. } => {
+                // Index load result type defaults to i64
+                Some((dest.name.clone(), MirType::I64))
+            }
+            MirInst::IndexStore { .. } => {
+                // Index store has no destination
+                None
             }
         }
     }

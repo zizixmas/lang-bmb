@@ -95,6 +95,49 @@ pub enum MirInst {
         dest: Place,
         values: Vec<(Operand, String)>, // (value, source_block_label)
     },
+    /// v0.19.0: Struct initialization: %dest = struct { field1: val1, field2: val2, ... }
+    StructInit {
+        dest: Place,
+        struct_name: String,
+        fields: Vec<(String, Operand)>, // (field_name, value)
+    },
+    /// v0.19.0: Field access: %dest = %base.field
+    FieldAccess {
+        dest: Place,
+        base: Place,
+        field: String,
+    },
+    /// v0.19.0: Field store: %base.field = %value
+    FieldStore {
+        base: Place,
+        field: String,
+        value: Operand,
+    },
+    /// v0.19.1: Enum variant creation: %dest = EnumName::Variant(args)
+    EnumVariant {
+        dest: Place,
+        enum_name: String,
+        variant: String,
+        args: Vec<Operand>,
+    },
+    /// v0.19.3: Array initialization with literal elements: %dest = [elem1, elem2, ...]
+    ArrayInit {
+        dest: Place,
+        element_type: MirType,
+        elements: Vec<Operand>,
+    },
+    /// v0.19.3: Array index load: %dest = %array[%index]
+    IndexLoad {
+        dest: Place,
+        array: Place,
+        index: Operand,
+    },
+    /// v0.19.3: Array index store: %array[%index] = %value
+    IndexStore {
+        array: Place,
+        index: Operand,
+        value: Operand,
+    },
 }
 
 /// Block terminator (control flow)
@@ -112,6 +155,13 @@ pub enum Terminator {
     },
     /// Unreachable (for optimization)
     Unreachable,
+    /// v0.19.2: Switch for pattern matching
+    /// switch %discriminant { case val1 -> label1, case val2 -> label2, ... } default -> default_label
+    Switch {
+        discriminant: Operand,
+        cases: Vec<(i64, String)>, // (value, target_label)
+        default: String,
+    },
 }
 
 /// An operand in MIR (either a place or constant)
@@ -198,6 +248,23 @@ pub enum MirType {
     Bool,
     String,
     Unit,
+    /// v0.19.0: Struct type with name and field types
+    Struct {
+        name: String,
+        fields: Vec<(String, Box<MirType>)>,
+    },
+    /// v0.19.0: Pointer to a struct (for references)
+    StructPtr(String),
+    /// v0.19.1: Enum type with name and variant types
+    Enum {
+        name: String,
+        variants: Vec<(String, Vec<Box<MirType>>)>, // (variant_name, arg_types)
+    },
+    /// v0.19.3: Array type with element type and optional fixed size
+    Array {
+        element_type: Box<MirType>,
+        size: Option<usize>, // None for dynamic arrays (slices)
+    },
 }
 
 impl MirType {
