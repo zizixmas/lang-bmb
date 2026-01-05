@@ -164,15 +164,15 @@ v0.MAJOR.MINOR
 | v0.28 | Benchmark | C/Rust/BMB benchmark suite | Compute-intensive benchmarks, Contract-optimized benchmarks, Real-world workloads |
 | v0.29 | Velocity | C/Rust performance sprint | MIR optimization framework (6 passes), Contract-based optimization, Bootstrap optimization module |
 
-### Bootstrap Statistics (as of v0.30.83)
+### Bootstrap Statistics (as of v0.30.86)
 
 | Metric | Value |
 |--------|-------|
 | Rust Codebase | ~21,783 LOC |
-| BMB Bootstrap | ~14,100 LOC |
-| Coverage | 65% |
+| BMB Bootstrap | ~14,300 LOC |
+| Coverage | 66% |
 | Stage 1/2 Tests | 19 tests passing |
-| Bootstrap Tests | 1223 tests (650 types + 229 llvm_ir + 108 lowering + 46 mir + 83 parser_ast + 33 utils + 19 selfhost_equiv + 30 pipeline + 9 optimize + 8 selfhost_test + 8 compiler) |
+| Bootstrap Tests | 1266 tests (693 types + 229 llvm_ir + 108 lowering + 46 mir + 83 parser_ast + 33 utils + 19 selfhost_equiv + 30 pipeline + 9 optimize + 8 selfhost_test + 8 compiler) |
 
 ---
 
@@ -302,6 +302,26 @@ v0.MAJOR.MINOR
 - `enum_reg_variant_type`: Resolve variant type with type args through registry lookup
 - `enum_reg_count`, `enum_reg_is_generic`: Registry utilities
 - 5 new test functions, 19 assertions (335 total in types.bmb)
+
+**v0.30.86 Completed (2026-01-05)**:
+- Impl registry: gen_impl_pack, gen_impl_trait_name, gen_impl_target_type, gen_impl_methods
+- impl_reg_new, impl_reg_add, impl_reg_lookup, impl_reg_has, impl_reg_method_return
+- tenv impl integration: tenv_add_impl, tenv_has_impl, tenv_impl_method_return
+- 4 new test functions (22 assertions)
+- types.bmb total: 693 tests (152 test functions)
+
+**v0.30.85 Completed (2026-01-05)**:
+- Trait registry: gen_trait_pack, gen_trait_name, gen_trait_tparams, gen_trait_methods
+- Trait method storage: gen_trait_method_count, gen_trait_has_method, gen_trait_method_return
+- trait_reg_new, trait_reg_add, trait_reg_lookup, trait_reg_has, trait_reg_is_generic
+- tenv trait integration: tenv_add_trait, tenv_has_trait, tenv_trait_method_return
+- Updated tenv format: "P:#S:#E:#F:#T:#I:" for trait and impl registries
+- Helper functions: find_char, count_commas for string processing
+- 4 new test functions (21 assertions)
+
+**v0.30.84 Completed (2026-01-05)**:
+- String eq method IR: gen_method_eq for string equality comparison
+- Runtime call to @bmb_string_eq(i8*, i8*) -> i64
 
 **v0.30.83 Completed (2026-01-05)**:
 - String concat/eq method IR: gen_method_concat, gen_method_eq
