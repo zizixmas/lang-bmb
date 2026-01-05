@@ -3827,6 +3827,531 @@ fn tenv_from_program_ast(ast: String) -> String =
     else register_items_from(tenv_new(), ast, start);
 
 -- ============================================================================
+-- v0.30.20: Expression Type Checking
+-- ============================================================================
+
+-- Local variable environment: "name1:type1,name2:type2,..."
+fn locals_new() -> String = "";
+
+fn locals_add(locals: String, name: String, typ: String) -> String =
+    if locals == "" then name + ":" + typ
+    else locals + "," + name + ":" + typ;
+
+fn locals_lookup(locals: String, name: String) -> String =
+    locals_lookup_from(locals, name, 0);
+
+fn locals_lookup_from(locals: String, name: String, pos: i64) -> String =
+    let len = locals.len();
+    if pos >= len then ""
+    else
+        -- Find next comma or end
+        let colon = locals_find_colon(locals, pos);
+        if colon < 0 then ""
+        else
+            let entry_name = locals.slice(pos, colon);
+            let comma = locals_find_comma(locals, colon + 1);
+            let entry_type = if comma < 0 then locals.slice(colon + 1, len) else locals.slice(colon + 1, comma);
+            if entry_name == name then entry_type
+            else if comma < 0 then ""
+            else locals_lookup_from(locals, name, comma + 1);
+
+fn locals_find_colon(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then 0 - 1
+    else if s.char_at(pos) == 58 then pos  -- ':'
+    else locals_find_colon(s, pos + 1);
+
+fn locals_find_comma(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then 0 - 1
+    else if s.char_at(pos) == 44 then pos  -- ','
+    else locals_find_comma(s, pos + 1);
+
+-- Expression kind detection from AST prefix
+fn EXPR_INT() -> i64 = 1;
+fn EXPR_BOOL() -> i64 = 2;
+fn EXPR_VAR() -> i64 = 3;
+fn EXPR_OP() -> i64 = 4;
+fn EXPR_IF() -> i64 = 5;
+fn EXPR_LET() -> i64 = 6;
+fn EXPR_CALL() -> i64 = 7;
+fn EXPR_NEW() -> i64 = 8;
+fn EXPR_FIELD() -> i64 = 9;
+fn EXPR_MATCH() -> i64 = 10;
+fn EXPR_UNKNOWN() -> i64 = 0;
+
+-- Detect expression kind from AST
+fn expr_kind(ast: String) -> i64 =
+    let len = ast.len();
+    if len < 4 then 0
+    else if ast.char_at(0) != 40 then 0  -- must start with '('
+    else
+        let c1 = ast.char_at(1);
+        let c2 = ast.char_at(2);
+        let c3 = ast.char_at(3);
+        -- (int ...) - 105='i', 110='n', 116='t'
+        if c1 == 105 and c2 == 110 and c3 == 116 then EXPR_INT()
+        -- (bool ...) - 98='b', 111='o', 111='o'
+        else if c1 == 98 and c2 == 111 and c3 == 111 then EXPR_BOOL()
+        -- (var ...) - 118='v', 97='a', 114='r'
+        else if c1 == 118 and c2 == 97 and c3 == 114 then EXPR_VAR()
+        -- (op ...) - 111='o', 112='p', 32=' '
+        else if c1 == 111 and c2 == 112 and c3 == 32 then EXPR_OP()
+        -- (if ...) - 105='i', 102='f', 32=' '
+        else if c1 == 105 and c2 == 102 and c3 == 32 then EXPR_IF()
+        -- (let ...) - 108='l', 101='e', 116='t'
+        else if c1 == 108 and c2 == 101 and c3 == 116 then EXPR_LET()
+        -- (call ...) - 99='c', 97='a', 108='l'
+        else if c1 == 99 and c2 == 97 and c3 == 108 then EXPR_CALL()
+        -- (new ...) - 110='n', 101='e', 119='w'
+        else if c1 == 110 and c2 == 101 and c3 == 119 then EXPR_NEW()
+        -- (field ...) - 102='f', 105='i', 101='e'
+        else if c1 == 102 and c2 == 105 and c3 == 101 then EXPR_FIELD()
+        -- (match ...) - 109='m', 97='a', 116='t'
+        else if c1 == 109 and c2 == 97 and c3 == 116 then EXPR_MATCH()
+        else EXPR_UNKNOWN();
+
+-- Extract operands from expression
+-- Returns the first sub-expression after the prefix
+fn expr_first_arg(ast: String, prefix_len: i64) -> String =
+    let start = ast_skip_ws(ast, prefix_len);
+    if start >= ast.len() then ""
+    else if ast.char_at(start) != 40 then
+        -- Not a parenthesized expression, extract until space or paren
+        expr_extract_token(ast, start)
+    else
+        let end_pos = ast_find_close_paren(ast, start + 1);
+        if end_pos < 0 then ""
+        else ast.slice(start, end_pos);
+
+-- Extract token (non-paren expression like operator, name, or number)
+fn expr_extract_token(ast: String, pos: i64) -> String =
+    let end = expr_token_end(ast, pos);
+    ast.slice(pos, end);
+
+fn expr_token_end(ast: String, pos: i64) -> i64 =
+    if pos >= ast.len() then pos
+    else
+        let c = ast.char_at(pos);
+        if c == 32 or c == 40 or c == 41 then pos  -- space, (, )
+        else expr_token_end(ast, pos + 1);
+
+-- Get position after first argument
+fn expr_after_first(ast: String, prefix_len: i64) -> i64 =
+    let start = ast_skip_ws(ast, prefix_len);
+    if start >= ast.len() then start
+    else if ast.char_at(start) != 40 then
+        expr_token_end(ast, start)
+    else
+        ast_find_close_paren(ast, start + 1);
+
+-- Extract second sub-expression
+fn expr_second_arg(ast: String, prefix_len: i64) -> String =
+    let after_first = expr_after_first(ast, prefix_len);
+    let start = ast_skip_ws(ast, after_first);
+    if start >= ast.len() then ""
+    else if ast.char_at(start) != 40 then
+        expr_extract_token(ast, start)
+    else
+        let end_pos = ast_find_close_paren(ast, start + 1);
+        if end_pos < 0 then ""
+        else ast.slice(start, end_pos);
+
+-- Extract third sub-expression
+fn expr_third_arg(ast: String, prefix_len: i64) -> String =
+    let after_first = expr_after_first(ast, prefix_len);
+    let after_second_start = ast_skip_ws(ast, after_first);
+    let after_second = if after_second_start >= ast.len() then after_second_start
+        else if ast.char_at(after_second_start) != 40 then expr_token_end(ast, after_second_start)
+        else ast_find_close_paren(ast, after_second_start + 1);
+    let start = ast_skip_ws(ast, after_second);
+    if start >= ast.len() then ""
+    else if ast.char_at(start) != 40 then
+        expr_extract_token(ast, start)
+    else
+        let end_pos = ast_find_close_paren(ast, start + 1);
+        if end_pos < 0 then ""
+        else ast.slice(start, end_pos);
+
+-- Extract variable name from (var <name>)
+fn expr_var_name(ast: String) -> String =
+    let name_with_brackets = expr_first_arg(ast, 4);  -- skip "(var"
+    ast_extract_angle_name(name_with_brackets);
+
+-- Extract operator from (op OP ...)
+fn expr_op_symbol(ast: String) -> String =
+    let len = ast.len();
+    if len < 5 then ""
+    else
+        -- "(op " is 4 chars, operator starts at 4
+        let start = 4;
+        if start >= len then ""
+        else expr_extract_token(ast, start);
+
+-- Count operands in (op OP e1 e2?) - returns 1 or 2
+fn expr_op_count(ast: String) -> i64 =
+    let op = expr_op_symbol(ast);
+    let after_op = 4 + op.len();  -- "(op " + operator length
+    let first = expr_first_arg(ast, after_op);
+    if first == "" then 0
+    else
+        let after_first = expr_after_first(ast, after_op);
+        let second = expr_second_arg(ast, after_op);
+        if second == "" or second == ")" then 1 else 2;
+
+-- Get first operand of binary/unary operation
+fn expr_op_arg1(ast: String) -> String =
+    let op = expr_op_symbol(ast);
+    let after_op = 4 + op.len();
+    expr_first_arg(ast, after_op);
+
+-- Get second operand of binary operation
+fn expr_op_arg2(ast: String) -> String =
+    let op = expr_op_symbol(ast);
+    let after_op = 4 + op.len();
+    expr_second_arg(ast, after_op);
+
+-- Type check expression: returns type string or "ERR:message"
+fn type_of_expr(tenv: String, locals: String, ast: String) -> String =
+    let kind = expr_kind(ast);
+    if kind == EXPR_INT() then "i64"
+    else if kind == EXPR_BOOL() then "bool"
+    else if kind == EXPR_VAR() then type_of_var(tenv, locals, ast)
+    else if kind == EXPR_OP() then type_of_op(tenv, locals, ast)
+    else if kind == EXPR_IF() then type_of_if(tenv, locals, ast)
+    else if kind == EXPR_LET() then type_of_let(tenv, locals, ast)
+    else if kind == EXPR_CALL() then type_of_call(tenv, locals, ast)
+    else if kind == EXPR_NEW() then type_of_new(tenv, locals, ast)
+    else if kind == EXPR_FIELD() then type_of_field(tenv, locals, ast)
+    else "ERR:unknown expression";
+
+-- Type of variable reference
+fn type_of_var(tenv: String, locals: String, ast: String) -> String =
+    let name = expr_var_name(ast);
+    let typ = locals_lookup(locals, name);
+    if typ != "" then typ
+    else
+        -- Check if it's a type parameter
+        if tenv_has_tparam(tenv, name) then name
+        else "ERR:undefined variable " + name;
+
+-- Type of binary/unary operation
+fn type_of_op(tenv: String, locals: String, ast: String) -> String =
+    let op = expr_op_symbol(ast);
+    let count = expr_op_count(ast);
+    if count == 1 then type_of_unop(tenv, locals, op, ast)
+    else if count == 2 then type_of_binop(tenv, locals, op, ast)
+    else "ERR:invalid operation";
+
+fn type_of_unop(tenv: String, locals: String, op: String, ast: String) -> String =
+    let arg = expr_op_arg1(ast);
+    let arg_t = type_of_expr(tenv, locals, arg);
+    if is_error_str(arg_t) then arg_t
+    else
+        -- Unary minus requires i64
+        if op == "-" then
+            if arg_t == "i64" then "i64"
+            else "ERR:unary - requires i64"
+        -- Logical not requires bool
+        else if op == "not" then
+            if arg_t == "bool" then "bool"
+            else "ERR:not requires bool"
+        else "ERR:unknown unary operator " + op;
+
+fn type_of_binop(tenv: String, locals: String, op: String, ast: String) -> String =
+    let arg1 = expr_op_arg1(ast);
+    let arg2 = expr_op_arg2(ast);
+    let t1 = type_of_expr(tenv, locals, arg1);
+    if is_error_str(t1) then t1
+    else
+        let t2 = type_of_expr(tenv, locals, arg2);
+        if is_error_str(t2) then t2
+        else binop_result_type(op, t1, t2);
+
+-- Compute result type of binary operation
+fn binop_result_type(op: String, t1: String, t2: String) -> String =
+    -- Arithmetic: +, -, *, /, %
+    if op == "+" or op == "-" or op == "*" or op == "/" or op == "%" then
+        if t1 == "i64" and t2 == "i64" then "i64"
+        else "ERR:arithmetic requires i64"
+    -- Comparison: ==, !=, <, >, <=, >=
+    else if op == "==" or op == "!=" then
+        if t1 == t2 then "bool"
+        else "ERR:comparison requires same types"
+    else if op == "<" or op == ">" or op == "<=" or op == ">=" then
+        if t1 == "i64" and t2 == "i64" then "bool"
+        else "ERR:ordering requires i64"
+    -- Logical: and, or
+    else if op == "and" or op == "or" then
+        if t1 == "bool" and t2 == "bool" then "bool"
+        else "ERR:logical requires bool"
+    else "ERR:unknown operator " + op;
+
+-- Check if type string is an error (starts with "ERR:")
+fn is_error_str(t: String) -> bool =
+    t.len() >= 4 and t.char_at(0) == 69 and t.char_at(1) == 82 and t.char_at(2) == 82 and t.char_at(3) == 58;
+
+-- Type of if-then-else
+fn type_of_if(tenv: String, locals: String, ast: String) -> String =
+    let cond = expr_first_arg(ast, 3);  -- skip "(if"
+    let then_e = expr_second_arg(ast, 3);
+    let else_e = expr_third_arg(ast, 3);
+    let cond_t = type_of_expr(tenv, locals, cond);
+    if is_error_str(cond_t) then cond_t
+    else if cond_t != "bool" then "ERR:if condition must be bool"
+    else
+        let then_t = type_of_expr(tenv, locals, then_e);
+        if is_error_str(then_t) then then_t
+        else
+            let else_t = type_of_expr(tenv, locals, else_e);
+            if is_error_str(else_t) then else_t
+            else if then_t == else_t then then_t
+            else "ERR:if branches must have same type";
+
+-- Extract let binding name from (let <name> val body)
+fn expr_let_name(ast: String) -> String =
+    let name_with_brackets = expr_first_arg(ast, 4);  -- skip "(let"
+    ast_extract_angle_name(name_with_brackets);
+
+-- Type of let binding
+fn type_of_let(tenv: String, locals: String, ast: String) -> String =
+    let name = expr_let_name(ast);
+    -- Get value expression (after "<name>")
+    let after_name = 4 + name.len() + 2;  -- "(let" + space + "<name>"
+    let val = expr_first_arg(ast, after_name + 1);
+    let val_t = type_of_expr(tenv, locals, val);
+    if is_error_str(val_t) then val_t
+    else
+        -- Extend locals and check body
+        let new_locals = locals_add(locals, name, val_t);
+        let after_val = expr_after_first(ast, after_name + 1);
+        let body = expr_first_arg(ast, after_val);
+        type_of_expr(tenv, new_locals, body);
+
+-- Extract call function name from (call <name> args...)
+fn expr_call_name(ast: String) -> String =
+    let name_with_brackets = expr_first_arg(ast, 5);  -- skip "(call"
+    ast_extract_angle_name(name_with_brackets);
+
+-- Count call arguments
+fn expr_call_arg_count(ast: String) -> i64 =
+    let name = expr_call_name(ast);
+    let after_name = 5 + name.len() + 3;  -- "(call" + space + "<name>"
+    expr_count_args(ast, after_name);
+
+fn expr_count_args(ast: String, pos: i64) -> i64 =
+    let start = ast_skip_ws(ast, pos);
+    if start >= ast.len() then 0
+    else if ast.char_at(start) == 41 then 0  -- ')'
+    else if ast.char_at(start) != 40 then 0  -- not '('
+    else
+        let end_pos = ast_find_close_paren(ast, start + 1);
+        if end_pos < 0 then 0
+        else 1 + expr_count_args(ast, end_pos);
+
+-- Get call argument at index
+fn expr_call_arg(ast: String, idx: i64) -> String =
+    let name = expr_call_name(ast);
+    let after_name = 5 + name.len() + 3;
+    expr_get_arg_at(ast, after_name, idx);
+
+fn expr_get_arg_at(ast: String, pos: i64, idx: i64) -> String =
+    let start = ast_skip_ws(ast, pos);
+    if start >= ast.len() then ""
+    else if ast.char_at(start) != 40 then ""
+    else
+        let end_pos = ast_find_close_paren(ast, start + 1);
+        if end_pos < 0 then ""
+        else if idx == 0 then ast.slice(start, end_pos)
+        else expr_get_arg_at(ast, end_pos, idx - 1);
+
+-- Type of function call
+fn type_of_call(tenv: String, locals: String, ast: String) -> String =
+    let name = expr_call_name(ast);
+    let count = expr_call_arg_count(ast);
+    -- Collect argument types
+    let arg_types = collect_call_arg_types(tenv, locals, ast, count, 0, "");
+    if is_error_str(arg_types) then arg_types
+    else
+        -- Try to infer and check the call
+        let result = tenv_infer_fn_call(tenv, name, arg_types);
+        if result == "" then "ERR:function " + name + " not found"
+        else result;
+
+fn collect_call_arg_types(tenv: String, locals: String, ast: String, count: i64, idx: i64, acc: String) -> String =
+    if idx >= count then acc
+    else
+        let arg = expr_call_arg(ast, idx);
+        let arg_t = type_of_expr(tenv, locals, arg);
+        if is_error_str(arg_t) then arg_t
+        else
+            let new_acc = if acc == "" then arg_t else acc + "," + arg_t;
+            collect_call_arg_types(tenv, locals, ast, count, idx + 1, new_acc);
+
+-- Extract struct name from (new <Name> ...)
+fn expr_new_name(ast: String) -> String =
+    let name_with_brackets = expr_first_arg(ast, 4);  -- skip "(new"
+    ast_extract_angle_name(name_with_brackets);
+
+-- Type of struct construction
+fn type_of_new(tenv: String, locals: String, ast: String) -> String =
+    let name = expr_new_name(ast);
+    -- For now, just return the struct type name
+    -- Full field checking would require more complex parsing
+    name;
+
+-- Type of field access
+fn type_of_field(tenv: String, locals: String, ast: String) -> String =
+    -- (field expr <fieldname>)
+    let obj = expr_first_arg(ast, 6);  -- skip "(field"
+    let obj_t = type_of_expr(tenv, locals, obj);
+    if is_error_str(obj_t) then obj_t
+    else
+        -- Get field name (last token before closing paren)
+        let field_name = expr_field_name(ast);
+        tenv_struct_field_type(tenv, obj_t, "", field_name);
+
+-- Extract field name from (field expr <name>)
+fn expr_field_name(ast: String) -> String =
+    -- Find the last <name> in the expression
+    let last_angle = expr_find_last_angle(ast, 0, 0 - 1);
+    if last_angle < 0 then ""
+    else
+        let end = expr_find_close_angle(ast, last_angle + 1);
+        if end < 0 then ""
+        else ast.slice(last_angle + 1, end);
+
+fn expr_find_last_angle(ast: String, pos: i64, last: i64) -> i64 =
+    if pos >= ast.len() then last
+    else if ast.char_at(pos) == 60 then expr_find_last_angle(ast, pos + 1, pos)  -- '<'
+    else expr_find_last_angle(ast, pos + 1, last);
+
+fn expr_find_close_angle(ast: String, pos: i64) -> i64 =
+    if pos >= ast.len() then 0 - 1
+    else if ast.char_at(pos) == 62 then pos  -- '>'
+    else expr_find_close_angle(ast, pos + 1);
+
+-- ============================================================================
+-- v0.30.20 Tests
+-- ============================================================================
+
+-- Test local variable environment
+fn test_locals() -> i64 =
+    let l1 = locals_new();
+    let l2 = locals_add(l1, "x", "i64");
+    let l3 = locals_add(l2, "y", "bool");
+
+    let t1 = locals_lookup(l3, "x");
+    let r1 = if t1 == "i64" then 1 else 0;
+
+    let t2 = locals_lookup(l3, "y");
+    let r2 = if t2 == "bool" then 1 else 0;
+
+    let t3 = locals_lookup(l3, "z");
+    let r3 = if t3 == "" then 1 else 0;
+
+    r1 + r2 + r3;
+
+-- Test expression kind detection
+fn test_expr_kind() -> i64 =
+    let k1 = expr_kind("(int 42)");
+    let r1 = if k1 == EXPR_INT() then 1 else 0;
+
+    let k2 = expr_kind("(bool 1)");
+    let r2 = if k2 == EXPR_BOOL() then 1 else 0;
+
+    let k3 = expr_kind("(var <x>)");
+    let r3 = if k3 == EXPR_VAR() then 1 else 0;
+
+    let k4 = expr_kind("(op + (int 1) (int 2))");
+    let r4 = if k4 == EXPR_OP() then 1 else 0;
+
+    let k5 = expr_kind("(if (bool 1) (int 1) (int 2))");
+    let r5 = if k5 == EXPR_IF() then 1 else 0;
+
+    let k6 = expr_kind("(let <x> (int 1) (var <x>))");
+    let r6 = if k6 == EXPR_LET() then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5 + r6;
+
+-- Test literal type checking
+fn test_type_literals() -> i64 =
+    let tenv = tenv_new();
+    let locals = locals_new();
+
+    let t1 = type_of_expr(tenv, locals, "(int 42)");
+    let r1 = if t1 == "i64" then 1 else 0;
+
+    let t2 = type_of_expr(tenv, locals, "(bool 1)");
+    let r2 = if t2 == "bool" then 1 else 0;
+
+    r1 + r2;
+
+-- Test variable type checking
+fn test_type_var() -> i64 =
+    let tenv = tenv_new();
+    let locals = locals_add(locals_new(), "x", "i64");
+
+    let t1 = type_of_expr(tenv, locals, "(var <x>)");
+    let r1 = if t1 == "i64" then 1 else 0;
+
+    let t2 = type_of_expr(tenv, locals, "(var <y>)");
+    let r2 = if is_error_str(t2) then 1 else 0;
+
+    r1 + r2;
+
+-- Test binary operation type checking
+fn test_type_binop() -> i64 =
+    let tenv = tenv_new();
+    let locals = locals_add(locals_add(locals_new(), "x", "i64"), "y", "i64");
+
+    -- Arithmetic
+    let t1 = type_of_expr(tenv, locals, "(op + (var <x>) (var <y>))");
+    let r1 = if t1 == "i64" then 1 else 0;
+
+    -- Comparison
+    let t2 = type_of_expr(tenv, locals, "(op == (var <x>) (var <y>))");
+    let r2 = if t2 == "bool" then 1 else 0;
+
+    -- Ordering
+    let t3 = type_of_expr(tenv, locals, "(op < (var <x>) (var <y>))");
+    let r3 = if t3 == "bool" then 1 else 0;
+
+    r1 + r2 + r3;
+
+-- Test if-then-else type checking
+fn test_type_if() -> i64 =
+    let tenv = tenv_new();
+    let locals = locals_add(locals_new(), "b", "bool");
+
+    -- Valid if
+    let t1 = type_of_expr(tenv, locals, "(if (var <b>) (int 1) (int 2))");
+    let r1 = if t1 == "i64" then 1 else 0;
+
+    -- Non-bool condition
+    let t2 = type_of_expr(tenv, locals, "(if (int 1) (int 1) (int 2))");
+    let r2 = if is_error_str(t2) then 1 else 0;
+
+    -- Mismatched branches
+    let t3 = type_of_expr(tenv, locals, "(if (var <b>) (int 1) (bool 0))");
+    let r3 = if is_error_str(t3) then 1 else 0;
+
+    r1 + r2 + r3;
+
+-- Test let binding type checking
+fn test_type_let() -> i64 =
+    let tenv = tenv_new();
+    let locals = locals_new();
+
+    -- Simple let
+    let t1 = type_of_expr(tenv, locals, "(let <x> (int 42) (var <x>))");
+    let r1 = if t1 == "i64" then 1 else 0;
+
+    -- Nested let
+    let t2 = type_of_expr(tenv, locals, "(let <x> (int 1) (let <y> (int 2) (op + (var <x>) (var <y>))))");
+    let r2 = if t2 == "i64" then 1 else 0;
+
+    r1 + r2;
+
+-- ============================================================================
 -- v0.30.18 Tests
 -- ============================================================================
 
@@ -4490,10 +5015,32 @@ fn main() -> i64 =
     let t103 = test_tenv_simple_program();
     let p103 = println(t103);  -- Expected: 2
 
+    -- v0.30.20: Expression type checking tests
+    let t104 = test_locals();
+    let p104 = println(t104);  -- Expected: 3
+
+    let t105 = test_expr_kind();
+    let p105 = println(t105);  -- Expected: 6
+
+    let t106 = test_type_literals();
+    let p106 = println(t106);  -- Expected: 2
+
+    let t107 = test_type_var();
+    let p107 = println(t107);  -- Expected: 2
+
+    let t108 = test_type_binop();
+    let p108 = println(t108);  -- Expected: 3
+
+    let t109 = test_type_if();
+    let p109 = println(t109);  -- Expected: 3
+
+    let t110 = test_type_let();
+    let p110 = println(t110);  -- Expected: 2
+
     let u1 = println(888);  -- Separator
 
-    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33 + t34 + t35 + t36 + t37 + t38 + t39 + t40 + t41 + t42 + t43 + t44 + t45 + t46 + t47 + t48 + t49 + t50 + t51 + t52 + t53 + t54 + t55 + t56 + t57 + t58 + t59 + t60 + t61 + t62 + t63 + t64 + t65 + t66 + t67 + t68 + t69 + t70 + t71 + t72 + t73 + t74 + t75 + t76 + t77 + t78 + t79 + t80 + t81 + t82 + t83 + t84 + t85 + t86 + t87 + t88 + t89 + t90 + t91 + t92 + t93 + t94 + t95 + t96 + t97 + t98 + t99 + t100 + t101 + t102 + t103;
-    let u2 = println(total);  -- Expected: 470
+    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33 + t34 + t35 + t36 + t37 + t38 + t39 + t40 + t41 + t42 + t43 + t44 + t45 + t46 + t47 + t48 + t49 + t50 + t51 + t52 + t53 + t54 + t55 + t56 + t57 + t58 + t59 + t60 + t61 + t62 + t63 + t64 + t65 + t66 + t67 + t68 + t69 + t70 + t71 + t72 + t73 + t74 + t75 + t76 + t77 + t78 + t79 + t80 + t81 + t82 + t83 + t84 + t85 + t86 + t87 + t88 + t89 + t90 + t91 + t92 + t93 + t94 + t95 + t96 + t97 + t98 + t99 + t100 + t101 + t102 + t103 + t104 + t105 + t106 + t107 + t108 + t109 + t110;
+    let u2 = println(total);  -- Expected: 491
 
     let u3 = println(999);  -- End marker
     total;

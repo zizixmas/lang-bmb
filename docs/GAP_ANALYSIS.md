@@ -177,10 +177,11 @@ Gap to Close:
 - ✅ Call site type checking (v0.30.17: tenv_check_fn_call, tenv_infer_fn_call)
 - ✅ AST-Type integration (v0.30.18: ast_struct_to_def, ast_fn_to_sig, register_*_from_ast)
 - ✅ Program AST traversal (v0.30.19: tenv_from_program_ast, ast_program_item_at)
+- ✅ Expression type checking (v0.30.20: type_of_expr, locals, type_of_if/let/call)
 
 ### What Bootstrap CANNOT Do Yet
 
-- ⚠️ Generic type checking (struct/function ready, expression type checking pending)
+- ⚠️ Generic expression type checking (inference with type parameters pending)
 - ❌ Trait implementation dispatch
 - ❌ Closure capture and codegen
 - ❌ FFI linking
@@ -291,11 +292,11 @@ $ diff stage2/bmb stage3/bmb
 
 v0.30 "Pure" represents the culmination of the BMB self-hosting journey. With Stage 1/2 verification complete and the bootstrap covering the full compilation pipeline, the remaining work is substantial but achievable within the 2026 Q4 timeline.
 
-**Key Metrics** (as of v0.30.19):
+**Key Metrics** (as of v0.30.20):
 - Rust code to remove: ~21,783 LOC
-- BMB bootstrap code: ~10,100 LOC (47% coverage)
-- Gap to close: ~12,916 LOC additional BMB
-- Bootstrap tests passing: 470 tests (types.bmb)
+- BMB bootstrap code: ~10,400 LOC (48% coverage)
+- Gap to close: ~12,600 LOC additional BMB
+- Bootstrap tests passing: 491 tests (types.bmb)
 - Estimated effort: 6-9 months
 
 ---

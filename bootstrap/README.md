@@ -121,7 +121,7 @@ Comprehensive test suite with 15 test categories.
 14. Deep nesting
 15. Nested function calls
 
-### types.bmb (160KB) - v0.30.19
+### types.bmb (165KB) - v0.30.20
 Type checker foundation for BMB.
 
 **Features:**
@@ -277,6 +277,19 @@ Type checker foundation for BMB.
 - `register_item`: Route item registration based on kind
 - `tenv_from_program_ast`: Main entry point - build complete tenv from program AST
 
+**Features (v0.30.20):**
+- Expression type checking: `type_of_expr` for S-expression AST inference
+- Local variable environment: `locals_new`, `locals_add`, `locals_lookup`
+- Expression kind constants: `EXPR_INT`, `EXPR_BOOL`, `EXPR_VAR`, `EXPR_OP`, `EXPR_IF`, `EXPR_LET`, `EXPR_CALL`, `EXPR_NEW`, `EXPR_FIELD`, `EXPR_MATCH`
+- Literal type checking: `(int n)` → i64, `(bool n)` → bool
+- Variable type checking: `(var <name>)` → lookup in locals
+- Operator type checking: `type_of_unop`, `type_of_binop`, `binop_result_type`
+- Control flow type checking: `type_of_if` (condition bool, branches match)
+- Let binding type checking: `type_of_let` with scope extension
+- Function call type checking: `type_of_call` with argument type collection
+- Struct construction/field access: `type_of_new`, `type_of_field`
+- Error propagation: `is_error_str` for String-based type error detection
+
 **Test output:**
 ```
 777 (start marker)
@@ -382,8 +395,15 @@ Type checker foundation for BMB.
 3  (program item at tests)            ; v0.30.19
 3  (tenv from program tests)          ; v0.30.19
 2  (simple program tests)             ; v0.30.19
+3  (locals tests)                     ; v0.30.20
+6  (expr kind tests)                  ; v0.30.20
+2  (type literals tests)              ; v0.30.20
+2  (type var tests)                   ; v0.30.20
+3  (type binop tests)                 ; v0.30.20
+3  (type if tests)                    ; v0.30.20
+2  (type let tests)                   ; v0.30.20
 888 (separator)
-470 (total passed)
+491 (total passed)
 999 (end marker)
 ```
 

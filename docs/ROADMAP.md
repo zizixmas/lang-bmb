@@ -303,6 +303,20 @@ v0.MAJOR.MINOR
 - `enum_reg_count`, `enum_reg_is_generic`: Registry utilities
 - 5 new test functions, 19 assertions (335 total in types.bmb)
 
+**v0.30.20 Completed (2026-01-05)**:
+- Expression type checking: type_of_expr for S-expression AST inference
+- Local variable environment: locals_new, locals_add, locals_lookup
+- Expression kind detection: EXPR_INT, EXPR_BOOL, EXPR_VAR, EXPR_OP, EXPR_IF, EXPR_LET, EXPR_CALL, EXPR_NEW, EXPR_FIELD, EXPR_MATCH
+- Literal type checking: (int n) → i64, (bool n) → bool
+- Variable type checking: (var <name>) → lookup in locals
+- Operator type checking: type_of_unop, type_of_binop, binop_result_type
+- Control flow type checking: type_of_if (condition bool, branches match)
+- Let binding type checking: type_of_let with scope extension
+- Function call type checking: type_of_call with argument type collection
+- Struct construction/field access: type_of_new, type_of_field
+- Error propagation: is_error_str for String-based type error detection
+- Total: 491 tests passing (21 new tests)
+
 **v0.30.19 Completed (2026-01-05)**:
 - Program AST Traversal: Navigate `(program ...)` S-expressions from parser_ast.bmb
 - Item kind detection: ITEM_FN, ITEM_STRUCT, ITEM_ENUM constants
