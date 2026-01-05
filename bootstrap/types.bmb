@@ -3889,6 +3889,8 @@ fn EXPR_LAMBDA() -> i64 = 11;  -- v0.30.24: Closure expression
 fn EXPR_NOT() -> i64 = 12;     -- v0.30.25: Logical not (not expr)
 fn EXPR_NEG() -> i64 = 13;     -- v0.30.25: Unary negation (neg expr)
 fn EXPR_STRING() -> i64 = 14;  -- v0.30.29: String literal "..."
+fn EXPR_BLOCK() -> i64 = 15;   -- v0.30.30: Block expression (block ...)
+fn EXPR_UNIT() -> i64 = 16;    -- v0.30.31: Unit value ()
 fn EXPR_UNKNOWN() -> i64 = 0;
 
 -- Detect expression kind from AST
@@ -3897,6 +3899,8 @@ fn expr_kind(ast: String) -> i64 =
     if len < 1 then 0
     -- v0.30.29: Check for string literal "..." first
     else if ast.char_at(0) == 34 then EXPR_STRING()  -- '"' = 34
+    -- v0.30.31: Check for unit value () - exactly "()"
+    else if len == 2 and ast.char_at(0) == 40 and ast.char_at(1) == 41 then EXPR_UNIT()
     else if len < 4 then 0
     else if ast.char_at(0) != 40 then 0  -- must start with '('
     else
@@ -3929,6 +3933,8 @@ fn expr_kind(ast: String) -> i64 =
         else if c1 == 109 and c2 == 97 and c3 == 116 then EXPR_MATCH()
         -- (fn |...) - 102='f', 110='n', 32=' ' then check for '|'
         else if c1 == 102 and c2 == 110 and c3 == 32 then expr_kind_check_lambda(ast, len)
+        -- v0.30.30: (block ...) - 98='b', 108='l', 111='o'
+        else if c1 == 98 and c2 == 108 and c3 == 111 then EXPR_BLOCK()
         else EXPR_UNKNOWN();
 
 -- v0.30.24: Check if fn expression is a lambda (has | after fn)
@@ -4043,6 +4049,7 @@ fn type_of_expr(tenv: String, locals: String, ast: String) -> String =
     if kind == EXPR_INT() then "i64"
     else if kind == EXPR_BOOL() then "bool"
     else if kind == EXPR_STRING() then "String"  -- v0.30.29: String literals
+    else if kind == EXPR_UNIT() then "()"        -- v0.30.31: Unit value
     else if kind == EXPR_VAR() then type_of_var(tenv, locals, ast)
     else if kind == EXPR_OP() then type_of_op(tenv, locals, ast)
     else if kind == EXPR_IF() then type_of_if(tenv, locals, ast)
@@ -4054,6 +4061,7 @@ fn type_of_expr(tenv: String, locals: String, ast: String) -> String =
     else if kind == EXPR_LAMBDA() then type_of_lambda(tenv, locals, ast)
     else if kind == EXPR_NOT() then type_of_not(tenv, locals, ast)
     else if kind == EXPR_NEG() then type_of_neg(tenv, locals, ast)
+    else if kind == EXPR_BLOCK() then type_of_block(tenv, locals, ast)  -- v0.30.30
     else "ERR:unknown expression";
 
 -- v0.30.25: Type of logical not (not expr)
@@ -4091,6 +4099,23 @@ fn neg_inner_expr(ast: String) -> String =
     let len = ast.len();
     if len < 7 then ""  -- minimum: "(neg x)"
     else ast.slice(5, len - 1);
+
+-- ============================================================================
+-- v0.30.30: Block Expression Type Checking
+-- ============================================================================
+-- Format: (block expr)
+-- Returns: type of the inner expression
+
+fn type_of_block(tenv: String, locals: String, ast: String) -> String =
+    let inner = block_inner_expr(ast);
+    if inner == "" then "ERR:block missing body"
+    else type_of_expr(tenv, locals, inner);
+
+-- Extract inner expression from (block expr)
+fn block_inner_expr(ast: String) -> String =
+    let len = ast.len();
+    if len < 9 then ""  -- minimum: "(block x)"
+    else ast.slice(7, len - 1);
 
 -- Type of variable reference
 fn type_of_var(tenv: String, locals: String, ast: String) -> String =
@@ -5992,6 +6017,44 @@ fn test_string_literal() -> i64 =
 
     r1 + r2 + r3 + r4 + r5;
 
+-- v0.30.30-31: Test block expression and unit type checking
+fn test_block_unit() -> i64 =
+    let tenv = tenv_new();
+    let locals = locals_new();
+
+    -- Test 1: EXPR_BLOCK constant is 15
+    let r1 = if EXPR_BLOCK() == 15 then 1 else 0;
+
+    -- Test 2: EXPR_UNIT constant is 16
+    let r2 = if EXPR_UNIT() == 16 then 1 else 0;
+
+    -- Test 3: expr_kind detects block expression
+    let k3 = expr_kind("(block (int 42))");
+    let r3 = if k3 == EXPR_BLOCK() then 1 else 0;
+
+    -- Test 4: expr_kind detects unit value
+    let k4 = expr_kind("()");
+    let r4 = if k4 == EXPR_UNIT() then 1 else 0;
+
+    -- Test 5: type_of_block returns inner type
+    let t5 = type_of_block(tenv, locals, "(block (int 42))");
+    let r5 = if t5 == "i64" then 1 else 0;
+
+    -- Test 6: type_of_block with bool inner
+    let t6 = type_of_block(tenv, locals, "(block (bool true))");
+    let r6 = if t6 == "bool" then 1 else 0;
+
+    -- Test 7: type_of_expr returns "()" for unit
+    let t7 = type_of_expr(tenv, locals, "()");
+    let r7 = if t7 == "()" then 1 else 0;
+
+    -- Test 8: block with nested let returns correct type
+    let ast8 = "(block (let <x> (int 1) (var <x>)))";
+    let t8 = type_of_block(tenv, locals, ast8);
+    let r8 = if t8 == "i64" then 1 else 0;
+
+    r1 + r2 + r3 + r4 + r5 + r6 + r7 + r8;
+
 -- Main test runner
 fn main() -> i64 =
     let u0 = println(777);  -- Start marker
@@ -6432,10 +6495,14 @@ fn main() -> i64 =
     let t136 = test_string_literal();
     let p136 = println(t136);  -- Expected: 5
 
+    -- v0.30.30-31: Block and unit type checking tests
+    let t137 = test_block_unit();
+    let p137 = println(t137);  -- Expected: 8
+
     let u1 = println(888);  -- Separator
 
-    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33 + t34 + t35 + t36 + t37 + t38 + t39 + t40 + t41 + t42 + t43 + t44 + t45 + t46 + t47 + t48 + t49 + t50 + t51 + t52 + t53 + t54 + t55 + t56 + t57 + t58 + t59 + t60 + t61 + t62 + t63 + t64 + t65 + t66 + t67 + t68 + t69 + t70 + t71 + t72 + t73 + t74 + t75 + t76 + t77 + t78 + t79 + t80 + t81 + t82 + t83 + t84 + t85 + t86 + t87 + t88 + t89 + t90 + t91 + t92 + t93 + t94 + t95 + t96 + t97 + t98 + t99 + t100 + t101 + t102 + t103 + t104 + t105 + t106 + t107 + t108 + t109 + t110 + t111 + t112 + t113 + t114 + t115 + t116 + t117 + t118 + t119 + t120 + t121 + t122 + t123 + t124 + t125 + t126 + t127 + t128 + t129 + t130 + t131 + t132 + t133 + t134 + t135 + t136;
-    let u2 = println(total);  -- Expected: 592
+    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33 + t34 + t35 + t36 + t37 + t38 + t39 + t40 + t41 + t42 + t43 + t44 + t45 + t46 + t47 + t48 + t49 + t50 + t51 + t52 + t53 + t54 + t55 + t56 + t57 + t58 + t59 + t60 + t61 + t62 + t63 + t64 + t65 + t66 + t67 + t68 + t69 + t70 + t71 + t72 + t73 + t74 + t75 + t76 + t77 + t78 + t79 + t80 + t81 + t82 + t83 + t84 + t85 + t86 + t87 + t88 + t89 + t90 + t91 + t92 + t93 + t94 + t95 + t96 + t97 + t98 + t99 + t100 + t101 + t102 + t103 + t104 + t105 + t106 + t107 + t108 + t109 + t110 + t111 + t112 + t113 + t114 + t115 + t116 + t117 + t118 + t119 + t120 + t121 + t122 + t123 + t124 + t125 + t126 + t127 + t128 + t129 + t130 + t131 + t132 + t133 + t134 + t135 + t136 + t137;
+    let u2 = println(total);  -- Expected: 600
 
     let u3 = println(999);  -- End marker
     total;

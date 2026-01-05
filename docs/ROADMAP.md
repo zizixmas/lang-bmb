@@ -303,6 +303,19 @@ v0.MAJOR.MINOR
 - `enum_reg_count`, `enum_reg_is_generic`: Registry utilities
 - 5 new test functions, 19 assertions (335 total in types.bmb)
 
+**v0.30.31 Completed (2026-01-05)**:
+- Unit type support: EXPR_UNIT constant = 16
+- expr_kind extended: Detects "()" exactly (len==2, chars 40 and 41)
+- type_of_expr: Returns "()" type for unit expressions
+- Total: 600 tests passing (combined with v0.30.30)
+
+**v0.30.30 Completed (2026-01-05)**:
+- Block expression type checking: EXPR_BLOCK constant = 15
+- expr_kind extended: Detects "(block" pattern via 'b','l','o' chars
+- type_of_block: Returns type of inner expression
+- block_inner_expr: Extracts inner expression from "(block expr)"
+- Total: 600 tests passing (8 new tests with v0.30.31)
+
 **v0.30.29 Completed (2026-01-05)**:
 - String literal type checking: EXPR_STRING constant and quote char detection
 - expr_kind extended: Detects strings starting with char 34 (quote) before checking '('
@@ -828,13 +841,13 @@ $ bmb doc --check
 
 For detailed analysis of the remaining work, see [GAP_ANALYSIS.md](./GAP_ANALYSIS.md).
 
-**Key Metrics (as of v0.30.29)**:
+**Key Metrics (as of v0.30.31)**:
 - Rust code to remove: ~21,783 LOC
-- BMB bootstrap code: ~11,600 LOC (53% coverage)
-- Gap to close: ~11,400 LOC additional BMB
-- Bootstrap tests passing: 592 tests
+- BMB bootstrap code: ~11,700 LOC (54% coverage)
+- Gap to close: ~11,300 LOC additional BMB
+- Bootstrap tests passing: 600 tests
 
 ---
 
 **Last Updated**: 2026-01-05
-**Version**: v0.30.29 → v1.0.0-rc Planning Document
+**Version**: v0.30.31 → v1.0.0-rc Planning Document
