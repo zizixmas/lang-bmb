@@ -164,15 +164,15 @@ v0.MAJOR.MINOR
 | v0.28 | Benchmark | C/Rust/BMB benchmark suite | Compute-intensive benchmarks, Contract-optimized benchmarks, Real-world workloads |
 | v0.29 | Velocity | C/Rust performance sprint | MIR optimization framework (6 passes), Contract-based optimization, Bootstrap optimization module |
 
-### Bootstrap Statistics (as of v0.30.53)
+### Bootstrap Statistics (as of v0.30.56)
 
 | Metric | Value |
 |--------|-------|
 | Rust Codebase | ~21,783 LOC |
-| BMB Bootstrap | ~12,700 LOC |
-| Coverage | 58% |
+| BMB Bootstrap | ~12,900 LOC |
+| Coverage | 59% |
 | Stage 1/2 Tests | 19 tests passing |
-| Bootstrap Tests | 1080 tests (621 types + 156 llvm_ir + 95 lowering + 46 mir + 71 parser_ast + 33 utils + 19 selfhost_equiv + 14 pipeline + 9 optimize + 8 selfhost_test + 8 compiler) |
+| Bootstrap Tests | 1103 tests (621 types + 163 llvm_ir + 95 lowering + 46 mir + 71 parser_ast + 33 utils + 19 selfhost_equiv + 30 pipeline + 9 optimize + 8 selfhost_test + 8 compiler) |
 
 ---
 
@@ -302,6 +302,29 @@ v0.MAJOR.MINOR
 - `enum_reg_variant_type`: Resolve variant type with type args through registry lookup
 - `enum_reg_count`, `enum_reg_is_generic`: Registry utilities
 - 5 new test functions, 19 assertions (335 total in types.bmb)
+
+**v0.30.56 Completed (2026-01-05)**:
+- End-to-end LLVM IR tests: Complete MIR to LLVM IR function generation tests
+- Return type tracking: gen_function now extracts return type for proper terminator generation
+- extract_return_type: Parse return type from MIR function header
+- gen_terminator_typed: Pass return type to terminator for correct `ret i1`/`ret i64`
+- test_full_compare_function: Validates comparison operators generate `icmp sle`
+- test_full_logic_function: Validates logic operators generate `and i1`/`or i1`/`xor i1`
+- Total: 163 tests passing in llvm_ir.bmb (156 + 7 new)
+
+**v0.30.55 Completed (2026-01-05)**:
+- Pipeline associativity tests: Verify left-to-right operator chaining
+- Pipeline unary tests: Verify nested unary operator handling
+- test_pipeline extended: 8 new test cases for operator precedence
+- Tests: `a + b + c`, `a * b / c`, `not not a`, `-(-x)`, `-(a + b)`
+- Total: 30 tests passing in pipeline.bmb (22 + 8 new)
+
+**v0.30.54 Completed (2026-01-05)**:
+- Pipeline comparison/logic tests: End-to-end verification of comparison and logic operators
+- find_child_end bug fix: Distinguish `<` operator from `<name>` pattern
+- low_is_ident_char check: Verify next char before treating `<` as name delimiter
+- test_pipeline extended: 8 new test cases for `<`, `>`, `<=`, `>=`, `and`, `or`, `!=`, `==`
+- Total: 22 tests passing in pipeline.bmb (14 + 8 new)
 
 **v0.30.53 Completed (2026-01-05)**:
 - Block expression LLVM IR test: Verification of block pass-through behavior

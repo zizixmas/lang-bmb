@@ -675,17 +675,25 @@ fn gen_phi(dest: String, ty: String, val1: String, label1: String, val2: String,
 -- MIR: goto entry   →  LLVM: br label %entry
 -- MIR: branch %c, then_0, else_0  →  LLVM: br i1 %c, label %then_0, label %else_0
 fn gen_terminator(line: String) -> String =
+    gen_terminator_typed(line, "i64");
+
+-- v0.30.56: Terminator with return type context
+fn gen_terminator_typed(line: String, ret_type: String) -> String =
     let pos0 = skip_ws(line, 0);
     let word = read_until_ws(line, pos0);
-    if word == "return" then gen_term_return(line, pos0 + 7)
+    if word == "return" then gen_term_return_typed(line, pos0 + 7, ret_type)
     else if word == "goto" then gen_term_goto(line, pos0 + 5)
     else if word == "branch" then gen_term_branch(line, pos0 + 7)
     else "; unknown terminator: " + word;
 
 fn gen_term_return(line: String, pos: i64) -> String =
+    gen_term_return_typed(line, pos, "i64");
+
+-- v0.30.56: Return with proper type
+fn gen_term_return_typed(line: String, pos: i64, ret_type: String) -> String =
     let pos1 = skip_ws(line, pos);
     let value = read_until_ws(line, pos1);
-    gen_ret("i64", value);
+    gen_ret(llvm_type(ret_type), value);
 
 fn gen_term_goto(line: String, pos: i64) -> String =
     let pos1 = skip_ws(line, pos);
@@ -888,20 +896,39 @@ fn extract_field_acc(s: String, pos: i64, target: i64, current: i64, acc: String
 -- Input: MIR function text with | separators
 -- fn add(a: i64, b: i64) -> i64 {|entry:|  %_t0 = + %a, %b|  return %_t0|}
 fn gen_function(mir: String) -> String =
-    gen_function_lines(mir, 0, "");
+    -- v0.30.56: Extract return type from header for proper terminator generation
+    let ret_type = extract_return_type(mir);
+    gen_function_lines_typed(mir, 0, "", ret_type);
+
+-- v0.30.56: Extract return type from MIR function header
+fn extract_return_type(mir: String) -> String =
+    let arrow_pos = find_arrow(mir, 0);
+    if arrow_pos < 0 then "i64"
+    else
+        let pos1 = arrow_pos + 2;
+        let pos2 = skip_ws(mir, pos1);
+        read_until_ws(mir, pos2);
 
 fn gen_function_lines(mir: String, pos: i64, acc: String) -> String =
+    gen_function_lines_typed(mir, pos, acc, "i64");
+
+-- v0.30.56: Function generation with return type tracking
+fn gen_function_lines_typed(mir: String, pos: i64, acc: String, ret_type: String) -> String =
     if pos >= mir.len() then acc
     else
         let line_end = find_pipe(mir, pos);
         let line = mir.slice(pos, line_end);
-        let llvm_line = gen_mir_line(line);
+        let llvm_line = gen_mir_line_typed(line, ret_type);
         let new_acc = if acc == "" then llvm_line else acc + "|" + llvm_line;
         if line_end >= mir.len() then new_acc
-        else gen_function_lines(mir, line_end + 1, new_acc);
+        else gen_function_lines_typed(mir, line_end + 1, new_acc, ret_type);
 
 -- Dispatch for any MIR line
 fn gen_mir_line(line: String) -> String =
+    gen_mir_line_typed(line, "i64");
+
+-- v0.30.56: MIR line dispatch with return type context
+fn gen_mir_line_typed(line: String, ret_type: String) -> String =
     let pos = skip_ws(line, 0);
     if pos >= line.len() then ""
     else
@@ -909,7 +936,7 @@ fn gen_mir_line(line: String) -> String =
         if word == "fn" then gen_mir_fn_header(line)
         else if word == "}" then gen_fn_footer()
         else if is_label_line(line) then gen_label_line(line)
-        else if is_terminator_line(line) then gen_terminator(line)
+        else if is_terminator_line(line) then gen_terminator_typed(line, ret_type)
         else if is_call_line(line) then gen_instr_call(line)
         -- v0.21.0: Struct support
         else if is_struct_init_line(line) then gen_instr_struct_init(line)
@@ -1003,6 +1030,22 @@ fn example_max_mir() -> String =
 
 fn example_max_llvm() -> String =
     gen_function(example_max_mir());
+
+-- v0.30.56: Example compare function (<=, >=, !=)
+-- fn compare(a: i64, b: i64) -> bool = a <= b;
+fn example_compare_mir() -> String =
+    "fn compare(a: i64, b: i64) -> bool {|entry:|  %_t0 = <= %a, %b|  return %_t0|}";
+
+fn example_compare_llvm() -> String =
+    gen_function(example_compare_mir());
+
+-- v0.30.56: Example logic function (and, or)
+-- fn logic(a: bool, b: bool) -> bool = a and b or not a;
+fn example_logic_mir() -> String =
+    "fn logic(a: bool, b: bool) -> bool {|entry:|  %_t0 = and %a, %b|  %_t1 = not %a|  %_t2 = or %_t0, %_t1|  return %_t2|}";
+
+fn example_logic_llvm() -> String =
+    gen_function(example_logic_mir());
 
 -- Validate LLVM IR output: check for expected patterns
 fn has_define(s: String) -> bool =
@@ -1345,6 +1388,23 @@ fn test_full_max_function() -> i64 =
     let t4 = if has_pattern(llvm, "br label", 0) then 1 else 0;
     t1 + t2 + t3 + t4;
 
+-- v0.30.56: Test compare function LLVM IR (<=)
+fn test_full_compare_function() -> i64 =
+    let llvm = example_compare_llvm();
+    let t1 = if has_define(llvm) then 1 else 0;
+    let t2 = if has_pattern(llvm, "icmp sle", 0) then 1 else 0;
+    let t3 = if has_pattern(llvm, "ret i1", 0) then 1 else 0;
+    t1 + t2 + t3;
+
+-- v0.30.56: Test logic function LLVM IR (and, or, not)
+fn test_full_logic_function() -> i64 =
+    let llvm = example_logic_llvm();
+    let t1 = if has_define(llvm) then 1 else 0;
+    let t2 = if has_pattern(llvm, "and i1", 0) then 1 else 0;
+    let t3 = if has_pattern(llvm, "or i1", 0) then 1 else 0;
+    let t4 = if has_pattern(llvm, "xor i1", 0) then 1 else 0;
+    t1 + t2 + t3 + t4;
+
 fn test_double_pipe() -> i64 =
     let s = "fn a() -> i64 {}||fn b() -> i64 {}";
     -- Position: fn a() -> i64 {} = 16 chars, || starts at 16
@@ -1621,8 +1681,13 @@ fn main() -> i64 =
     -- v0.30.53 block expression IR tests
     let r42 = test_block_ir();
     let u42 = println(r42);
+    -- v0.30.56 end-to-end compare/logic IR tests
+    let r43 = test_full_compare_function();
+    let u43 = println(r43);
+    let r44 = test_full_logic_function();
+    let u44 = println(r44);
     let u_end = println(888);
-    let total = r1 + r2 + r3 + r4 + r5 + r6 + r7 + r8 + r9 + r10 + r11 + r12 + r13 + r14 + r15 + r16 + r17 + r18 + r19 + r20 + r21 + r22 + r23 + r24 + r25 + r26 + r27 + r28 + r29 + r30 + r31 + r32 + r33 + r34 + r35 + r36 + r37 + r38 + r39 + r40 + r41 + r42;
+    let total = r1 + r2 + r3 + r4 + r5 + r6 + r7 + r8 + r9 + r10 + r11 + r12 + r13 + r14 + r15 + r16 + r17 + r18 + r19 + r20 + r21 + r22 + r23 + r24 + r25 + r26 + r27 + r28 + r29 + r30 + r31 + r32 + r33 + r34 + r35 + r36 + r37 + r38 + r39 + r40 + r41 + r42 + r43 + r44;
     let u_tot = println(total);
     let u_fin = println(999);
     total;

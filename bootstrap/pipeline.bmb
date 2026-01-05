@@ -507,7 +507,10 @@ fn find_child_end(s: String, pos: i64) -> i64 =
     if pos >= s.len() then pos
     else let c = s.char_at(pos);
         if c == 40 then find_close_paren(s, pos, 0) + 1
-        else if c == 60 then find_name_end(s, pos) + 1
+        -- v0.30.54: Check if < is start of <name> or operator
+        -- <name> pattern: < followed by identifier char
+        else if c == 60 and pos + 1 < s.len() and low_is_ident_char(s.char_at(pos + 1)) then
+            find_name_end(s, pos) + 1
         else if low_is_op_char(c) then low_find_op_end(s, pos)
         else low_find_ident_end(s, pos);
 
@@ -713,6 +716,7 @@ fn test_pipeline(src: String, expected: String) -> i64 =
     let mir = compile_expr(src);
     if str_contains(mir, expected) then 1 else 0;
 
+
 fn main() -> i64 =
     let u0 = println(777);
 
@@ -742,9 +746,43 @@ fn main() -> i64 =
     let t3 = c1 + c2 + c3 + c4;
     let u3 = println(t3);
 
-    let u4 = println(888);
-    let total = t1 + t2 + t3;
-    let u5 = println(total);
-    let u6 = println(999);
+    -- v0.30.54: Test 4: Comparison operators pipeline (4 tests)
+    let i1 = test_pipeline("a < b", "< %a, %b");
+    let i2 = test_pipeline("a > b", "> %a, %b");
+    let i3 = test_pipeline("a <= b", "<= %a, %b");
+    let i4 = test_pipeline("a >= b", ">= %a, %b");
+    let t4 = i1 + i2 + i3 + i4;
+    let u4 = println(t4);
+
+    -- v0.30.54: Test 5: Logical operators pipeline (4 tests)
+    let l1 = test_pipeline("a and b", "and %a, %b");
+    let l2 = test_pipeline("a or b", "or %a, %b");
+    let l3 = test_pipeline("x != y", "!= %x, %y");
+    -- Complex expr: a == b produces %_t0, c != d produces %_t1, and produces %_t2
+    let l4 = test_pipeline("a == b and c != d", "and");
+    let t5 = l1 + l2 + l3 + l4;
+    let u5 = println(t5);
+
+    -- v0.30.55: Test 6: Left-to-right associativity pipeline (4 tests)
+    -- Parser uses simple left-to-right, so a + b * c = ((a + b) * c)
+    let o1 = test_pipeline("a + b + c", "+ %_t0, %c");
+    let o2 = test_pipeline("a - b - c", "- %_t0, %c");
+    let o3 = test_pipeline("a * b / c", "/ %_t0, %c");
+    let o4 = test_pipeline("a * b * c", "* %_t0, %c");
+    let t6 = o1 + o2 + o3 + o4;
+    let u6 = println(t6);
+
+    -- v0.30.55: Test 7: Nested unary operators pipeline (4 tests)
+    let n1 = test_pipeline("not not a", "not %_t0");
+    let n2 = test_pipeline("-(-x)", "neg %_t0");
+    let n3 = test_pipeline("not a or b", "or %_t0, %b");
+    let n4 = test_pipeline("-(a + b)", "neg %_t0");
+    let t7 = n1 + n2 + n3 + n4;
+    let u7 = println(t7);
+
+    let u8 = println(888);
+    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7;
+    let u9 = println(total);
+    let u10 = println(999);
 
     total;
