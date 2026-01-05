@@ -102,6 +102,10 @@ fn lookup_keyword(w: String) -> i64 =
     else if w == "in" then 120
     else if w == "pub" then 121
     else if w == "use" then 122
+    else if w == "break" then 125    -- v0.30.42
+    else if w == "continue" then 126 -- v0.30.42
+    else if w == "trait" then 127    -- v0.30.57
+    else if w == "impl" then 128     -- v0.30.57
     -- Type keywords
     else if w == "i32" then 150
     else if w == "i64" then 151

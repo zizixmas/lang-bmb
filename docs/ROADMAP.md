@@ -164,15 +164,15 @@ v0.MAJOR.MINOR
 | v0.28 | Benchmark | C/Rust/BMB benchmark suite | Compute-intensive benchmarks, Contract-optimized benchmarks, Real-world workloads |
 | v0.29 | Velocity | C/Rust performance sprint | MIR optimization framework (6 passes), Contract-based optimization, Bootstrap optimization module |
 
-### Bootstrap Statistics (as of v0.30.56)
+### Bootstrap Statistics (as of v0.30.59)
 
 | Metric | Value |
 |--------|-------|
 | Rust Codebase | ~21,783 LOC |
-| BMB Bootstrap | ~12,900 LOC |
-| Coverage | 59% |
+| BMB Bootstrap | ~13,500 LOC |
+| Coverage | 62% |
 | Stage 1/2 Tests | 19 tests passing |
-| Bootstrap Tests | 1103 tests (621 types + 163 llvm_ir + 95 lowering + 46 mir + 71 parser_ast + 33 utils + 19 selfhost_equiv + 30 pipeline + 9 optimize + 8 selfhost_test + 8 compiler) |
+| Bootstrap Tests | 1115 tests (621 types + 163 llvm_ir + 95 lowering + 46 mir + 83 parser_ast + 33 utils + 19 selfhost_equiv + 30 pipeline + 9 optimize + 8 selfhost_test + 8 compiler) |
 
 ---
 
@@ -302,6 +302,25 @@ v0.MAJOR.MINOR
 - `enum_reg_variant_type`: Resolve variant type with type args through registry lookup
 - `enum_reg_count`, `enum_reg_is_generic`: Registry utilities
 - 5 new test functions, 19 assertions (335 total in types.bmb)
+
+**v0.30.59 Completed (2026-01-05)**:
+- Impl block parsing: parse_impl_block function with generic support
+- Generic impl: `impl<T> TraitName<T> for Type { ... }`
+- Self parameter: Updated parse_params to handle 'self' without type annotation
+- AST format: `(impl [type_params] trait_name target (methods (fn ...)))`
+- 5 impl parsing tests, parser total: 83 tests
+
+**v0.30.58 Completed (2026-01-05)**:
+- Trait definition parsing: parse_trait_def with generic support
+- Trait methods: parse_trait_methods, parse_trait_method_sig, parse_trait_params
+- Self parameter handling: `(param <self>)` for methods
+- AST format: `(trait <Name> [type_params] (methods (method-sig ...)))`
+- 5 trait parsing tests
+
+**v0.30.57 Completed (2026-01-05)**:
+- Trait token support: TK_TRAIT (127) and TK_IMPL (128) tokens
+- Keyword recognition: 'trait' and 'impl' in lookup_keyword
+- Token tests: test_trait_token, test_impl_token
 
 **v0.30.56 Completed (2026-01-05)**:
 - End-to-end LLVM IR tests: Complete MIR to LLVM IR function generation tests

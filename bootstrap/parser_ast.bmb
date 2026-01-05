@@ -45,6 +45,8 @@ fn TK_FOR() -> i64 = 123;     -- v0.30.39: for keyword
 fn TK_IN() -> i64 = 124;      -- v0.30.39: in keyword
 fn TK_BREAK() -> i64 = 125;   -- v0.30.42: break keyword
 fn TK_CONTINUE() -> i64 = 126; -- v0.30.42: continue keyword
+fn TK_TRAIT() -> i64 = 127;   -- v0.30.57: trait keyword
+fn TK_IMPL() -> i64 = 128;    -- v0.30.57: impl keyword
 
 fn TK_I32() -> i64 = 150;
 fn TK_I64() -> i64 = 151;
@@ -156,6 +158,8 @@ fn lookup_keyword(w: String) -> i64 =
     else if w == "in" then 124      -- v0.30.39
     else if w == "break" then 125   -- v0.30.42
     else if w == "continue" then 126 -- v0.30.42
+    else if w == "trait" then 127    -- v0.30.57
+    else if w == "impl" then 128     -- v0.30.57
     else if w == "i32" then 150
     else if w == "i64" then 151
     else if w == "f64" then 152
@@ -597,6 +601,154 @@ fn parse_enum_variants_more(src: String, pos: i64, variants: String) -> String =
     else pack_result(pos, make_error("variant-comma"));
 
 -- ============================================================
+-- v0.30.57-58: Trait Definition Parser
+-- ============================================================
+
+-- Parse trait definition: trait Name { fn method(self) -> Type; }
+-- or: trait Name<T> { fn method(self, x: T) -> T; }
+-- Returns: (trait <Name> (methods (method-sig <name> (params ...) return_type) ...))
+--          or (trait <Name> (type_params <T>) (methods ...))
+fn parse_trait_def(src: String, pos: i64) -> String =
+    let t1 = next_token_raw(src, pos);
+    if tok_kind(t1) != TK_IDENT() then pack_result(pos, make_error("trait-name"))
+    else
+        let ns = skip_all(src, pos);
+        let ne = tok_end(t1);
+        let name = src.slice(ns, ne);
+        -- Try to parse optional type parameters
+        let tp = try_parse_type_params(src, ne);
+        if is_error(unpack_ast(tp)) then tp
+        else
+            let tp_str = unpack_ast(tp);
+            let after_tp = unpack_pos(tp);
+            let t2 = next_token_raw(src, after_tp);
+            if tok_kind(t2) != TK_LBRACE() then pack_result(after_tp, make_error("trait-lbrace"))
+            else
+                let rm = parse_trait_methods(src, tok_end(t2), "");
+                if is_error(unpack_ast(rm)) then rm
+                else if tp_str == "" then
+                    pack_result(unpack_pos(rm), "(trait <" + name + "> (methods" + unpack_ast(rm) + "))")
+                else
+                    pack_result(unpack_pos(rm), "(trait <" + name + "> " + tp_str + " (methods" + unpack_ast(rm) + "))");
+
+-- Parse trait methods: fn method(self) -> Type; ...
+fn parse_trait_methods(src: String, pos: i64, methods: String) -> String =
+    let tok = next_token_raw(src, pos);
+    let kind = tok_kind(tok);
+    if kind == TK_RBRACE() then pack_result(tok_end(tok), methods)
+    else if kind == TK_FN() then
+        let rm = parse_trait_method_sig(src, tok_end(tok));
+        if is_error(unpack_ast(rm)) then rm
+        else parse_trait_methods(src, unpack_pos(rm), methods + " " + unpack_ast(rm))
+    else pack_result(pos, make_error("trait-fn"));
+
+-- Parse trait method signature: method(params) -> Type;
+-- Returns: (method-sig <name> (params ...) return_type)
+fn parse_trait_method_sig(src: String, pos: i64) -> String =
+    let t1 = next_token_raw(src, pos);
+    if tok_kind(t1) != TK_IDENT() then pack_result(pos, make_error("method-name"))
+    else
+        let ns = skip_all(src, pos);
+        let ne = tok_end(t1);
+        let name = src.slice(ns, ne);
+        let t2 = next_token_raw(src, ne);
+        if tok_kind(t2) != TK_LPAREN() then pack_result(ne, make_error("method-lparen"))
+        else
+            let rp = parse_trait_params(src, tok_end(t2), "");
+            if is_error(unpack_ast(rp)) then rp
+            else
+                let t3 = next_token_raw(src, unpack_pos(rp));
+                if tok_kind(t3) != TK_ARROW() then pack_result(unpack_pos(rp), make_error("method-arrow"))
+                else
+                    let rt = parse_type_or_ident(src, tok_end(t3));
+                    if is_error(unpack_ast(rt)) then rt
+                    else
+                        let t4 = next_token_raw(src, unpack_pos(rt));
+                        if tok_kind(t4) != TK_SEMI() then pack_result(unpack_pos(rt), make_error("method-semi"))
+                        else pack_result(tok_end(t4), "(method-sig <" + name + "> (params" + unpack_ast(rp) + ") " + unpack_ast(rt) + ")");
+
+-- Parse trait method params (including self)
+fn parse_trait_params(src: String, pos: i64, params: String) -> String =
+    let tok = next_token_raw(src, pos);
+    let kind = tok_kind(tok);
+    if kind == TK_RPAREN() then pack_result(tok_end(tok), params)
+    else if kind == TK_IDENT() then
+        let ns = skip_all(src, pos);
+        let ne = tok_end(tok);
+        let pname = src.slice(ns, ne);
+        -- Check if it's 'self' (no type annotation)
+        if pname == "self" then
+            parse_trait_params_more(src, ne, params + " (param <self>)")
+        else
+            -- Regular param: name: Type
+            let t2 = next_token_raw(src, ne);
+            if tok_kind(t2) != TK_COLON() then pack_result(ne, make_error("param-colon"))
+            else
+                let rt = parse_type_or_ident(src, tok_end(t2));
+                if is_error(unpack_ast(rt)) then rt
+                else parse_trait_params_more(src, unpack_pos(rt), params + " (param <" + pname + "> " + unpack_ast(rt) + ")")
+    else pack_result(pos, make_error("param"));
+
+-- Continue parsing more trait params after comma
+fn parse_trait_params_more(src: String, pos: i64, params: String) -> String =
+    let tok = next_token_raw(src, pos);
+    let kind = tok_kind(tok);
+    if kind == TK_RPAREN() then pack_result(tok_end(tok), params)
+    else if kind == TK_COMMA() then parse_trait_params(src, tok_end(tok), params)
+    else pack_result(pos, make_error("param-comma"));
+
+-- ============================================================
+-- v0.30.59: Impl Block Parser
+-- ============================================================
+
+-- Parse impl block: impl [<T>] TraitName for TargetType { methods }
+-- Returns: (impl <TraitName> <TargetType> (methods (fn ...)))
+--          or (impl <TraitName> (type_params <T>) <TargetType> (methods ...))
+fn parse_impl_block(src: String, pos: i64) -> String =
+    -- Try to parse optional type parameters first
+    let tp = try_parse_type_params(src, pos);
+    if is_error(unpack_ast(tp)) then tp
+    else
+        let tp_str = unpack_ast(tp);
+        let after_tp = unpack_pos(tp);
+        -- Parse trait name (may include generic args like Container<T>)
+        let rt = parse_type_or_ident(src, after_tp);
+        if is_error(unpack_ast(rt)) then rt
+        else
+            let trait_name = unpack_ast(rt);
+            let after_trait = unpack_pos(rt);
+            -- Expect 'for' keyword (reuse TK_FOR token)
+            let t2 = next_token_raw(src, after_trait);
+            if tok_kind(t2) != TK_FOR() then pack_result(after_trait, make_error("impl-for"))
+            else
+                -- Parse target type
+                let rt = parse_type_or_ident(src, tok_end(t2));
+                if is_error(unpack_ast(rt)) then rt
+                else
+                    let target = unpack_ast(rt);
+                    let t3 = next_token_raw(src, unpack_pos(rt));
+                    if tok_kind(t3) != TK_LBRACE() then pack_result(unpack_pos(rt), make_error("impl-lbrace"))
+                    else
+                        let rm = parse_impl_methods(src, tok_end(t3), "");
+                        if is_error(unpack_ast(rm)) then rm
+                        else if tp_str == "" then
+                            pack_result(unpack_pos(rm), "(impl " + trait_name + " " + target + " (methods" + unpack_ast(rm) + "))")
+                        else
+                            pack_result(unpack_pos(rm), "(impl " + tp_str + " " + trait_name + " " + target + " (methods" + unpack_ast(rm) + "))");
+
+-- Parse impl methods: fn method(params) -> Type = body;
+fn parse_impl_methods(src: String, pos: i64, methods: String) -> String =
+    let tok = next_token_raw(src, pos);
+    let kind = tok_kind(tok);
+    if kind == TK_RBRACE() then pack_result(tok_end(tok), methods)
+    else if kind == TK_FN() then
+        -- Reuse existing function parser for impl methods
+        let rf = parse_fn(src, tok_end(tok));
+        if is_error(unpack_ast(rf)) then rf
+        else parse_impl_methods(src, unpack_pos(rf), methods + " " + unpack_ast(rf))
+    else pack_result(pos, make_error("impl-fn"));
+
+-- ============================================================
 -- v0.22.1: Match Expression Parser
 -- ============================================================
 
@@ -1000,12 +1152,16 @@ fn parse_params(src: String, pos: i64, ps: String) -> String =
         let ns = skip_all(src, pos);
         let ne = tok_end(tok);
         let name = src.slice(ns, ne);
-        let t2 = next_token_raw(src, ne);
-        if tok_kind(t2) != TK_COLON() then pack_result(ne, make_error("param-colon"))
+        -- v0.30.59: Handle 'self' parameter (no type annotation)
+        if name == "self" then
+            parse_more_params(src, ne, ps + " (p <self>)")
         else
-            let rt = parse_type(src, tok_end(t2));
-            if is_error(unpack_ast(rt)) then rt
-            else parse_more_params(src, unpack_pos(rt), ps + " (p <" + name + "> " + unpack_ast(rt) + ")")
+            let t2 = next_token_raw(src, ne);
+            if tok_kind(t2) != TK_COLON() then pack_result(ne, make_error("param-colon"))
+            else
+                let rt = parse_type(src, tok_end(t2));
+                if is_error(unpack_ast(rt)) then rt
+                else parse_more_params(src, unpack_pos(rt), ps + " (p <" + name + "> " + unpack_ast(rt) + ")")
     else pack_result(pos, make_error("param"));
 
 fn parse_more_params(src: String, pos: i64, ps: String) -> String =
@@ -1094,6 +1250,14 @@ fn parse_program(src: String, pos: i64, items: String) -> String =
         else parse_program(src, unpack_pos(r), items + " " + unpack_ast(r))
     else if kind == TK_ENUM() then    -- v0.22.1: enum definition
         let r = parse_enum_def(src, tok_end(tok));
+        if is_error(unpack_ast(r)) then r
+        else parse_program(src, unpack_pos(r), items + " " + unpack_ast(r))
+    else if kind == TK_TRAIT() then   -- v0.30.58: trait definition
+        let r = parse_trait_def(src, tok_end(tok));
+        if is_error(unpack_ast(r)) then r
+        else parse_program(src, unpack_pos(r), items + " " + unpack_ast(r))
+    else if kind == TK_IMPL() then   -- v0.30.59: impl block
+        let r = parse_impl_block(src, tok_end(tok));
         if is_error(unpack_ast(r)) then r
         else parse_program(src, unpack_pos(r), items + " " + unpack_ast(r))
     else pack_result(pos, make_error("program"));
@@ -1279,6 +1443,120 @@ fn test_break_continue_combined() -> i64 =
     let ast = unpack_ast(result);
     if is_error(ast) then 0
     else if ast_contains(ast, "(break)") and ast_contains(ast, "(continue)") then 1
+    else 0;
+
+-- ============================================================
+-- v0.30.57: Trait/Impl Token Tests
+-- ============================================================
+
+-- Test 1: trait token recognition
+fn test_trait_token() -> i64 =
+    let src = "trait";
+    let t1 = next_token_raw(src, 0);
+    if tok_kind(t1) == TK_TRAIT() then 1 else 0;
+
+-- Test 2: impl token recognition
+fn test_impl_token() -> i64 =
+    let src = "impl";
+    let t1 = next_token_raw(src, 0);
+    if tok_kind(t1) == TK_IMPL() then 1 else 0;
+
+-- ============================================================
+-- v0.30.58: Trait Definition Parsing Tests
+-- ============================================================
+
+-- Test 3: simple trait definition
+fn test_trait_simple() -> i64 =
+    let src = "trait Foo { fn bar(self) -> i64; }";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0
+    else if ast_contains(ast, "(trait <Foo>") and ast_contains(ast, "(method-sig <bar>") then 1
+    else 0;
+
+-- Test 4: trait with multiple methods
+fn test_trait_multi_method() -> i64 =
+    let src = "trait Foo { fn get(self) -> i64; fn set(self, x: i64) -> i64; }";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0
+    else if ast_contains(ast, "(method-sig <get>") and ast_contains(ast, "(method-sig <set>") then 1
+    else 0;
+
+-- Test 5: generic trait definition
+fn test_trait_generic() -> i64 =
+    let src = "trait Container<T> { fn get(self) -> T; }";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0
+    else if ast_contains(ast, "(trait <Container>") and ast_contains(ast, "(type_params <T>)") then 1
+    else 0;
+
+-- Test 6: self parameter parsing
+fn test_trait_self_param() -> i64 =
+    let src = "trait Foo { fn bar(self) -> i64; }";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0
+    else if ast_contains(ast, "(param <self>)") then 1
+    else 0;
+
+-- Test 7: method with multiple params
+fn test_trait_method_params() -> i64 =
+    let src = "trait Foo { fn add(self, x: i64, y: i64) -> i64; }";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0
+    else if ast_contains(ast, "(param <x>") and ast_contains(ast, "(param <y>") then 1
+    else 0;
+
+-- ============================================================
+-- v0.30.59: Impl Block Parsing Tests
+-- ============================================================
+
+-- Test 8: simple impl block
+fn test_impl_simple() -> i64 =
+    let src = "impl Foo for Bar { fn bar(self) -> i64 = 42; }";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0
+    else if ast_contains(ast, "(impl Foo Bar") then 1
+    else 0;
+
+-- Test 9: impl with method body
+fn test_impl_method() -> i64 =
+    let src = "impl Foo for Bar { fn get(self) -> i64 = 42; }";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0
+    else if ast_contains(ast, "(fn <get>") then 1
+    else 0;
+
+-- Test 10: impl with multiple methods
+fn test_impl_multi_method() -> i64 =
+    let src = "impl Foo for Bar { fn get(self) -> i64 = 1; fn set(self, x: i64) -> i64 = x; }";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0
+    else if ast_contains(ast, "(fn <get>") and ast_contains(ast, "(fn <set>") then 1
+    else 0;
+
+-- Test 11: generic impl
+fn test_impl_generic() -> i64 =
+    let src = "impl<T> Container<T> for Box { fn get(self) -> T = self; }";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0
+    else if ast_contains(ast, "(type_params <T>)") and ast_contains(ast, "Container") then 1
+    else 0;
+
+-- Test 12: impl with generic target
+fn test_impl_generic_target() -> i64 =
+    let src = "impl Foo for Box<i64> { fn get(self) -> i64 = 0; }";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0
+    else if ast_contains(ast, "(impl Foo") and ast_contains(ast, "(type_app Box (i64))") then 1
     else 0;
 
 -- Test struct init with match expression
@@ -1777,6 +2055,24 @@ fn main() -> i64 =
     let break_passed = brk1 + brk2 + brk3 + brk4 + brk5;
     let u15 = println(break_passed);  -- Should be 5
 
+    -- v0.30.57: Trait/Impl token tests
+    let trait1 = test_trait_token();
+    let trait2 = test_impl_token();
+    -- v0.30.58: Trait definition parsing tests
+    let trait3 = test_trait_simple();
+    let trait4 = test_trait_multi_method();
+    let trait5 = test_trait_generic();
+    let trait6 = test_trait_self_param();
+    let trait7 = test_trait_method_params();
+    -- v0.30.59: Impl block parsing tests
+    let impl1 = test_impl_simple();
+    let impl2 = test_impl_method();
+    let impl3 = test_impl_multi_method();
+    let impl4 = test_impl_generic();
+    let impl5 = test_impl_generic_target();
+    let trait_passed = trait1 + trait2 + trait3 + trait4 + trait5 + trait6 + trait7 + impl1 + impl2 + impl3 + impl4 + impl5;
+    let u16 = println(trait_passed);  -- Should be 12
+
     let u4 = println(999);  -- End marker
 
-    parse_passed + ast_passed + struct_passed + enum_passed + integration_passed + generic_passed + typeparam_passed + string_passed + lambda_passed + while_passed + for_passed + range_passed + break_passed;  -- Should be 71
+    parse_passed + ast_passed + struct_passed + enum_passed + integration_passed + generic_passed + typeparam_passed + string_passed + lambda_passed + while_passed + for_passed + range_passed + break_passed + trait_passed;  -- Should be 83
