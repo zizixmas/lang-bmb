@@ -303,6 +303,14 @@ v0.MAJOR.MINOR
 - `enum_reg_count`, `enum_reg_is_generic`: Registry utilities
 - 5 new test functions, 19 assertions (335 total in types.bmb)
 
+**v0.30.44 Completed (2026-01-05)**:
+- Range MIR lowering: MIR generation for range expressions
+- binop_from_symbol extended: Map ".." to 14, "..=" to 15
+- binop_symbol extended: Return ".." and "..=" for range operators
+- is_op_char extended: Include '.' (ASCII 46) for range operators
+- Range expressions lowered via existing lower_binop infrastructure
+- Total: 95 tests passing in lowering.bmb (91 + 4 new)
+
 **v0.30.43 Completed (2026-01-05)**:
 - Break/Continue MIR lowering: MIR generation for break and continue
 - is_break_node: Detect break expressions "(break)"

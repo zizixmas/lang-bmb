@@ -69,7 +69,8 @@ fn is_ident_char(c: i64) -> bool =
 -- Check if char is operator char (+, -, *, /, %, <, >, =, !)
 fn is_op_char(c: i64) -> bool =
     c == 43 or c == 45 or c == 42 or c == 47 or c == 37 or  -- + - * / %
-    c == 60 or c == 62 or c == 61 or c == 33;               -- < > = !
+    c == 60 or c == 62 or c == 61 or c == 33 or             -- < > = !
+    c == 46;                                                 -- . (v0.30.44: for range operators)
 
 -- Find end of identifier/symbol
 fn find_ident_end(s: String, pos: i64) -> i64 =
@@ -478,6 +479,9 @@ fn binop_from_symbol(s: String) -> i64 =
     else if s == ">=" then 11
     else if s == "and" then 12
     else if s == "or" then 13
+    -- v0.30.44: Range operators
+    else if s == ".." then 14
+    else if s == "..=" then 15
     else 0;
 
 fn binop_symbol(op: i64) -> String =
@@ -487,7 +491,10 @@ fn binop_symbol(op: i64) -> String =
     else if op == 7 then "!=" else if op == 8 then "<"
     else if op == 9 then ">" else if op == 10 then "<="
     else if op == 11 then ">=" else if op == 12 then "and"
-    else if op == 13 then "or" else "?";
+    else if op == 13 then "or"
+    -- v0.30.44: Range operators
+    else if op == 14 then ".." else if op == 15 then "..="
+    else "?";
 
 -- ============================================================================
 -- MIR Place Encoding
@@ -1586,6 +1593,18 @@ fn main() -> i64 =
     let break_continue_lower_tests = bcl1 + bcl2;
     let u38 = println(break_continue_lower_tests);  -- Should be 2
 
+    -- Test 36: v0.30.44 Range operator encoding (2 tests)
+    let rge1 = if binop_from_symbol("..") == 14 then 1 else 0;
+    let rge2 = if binop_from_symbol("..=") == 15 then 1 else 0;
+    let range_encode_tests = rge1 + rge2;
+    let u39 = println(range_encode_tests);  -- Should be 2
+
+    -- Test 37: v0.30.44 Range lowering (2 tests)
+    let rgl1 = test_lower_contains("(op .. (int 0) (int 10))", ".. %_t0, %_t1");
+    let rgl2 = test_lower_contains("(op ..= (int 1) (int 5))", "..= %_t0, %_t1");
+    let range_lower_tests = rgl1 + rgl2;
+    let u40 = println(range_lower_tests);  -- Should be 2
+
     let u22 = println(888);  -- Separator
 
     let total = node_tests + extract_tests + child_tests + int_tests + bool_tests +
@@ -1596,8 +1615,9 @@ fn main() -> i64 =
                 string_tests + lambda_node_tests + lambda_body_tests + lambda_lower_tests +
                 block_unit_node_tests + block_inner_tests + block_unit_lower_tests +
                 while_node_tests + while_lower_tests + for_node_tests + for_lower_tests +
-                break_node_tests + continue_node_tests + break_continue_lower_tests;
-    let u23 = println(total);  -- Should be 91 (85 + 6 break/continue tests)
+                break_node_tests + continue_node_tests + break_continue_lower_tests +
+                range_encode_tests + range_lower_tests;
+    let u23 = println(total);  -- Should be 95 (91 + 4 range tests)
 
     let u24 = println(999);  -- End marker
 
