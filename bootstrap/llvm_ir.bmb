@@ -1189,6 +1189,8 @@ fn gen_method_dispatch(dest: String, recv: String, method: String, args: String)
     if method == "len" then gen_method_len(dest, recv)
     else if method == "char_at" then gen_method_char_at(dest, recv, args)
     else if method == "slice" then gen_method_slice(dest, recv, args)
+    else if method == "concat" then gen_method_concat(dest, recv, args)
+    else if method == "eq" then gen_method_eq(dest, recv, args)
     -- Array methods (v0.30.78)
     else if method == "array_len" then gen_method_array_len(dest, recv)
     else if method == "array_get" then gen_method_array_get(dest, recv, args)
@@ -1231,6 +1233,17 @@ fn extract_second_arg(args: String) -> String =
     let comma_pos = find_char(args, 44, 0);  -- ','
     if comma_pos <= 0 then ""
     else trim_ws(args.slice(comma_pos + 1, args.len()));
+
+-- v0.30.83: String concat/eq method IR
+-- concat: Concatenate two strings (returns new string)
+fn gen_method_concat(dest: String, recv: String, args: String) -> String =
+    let other = trim_ws(args);
+    dest + " = call i8* @bmb_string_concat(i8* " + recv + ", i8* " + other + ")";
+
+-- eq: String equality comparison (returns i1)
+fn gen_method_eq(dest: String, recv: String, args: String) -> String =
+    let other = trim_ws(args);
+    dest + " = call i1 @bmb_string_eq(i8* " + recv + ", i8* " + other + ")";
 
 -- v0.30.78: Array method IR generation
 -- array_len: Get length from array struct
@@ -2068,7 +2081,29 @@ fn test_method_call_ir() -> i64 =
     let mc1 = gen_instr_method_call("  %_t1 = MethodCall %_t0.len()");
     let t12 = if has_pattern(mc1, "call i64 @bmb_string_len", 0) then 1 else 0;
 
-    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12;
+    -- Test 13: gen_method_concat generates call to @bmb_string_concat (v0.30.83)
+    let cc1 = gen_method_concat("%_t2", "%s1", "%s2");
+    let t13 = if has_pattern(cc1, "@bmb_string_concat", 0) then 1 else 0;
+
+    -- Test 14: gen_method_concat includes both operands
+    let t14 = if has_pattern(cc1, "i8* %s1", 0) and has_pattern(cc1, "i8* %s2", 0) then 1 else 0;
+
+    -- Test 15: gen_method_eq generates call to @bmb_string_eq
+    let eq1 = gen_method_eq("%_t3", "%s1", "%s2");
+    let t15 = if has_pattern(eq1, "@bmb_string_eq", 0) then 1 else 0;
+
+    -- Test 16: gen_method_eq returns i1 type
+    let t16 = if has_pattern(eq1, "call i1", 0) then 1 else 0;
+
+    -- Test 17: gen_method_dispatch routes concat
+    let cd1 = gen_method_dispatch("%_t4", "%str", "concat", "%other");
+    let t17 = if has_pattern(cd1, "@bmb_string_concat", 0) then 1 else 0;
+
+    -- Test 18: gen_method_dispatch routes eq
+    let ed1 = gen_method_dispatch("%_t5", "%str", "eq", "%other");
+    let t18 = if has_pattern(ed1, "@bmb_string_eq", 0) then 1 else 0;
+
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18;
 
 -- v0.30.79: Test Array method IR generation
 fn test_array_method_ir() -> i64 =
