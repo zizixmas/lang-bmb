@@ -164,15 +164,15 @@ v0.MAJOR.MINOR
 | v0.28 | Benchmark | C/Rust/BMB benchmark suite | Compute-intensive benchmarks, Contract-optimized benchmarks, Real-world workloads |
 | v0.29 | Velocity | C/Rust performance sprint | MIR optimization framework (6 passes), Contract-based optimization, Bootstrap optimization module |
 
-### Bootstrap Statistics (as of v0.30.72)
+### Bootstrap Statistics (as of v0.30.76)
 
 | Metric | Value |
 |--------|-------|
 | Rust Codebase | ~21,783 LOC |
-| BMB Bootstrap | ~13,800 LOC |
-| Coverage | 63% |
+| BMB Bootstrap | ~14,000 LOC |
+| Coverage | 64% |
 | Stage 1/2 Tests | 19 tests passing |
-| Bootstrap Tests | 1175 tests (650 types + 181 llvm_ir + 108 lowering + 46 mir + 83 parser_ast + 33 utils + 19 selfhost_equiv + 30 pipeline + 9 optimize + 8 selfhost_test + 8 compiler) |
+| Bootstrap Tests | 1187 tests (650 types + 193 llvm_ir + 108 lowering + 46 mir + 83 parser_ast + 33 utils + 19 selfhost_equiv + 30 pipeline + 9 optimize + 8 selfhost_test + 8 compiler) |
 
 ---
 
@@ -302,6 +302,31 @@ v0.MAJOR.MINOR
 - `enum_reg_variant_type`: Resolve variant type with type args through registry lookup
 - `enum_reg_count`, `enum_reg_is_generic`: Registry utilities
 - 5 new test functions, 19 assertions (335 total in types.bmb)
+
+**v0.30.76 Completed (2026-01-05)**:
+- String.slice IR: `MethodCall %recv.slice(%start, %end)` → external call
+- gen_method_slice: Call @bmb_string_slice(i8*, i64, i64)
+- extract_slice_arg, extract_first_arg, extract_second_arg: Argument parsing
+- gen_extern_string_slice: Runtime declaration for string slice
+- Complete method call pipeline for all String methods
+
+**v0.30.75 Completed (2026-01-05)**:
+- String.char_at IR: `MethodCall %recv.char_at(%idx)` → GEP + load + sext
+- gen_method_char_at: Generate getelementptr i8 + load i8 + sext to i64
+- Character access via pointer arithmetic on i8* string
+
+**v0.30.74 Completed (2026-01-05)**:
+- String.len IR: `MethodCall %recv.len()` → external call @bmb_string_len
+- gen_method_len: Generate call to @bmb_string_len(i8*)
+- gen_extern_string_len: Runtime declaration for string length
+
+**v0.30.73 Completed (2026-01-05)**:
+- MethodCall MIR detection and dispatch in gen_mir_line_typed
+- is_method_call_line, has_method_call_keyword: Line detection
+- parse_method_call_dest, parse_method_call_recv: MIR parsing
+- parse_method_call_method, parse_method_call_args: Method/args extraction
+- gen_method_dispatch: Route to specific method implementations
+- 12 method call IR tests, llvm_ir total: 193 tests
 
 **v0.30.72 Completed (2026-01-05)**:
 - Index expression LLVM IR: `%dest = Index %base[%idx]` → GEP + load

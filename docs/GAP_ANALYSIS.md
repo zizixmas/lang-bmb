@@ -59,11 +59,11 @@ This document provides a comprehensive analysis of the requirements for BMB v0.3
 | config.rs | 4,245 | Complete | Configuration |
 | error.rs | 694 | Complete | Error handling |
 
-### Bootstrap Components (~10,200 LOC in BMB)
+### Bootstrap Components (~10,400 LOC in BMB)
 
 | File | Size | LOC | Status | Test Coverage |
 |------|------|-----|--------|---------------|
-| llvm_ir.bmb | 78KB | 1,923 | Complete | 181 tests (47 test functions) |
+| llvm_ir.bmb | 86KB | 2,111 | Complete | 193 tests (48 test functions) |
 | lowering.bmb | 53KB | 1,280 | Complete | 108 tests |
 | compiler.bmb | 53KB | 1,202 | Complete | 8 tests |
 | parser_ast.bmb | 98KB | 2,390 | Complete | 104 tests (Struct/Enum/Trait/Impl/Array/Index/MethodCall) |
