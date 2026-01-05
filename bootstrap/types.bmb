@@ -3309,8 +3309,8 @@ fn ast_find_close_paren(ast: String, start: i64) -> i64 =
     ast_find_close_paren_depth(ast, start, 1);  -- start should be position AFTER '(', returns position AFTER ')'
 
 fn ast_find_close_paren_depth(ast: String, pos: i64, depth: i64) -> i64 =
-    if pos >= ast.len() then 0 - 1
-    else if depth == 0 then pos
+    if depth == 0 then pos  -- Check depth first! pos may be at len()
+    else if pos >= ast.len() then 0 - 1
     else
         let c = ast.char_at(pos);
         if c == 40 then ast_find_close_paren_depth(ast, pos + 1, depth + 1)  -- (
@@ -3876,6 +3876,7 @@ fn EXPR_CALL() -> i64 = 7;
 fn EXPR_NEW() -> i64 = 8;
 fn EXPR_FIELD() -> i64 = 9;
 fn EXPR_MATCH() -> i64 = 10;
+fn EXPR_LAMBDA() -> i64 = 11;  -- v0.30.24: Closure expression
 fn EXPR_UNKNOWN() -> i64 = 0;
 
 -- Detect expression kind from AST
@@ -3907,7 +3908,15 @@ fn expr_kind(ast: String) -> i64 =
         else if c1 == 102 and c2 == 105 and c3 == 101 then EXPR_FIELD()
         -- (match ...) - 109='m', 97='a', 116='t'
         else if c1 == 109 and c2 == 97 and c3 == 116 then EXPR_MATCH()
+        -- (fn |...) - 102='f', 110='n', 32=' ' then check for '|'
+        else if c1 == 102 and c2 == 110 and c3 == 32 then expr_kind_check_lambda(ast, len)
         else EXPR_UNKNOWN();
+
+-- v0.30.24: Check if fn expression is a lambda (has | after fn)
+fn expr_kind_check_lambda(ast: String, len: i64) -> i64 =
+    if len < 5 then EXPR_UNKNOWN()
+    else if ast.char_at(4) == 124 then EXPR_LAMBDA()  -- '|' = 124
+    else EXPR_UNKNOWN();
 
 -- Extract operands from expression
 -- Returns the first sub-expression after the prefix
@@ -4022,6 +4031,7 @@ fn type_of_expr(tenv: String, locals: String, ast: String) -> String =
     else if kind == EXPR_NEW() then type_of_new(tenv, locals, ast)
     else if kind == EXPR_FIELD() then type_of_field(tenv, locals, ast)
     else if kind == EXPR_MATCH() then type_of_match(tenv, locals, ast)
+    else if kind == EXPR_LAMBDA() then type_of_lambda(tenv, locals, ast)
     else "ERR:unknown expression";
 
 -- Type of variable reference
@@ -4743,6 +4753,192 @@ fn test_typecheck_program_generic() -> i64 =
 
     t1 + t2 + t3;
 
+
+
+-- ============================================================================
+-- v0.30.24: Closure Type Checking
+-- ============================================================================
+-- Closure AST format: (fn |params| body) or (fn |params| -> ret_type body)
+-- Params format: Each param is (name: type), space-separated
+-- Example: (fn |(x: i64) (y: i64)| (op + (var <x>) (var <y>)))
+
+-- Find the closing pipe | position
+fn lambda_find_pipe_end(ast: String, pos: i64) -> i64 =
+    if pos >= ast.len() then 0 - 1
+    else if ast.char_at(pos) == 124 then pos
+    else lambda_find_pipe_end(ast, pos + 1);
+
+-- Extract parameters section between || (not including pipes)
+fn lambda_params_section(ast: String) -> String =
+    let start = 5;
+    let end_pos = lambda_find_pipe_end(ast, start);
+    if end_pos < 0 then ""
+    else ast.slice(start, end_pos);
+
+-- Check if lambda has explicit return type
+fn lambda_has_arrow_prefix(ast: String, pos: i64) -> i64 =
+    if pos + 2 >= ast.len() then 0
+    else if ast.char_at(pos) == 45 and ast.char_at(pos + 1) == 62 then 1
+    else 0;
+
+-- Find where lambda body starts
+fn lambda_body_start(ast: String) -> i64 =
+    let pipe_pos = lambda_find_pipe_end(ast, 5);
+    if pipe_pos < 0 then 0 - 1
+    else
+        let after_pipe = ast_skip_ws(ast, pipe_pos + 1);
+        if lambda_has_arrow_prefix(ast, after_pipe) == 1 then
+            lambda_skip_return_type(ast, after_pipe + 2)
+        else after_pipe;
+
+-- Skip return type after -> to find body start
+fn lambda_skip_return_type(ast: String, pos: i64) -> i64 =
+    let start = ast_skip_ws(ast, pos);
+    if start >= ast.len() then ast.len()
+    else if ast.char_at(start) == 40 then start
+    else lambda_skip_type_name(ast, start);
+
+fn lambda_skip_type_name(ast: String, pos: i64) -> i64 =
+    if pos >= ast.len() then pos
+    else
+        let c = ast.char_at(pos);
+        if c == 32 or c == 40 then ast_skip_ws(ast, pos)
+        else lambda_skip_type_name(ast, pos + 1);
+
+-- Extract lambda body expression
+fn lambda_body(ast: String) -> String =
+    let start = lambda_body_start(ast);
+    if start < 0 then ""
+    else if start >= ast.len() then ""
+    else
+        let body_end = ast.len() - 1;
+        if body_end <= start then ""
+        else ast.slice(start, body_end);
+
+-- Extract explicit return type (if present)
+fn lambda_return_type(ast: String) -> String =
+    let pipe_pos = lambda_find_pipe_end(ast, 5);
+    if pipe_pos < 0 then ""
+    else
+        let after_pipe = ast_skip_ws(ast, pipe_pos + 1);
+        if lambda_has_arrow_prefix(ast, after_pipe) == 0 then ""
+        else
+            let type_start = ast_skip_ws(ast, after_pipe + 2);
+            lambda_extract_return_type(ast, type_start);
+
+fn lambda_extract_return_type(ast: String, pos: i64) -> String =
+    let end_pos = lambda_return_type_end(ast, pos);
+    if end_pos <= pos then ""
+    else ast.slice(pos, end_pos);
+
+fn lambda_return_type_end(ast: String, pos: i64) -> i64 =
+    if pos >= ast.len() then pos
+    else
+        let c = ast.char_at(pos);
+        if c == 32 or c == 40 then pos
+        else lambda_return_type_end(ast, pos + 1);
+
+-- Count parameters in params section
+fn lambda_param_count(params: String) -> i64 =
+    if params.len() == 0 then 0
+    else lambda_param_count_helper(params, 0, 0, 0);
+
+fn lambda_param_count_helper(params: String, pos: i64, depth: i64, count: i64) -> i64 =
+    if pos >= params.len() then count
+    else
+        let c = params.char_at(pos);
+        if c == 40 then
+            if depth == 0 then lambda_param_count_helper(params, pos + 1, 1, count + 1)
+            else lambda_param_count_helper(params, pos + 1, depth + 1, count)
+        else if c == 41 then
+            lambda_param_count_helper(params, pos + 1, depth - 1, count)
+        else lambda_param_count_helper(params, pos + 1, depth, count);
+
+-- Get nth parameter (0-indexed)
+fn lambda_param_at_helper(params: String, pos: i64, idx: i64, target: i64) -> String =
+    if pos >= params.len() then ""
+    else if params.char_at(pos) != 40 then lambda_param_at_helper(params, pos + 1, idx, target)
+    else if idx == target then lambda_extract_param(params, pos)
+    else lambda_param_at_helper(params, lambda_skip_param(params, pos), idx + 1, target);
+
+fn lambda_skip_param(params: String, pos: i64) -> i64 =
+    let end_pos = ast_find_close_paren(params, pos + 1);
+    if end_pos < 0 then params.len()
+    else end_pos;
+
+fn lambda_extract_param(params: String, pos: i64) -> String =
+    let end_pos = ast_find_close_paren(params, pos + 1);
+    if end_pos < 0 then ""
+    else params.slice(pos, end_pos);
+
+fn lambda_param_at(params: String, idx: i64) -> String =
+    lambda_param_at_helper(params, 0, 0, idx);
+
+-- Extract parameter name from "(name: type)"
+fn lambda_param_name(param: String) -> String =
+    if param.len() < 3 then ""
+    else if param.char_at(0) != 40 then ""
+    else lambda_extract_name_until_colon(param, 1);
+
+fn lambda_extract_name_until_colon(param: String, pos: i64) -> String =
+    if pos >= param.len() then ""
+    else if param.char_at(pos) == 58 then param.slice(1, pos)
+    else lambda_extract_name_until_colon(param, pos + 1);
+
+-- Extract parameter type from "(name: type)"
+fn lambda_param_type(param: String) -> String =
+    let colon_pos = lambda_find_colon(param, 1);
+    if colon_pos < 0 then ""
+    else
+        let type_start = ast_skip_ws(param, colon_pos + 1);
+        let type_end = param.len() - 1;
+        if type_start >= type_end then ""
+        else param.slice(type_start, type_end);
+
+fn lambda_find_colon(param: String, pos: i64) -> i64 =
+    if pos >= param.len() then 0 - 1
+    else if param.char_at(pos) == 58 then pos
+    else lambda_find_colon(param, pos + 1);
+
+-- Build locals from lambda parameters
+fn lambda_build_locals(base_locals: String, params: String, idx: i64, count: i64) -> String =
+    if idx >= count then base_locals
+    else
+        let param = lambda_param_at(params, idx);
+        let name = lambda_param_name(param);
+        let typ = lambda_param_type(param);
+        if name == "" or typ == "" then base_locals
+        else
+            let new_locals = locals_add(base_locals, name, typ);
+            lambda_build_locals(new_locals, params, idx + 1, count);
+
+-- Build function type parameter string
+fn lambda_build_param_types(params: String, idx: i64, count: i64) -> String =
+    if idx >= count then ""
+    else
+        let param = lambda_param_at(params, idx);
+        let typ = lambda_param_type(param);
+        if idx + 1 >= count then typ
+        else typ + "," + lambda_build_param_types(params, idx + 1, count);
+
+-- Type of lambda expression
+fn type_of_lambda(tenv: String, locals: String, ast: String) -> String =
+    let params = lambda_params_section(ast);
+    let param_count = lambda_param_count(params);
+    let body = lambda_body(ast);
+    if body == "" then "ERR:lambda missing body"
+    else type_of_lambda_with_body(tenv, locals, params, param_count, body, ast);
+
+fn type_of_lambda_with_body(tenv: String, locals: String, params: String, param_count: i64, body: String, ast: String) -> String =
+    let lambda_locals = lambda_build_locals(locals, params, 0, param_count);
+    let body_type = type_of_expr(tenv, lambda_locals, body);
+    if body_type.len() > 3 and body_type.char_at(0) == 69 then body_type
+    else
+        let explicit_ret = lambda_return_type(ast);
+        let ret_type = if explicit_ret != "" then explicit_ret else body_type;
+        let param_types = lambda_build_param_types(params, 0, param_count);
+        "Fn(" + param_types + ")->" + ret_type;
+
 -- ============================================================================
 -- v0.30.23 Tests: Match Expression Type Checking
 -- ============================================================================
@@ -5283,6 +5479,106 @@ fn test_tenv_simple_program() -> i64 =
 
     r1 + r2;
 
+
+-- ============================================================================
+-- v0.30.24 Tests: Closure Type Checking
+-- ============================================================================
+
+fn test_lambda_params_section() -> i64 =
+    -- Test 1: Single param
+    let ast1 = "(fn |(x: i64)| (var <x>))";
+    let params1 = lambda_params_section(ast1);
+    let r1 = if params1 == "(x: i64)" then 1 else 0;
+
+    -- Test 2: Multiple params
+    let ast2 = "(fn |(a: i64) (b: i64)| (op + (var <a>) (var <b>)))";
+    let params2 = lambda_params_section(ast2);
+    let r2 = if params2 == "(a: i64) (b: i64)" then 1 else 0;
+
+    -- Test 3: Empty params
+    let ast3 = "(fn || (int 42))";
+    let params3 = lambda_params_section(ast3);
+    let r3 = if params3 == "" then 1 else 0;
+
+    r1 + r2 + r3;
+
+fn test_lambda_param_count() -> i64 =
+    -- Test 1: Single param
+    let r1 = if lambda_param_count("(x: i64)") == 1 then 1 else 0;
+
+    -- Test 2: Two params
+    let r2 = if lambda_param_count("(a: i64) (b: String)") == 2 then 1 else 0;
+
+    -- Test 3: Empty params
+    let r3 = if lambda_param_count("") == 0 then 1 else 0;
+
+    r1 + r2 + r3;
+
+fn test_lambda_param_at() -> i64 =
+    let params = "(a: i64) (b: String)";
+
+    -- Test 1: Get first param
+    let p1 = lambda_param_at(params, 0);
+    let r1 = if p1 == "(a: i64)" then 1 else 0;
+
+    -- Test 2: Get second param
+    let p2 = lambda_param_at(params, 1);
+    let r2 = if p2 == "(b: String)" then 1 else 0;
+
+    -- Test 3: Param name extraction
+    let name1 = lambda_param_name(p1);
+    let r3 = if name1 == "a" then 1 else 0;
+
+    -- Test 4: Param type extraction
+    let type1 = lambda_param_type(p1);
+    let r4 = if type1 == "i64" then 1 else 0;
+
+    r1 + r2 + r3 + r4;
+
+fn test_lambda_body() -> i64 =
+    -- Test 1: Simple body
+    let ast1 = "(fn |(x: i64)| (var <x>))";
+    let body1 = lambda_body(ast1);
+    let r1 = if body1 == "(var <x>)" then 1 else 0;
+
+    -- Test 2: Body with return type
+    let ast2 = "(fn |(x: i64)| -> i64 (var <x>))";
+    let body2 = lambda_body(ast2);
+    let r2 = if body2 == "(var <x>)" then 1 else 0;
+
+    -- Test 3: Empty param body
+    let ast3 = "(fn || (int 42))";
+    let body3 = lambda_body(ast3);
+    let r3 = if body3 == "(int 42)" then 1 else 0;
+
+    r1 + r2 + r3;
+
+fn test_type_of_lambda() -> i64 =
+    let tenv = tenv_new();
+    let locals = locals_new();
+
+    -- Test 1: Simple identity closure
+    let ast1 = "(fn |(x: i64)| (var <x>))";
+    let t1 = type_of_lambda(tenv, locals, ast1);
+    let r1 = if t1 == "Fn(i64)->i64" then 1 else 0;
+
+    -- Test 2: Empty closure
+    let ast2 = "(fn || (int 42))";
+    let t2 = type_of_lambda(tenv, locals, ast2);
+    let r2 = if t2 == "Fn()->i64" then 1 else 0;
+
+    -- Test 3: Two-parameter closure
+    let ast3 = "(fn |(a: i64) (b: i64)| (op + (var <a>) (var <b>)))";
+    let t3 = type_of_lambda(tenv, locals, ast3);
+    let r3 = if t3 == "Fn(i64,i64)->i64" then 1 else 0;
+
+    -- Test 4: Closure with explicit return type
+    let ast4 = "(fn |(x: i64)| -> i64 (var <x>))";
+    let t4 = type_of_lambda(tenv, locals, ast4);
+    let r4 = if t4 == "Fn(i64)->i64" then 1 else 0;
+
+    r1 + r2 + r3 + r4;
+
 -- Main test runner
 fn main() -> i64 =
     let u0 = println(777);  -- Start marker
@@ -5674,10 +5970,27 @@ fn main() -> i64 =
     let t122 = test_type_of_match();
     let p122 = println(t122);  -- Expected: 3
 
+
+    -- v0.30.24: Closure type checking tests
+    let t123 = test_lambda_params_section();
+    let p123 = println(t123);  -- Expected: 3
+
+    let t124 = test_lambda_param_count();
+    let p124 = println(t124);  -- Expected: 3
+
+    let t125 = test_lambda_param_at();
+    let p125 = println(t125);  -- Expected: 4
+
+    let t126 = test_lambda_body();
+    let p126 = println(t126);  -- Expected: 3
+
+    let t127 = test_type_of_lambda();
+    let p127 = println(t127);  -- Expected: 4
+
     let u1 = println(888);  -- Separator
 
-    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33 + t34 + t35 + t36 + t37 + t38 + t39 + t40 + t41 + t42 + t43 + t44 + t45 + t46 + t47 + t48 + t49 + t50 + t51 + t52 + t53 + t54 + t55 + t56 + t57 + t58 + t59 + t60 + t61 + t62 + t63 + t64 + t65 + t66 + t67 + t68 + t69 + t70 + t71 + t72 + t73 + t74 + t75 + t76 + t77 + t78 + t79 + t80 + t81 + t82 + t83 + t84 + t85 + t86 + t87 + t88 + t89 + t90 + t91 + t92 + t93 + t94 + t95 + t96 + t97 + t98 + t99 + t100 + t101 + t102 + t103 + t104 + t105 + t106 + t107 + t108 + t109 + t110 + t111 + t112 + t113 + t114 + t115 + t116 + t117 + t118 + t119 + t120 + t121 + t122;
-    let u2 = println(total);  -- Expected: 532
+    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33 + t34 + t35 + t36 + t37 + t38 + t39 + t40 + t41 + t42 + t43 + t44 + t45 + t46 + t47 + t48 + t49 + t50 + t51 + t52 + t53 + t54 + t55 + t56 + t57 + t58 + t59 + t60 + t61 + t62 + t63 + t64 + t65 + t66 + t67 + t68 + t69 + t70 + t71 + t72 + t73 + t74 + t75 + t76 + t77 + t78 + t79 + t80 + t81 + t82 + t83 + t84 + t85 + t86 + t87 + t88 + t89 + t90 + t91 + t92 + t93 + t94 + t95 + t96 + t97 + t98 + t99 + t100 + t101 + t102 + t103 + t104 + t105 + t106 + t107 + t108 + t109 + t110 + t111 + t112 + t113 + t114 + t115 + t116 + t117 + t118 + t119 + t120 + t121 + t122 + t123 + t124 + t125 + t126 + t127;
+    let u2 = println(total);  -- Expected: 549
 
     let u3 = println(999);  -- End marker
     total;

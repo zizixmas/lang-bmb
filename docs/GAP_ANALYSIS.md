@@ -181,11 +181,12 @@ Gap to Close:
 - ✅ Function body type checking (v0.30.21: check_fn_body, typecheck_program)
 - ✅ Generic function body type checking (v0.30.22: tenv_with_tparams in check_fn_body)
 - ✅ Match expression type checking (v0.30.23: type_of_match, arm type consistency)
+- ✅ Closure type checking (v0.30.24: type_of_lambda, lambda_params_section, Fn type)
 
 ### What Bootstrap CANNOT Do Yet
 
 - ❌ Trait implementation dispatch
-- ❌ Closure capture and codegen
+- ❌ Closure capture and codegen (type checking ✅, MIR/codegen ❌)
 - ❌ FFI linking
 - ❌ Standard library operations (IO, String heap)
 - ❌ Interpreter execution
@@ -294,11 +295,11 @@ $ diff stage2/bmb stage3/bmb
 
 v0.30 "Pure" represents the culmination of the BMB self-hosting journey. With Stage 1/2 verification complete and the bootstrap covering the full compilation pipeline, the remaining work is substantial but achievable within the 2026 Q4 timeline.
 
-**Key Metrics** (as of v0.30.23):
+**Key Metrics** (as of v0.30.24):
 - Rust code to remove: ~21,783 LOC
-- BMB bootstrap code: ~11,100 LOC (51% coverage)
-- Gap to close: ~11,900 LOC additional BMB
-- Bootstrap tests passing: 532 tests (types.bmb)
+- BMB bootstrap code: ~11,300 LOC (52% coverage)
+- Gap to close: ~11,700 LOC additional BMB
+- Bootstrap tests passing: 549 tests (types.bmb)
 - Estimated effort: 6-9 months
 
 ---

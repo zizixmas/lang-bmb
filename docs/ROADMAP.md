@@ -303,6 +303,20 @@ v0.MAJOR.MINOR
 - `enum_reg_count`, `enum_reg_is_generic`: Registry utilities
 - 5 new test functions, 19 assertions (335 total in types.bmb)
 
+**v0.30.24 Completed (2026-01-05)**:
+- Closure type checking: type_of_lambda for lambda expression type inference
+- EXPR_LAMBDA constant (kind=11): Lambda expression detection in expr_kind
+- Lambda detection: expr_kind_check_lambda for "(fn |..." pattern
+- Parameter section parsing: lambda_params_section extracting "|params|"
+- Parameter extraction: lambda_param_count, lambda_param_at, lambda_param_name, lambda_param_type
+- Lambda body parsing: lambda_body, lambda_body_start, lambda_find_pipe_end
+- Return type handling: lambda_has_arrow_prefix, lambda_return_type
+- Local scope building: lambda_build_locals, lambda_build_param_types
+- Fn type construction: "Fn(T1,T2,...)->R" format generation
+- Type checking integration: type_of_expr → type_of_lambda routing
+- Condition order fix in ast_find_close_paren_depth: Check depth==0 before pos>=len
+- Total: 549 tests passing (17 new tests)
+
 **v0.30.23 Completed (2026-01-05)**:
 - Match expression type checking: type_of_match for pattern matching
 - Match scrutinee extraction: match_scrutinee from (match expr (arms ...))
@@ -771,13 +785,13 @@ $ bmb doc --check
 
 For detailed analysis of the remaining work, see [GAP_ANALYSIS.md](./GAP_ANALYSIS.md).
 
-**Key Metrics (as of v0.29.6)**:
+**Key Metrics (as of v0.30.24)**:
 - Rust code to remove: ~21,783 LOC
-- BMB bootstrap code: ~9,924 LOC (46% coverage)
-- Gap to close: ~12,916 LOC additional BMB
-- Bootstrap tests passing: 353 tests
+- BMB bootstrap code: ~11,300 LOC (52% coverage)
+- Gap to close: ~11,700 LOC additional BMB
+- Bootstrap tests passing: 549 tests
 
 ---
 
-**Last Updated**: 2026-01-04
-**Version**: v0.29 → v1.0.0-rc Planning Document
+**Last Updated**: 2026-01-05
+**Version**: v0.30.24 → v1.0.0-rc Planning Document
