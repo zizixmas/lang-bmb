@@ -41,6 +41,8 @@ fn TK_NEW() -> i64 = 119;     -- v0.22.0: new keyword for struct init
 fn TK_ENUM() -> i64 = 120;    -- v0.22.1: enum keyword
 fn TK_MATCH() -> i64 = 121;   -- v0.22.1: match keyword
 fn TK_WHILE() -> i64 = 122;   -- v0.30.37: while keyword
+fn TK_FOR() -> i64 = 123;     -- v0.30.39: for keyword
+fn TK_IN() -> i64 = 124;      -- v0.30.39: in keyword
 
 fn TK_I32() -> i64 = 150;
 fn TK_I64() -> i64 = 151;
@@ -147,6 +149,8 @@ fn lookup_keyword(w: String) -> i64 =
     else if w == "enum" then 120    -- v0.22.1
     else if w == "match" then 121   -- v0.22.1
     else if w == "while" then 122   -- v0.30.37
+    else if w == "for" then 123     -- v0.30.39
+    else if w == "in" then 124      -- v0.30.39
     else if w == "i32" then 150
     else if w == "i64" then 151
     else if w == "f64" then 152
@@ -678,6 +682,7 @@ fn parse_primary(src: String, pos: i64) -> String =
     else if kind == TK_LPAREN() then parse_paren(src, end)
     else if kind == TK_IF() then parse_if(src, end)
     else if kind == TK_WHILE() then parse_while(src, end)  -- v0.30.37
+    else if kind == TK_FOR() then parse_for(src, end)      -- v0.30.39
     else if kind == TK_LET() then parse_let(src, end)
     else if kind == TK_NOT() then
         let r = parse_primary(src, end);
@@ -837,6 +842,38 @@ fn parse_while(src: String, pos: i64) -> String =
                 let t2 = next_token_raw(src, unpack_pos(rb));
                 if tok_kind(t2) != TK_RBRACE() then pack_result(unpack_pos(rb), make_error("while-rbrace"))
                 else pack_result(tok_end(t2), "(while " + unpack_ast(rc) + " " + unpack_ast(rb) + ")");
+
+-- ============================================================
+-- v0.30.39: For Loop Parser
+-- ============================================================
+
+-- Parse for expression: for var in iter { body }
+-- AST format: (for <var> iter body)
+fn parse_for(src: String, pos: i64) -> String =
+    -- pos is after 'for', parse variable name
+    let t1 = next_token_raw(src, pos);
+    if tok_kind(t1) != TK_IDENT() then pack_result(pos, make_error("for-var"))
+    else
+        let vstart = skip_all(src, pos);
+        let vend = tok_end(t1);
+        let varname = src.slice(vstart, vend);
+        -- Expect 'in' keyword
+        let t2 = next_token_raw(src, vend);
+        if tok_kind(t2) != TK_IN() then pack_result(vend, make_error("for-in"))
+        else
+            -- Parse iterator expression
+            let ri = parse_expr(src, tok_end(t2));
+            if is_error(unpack_ast(ri)) then ri
+            else
+                let t3 = next_token_raw(src, unpack_pos(ri));
+                if tok_kind(t3) != TK_LBRACE() then pack_result(unpack_pos(ri), make_error("for-lbrace"))
+                else
+                    let rb = parse_expr(src, tok_end(t3));
+                    if is_error(unpack_ast(rb)) then rb
+                    else
+                        let t4 = next_token_raw(src, unpack_pos(rb));
+                        if tok_kind(t4) != TK_RBRACE() then pack_result(unpack_pos(rb), make_error("for-rbrace"))
+                        else pack_result(tok_end(t4), "(for <" + varname + "> " + unpack_ast(ri) + " " + unpack_ast(rb) + ")");
 
 fn parse_let(src: String, pos: i64) -> String =
     let t1 = next_token_raw(src, pos);
@@ -1438,6 +1475,51 @@ fn ast_contains_at(ast: String, pattern: String, pos: i64) -> bool =
     else if ast.slice(pos, pos + pattern.len()) == pattern then true
     else ast_contains_at(ast, pattern, pos + 1);
 
+-- ============================================================
+-- v0.30.39: For Loop Tests
+-- ============================================================
+
+-- Test 1: for keyword token
+fn test_for_token() -> i64 =
+    let tok = next_token_raw("for i in 0 { 1 }", 0);
+    if tok_kind(tok) == TK_FOR() then 1 else 0;
+
+-- Test 2: simple for loop
+fn test_for_simple() -> i64 =
+    let src = "fn test() -> i64 = for i in items { 0 };";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0
+    else if ast_contains(ast, "(for <i>") then 1
+    else 0;
+
+-- Test 3: for with range expression
+fn test_for_range() -> i64 =
+    let src = "fn test(n: i64) -> i64 = for i in n { i };";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0
+    else if ast_contains(ast, "(for <i>") and ast_contains(ast, "(var <n>)") then 1
+    else 0;
+
+-- Test 4: for with complex body
+fn test_for_body() -> i64 =
+    let src = "fn test() -> i64 = for x in items { x + 1 };";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0
+    else if ast_contains(ast, "(for <x>") and ast_contains(ast, "(op +") then 1
+    else 0;
+
+-- Test 5: for in let binding
+fn test_for_in_let() -> i64 =
+    let src = "fn test() -> i64 = let result = for i in items { i }; result;";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0
+    else if ast_contains(ast, "(for <i>") and ast_contains(ast, "(let <result>") then 1
+    else 0;
+
 fn main() -> i64 =
     let u0 = println(777);  -- Start marker
 
@@ -1544,6 +1626,15 @@ fn main() -> i64 =
     let while_passed = wh1 + wh2 + wh3 + wh4 + wh5;
     let u12 = println(while_passed);  -- Should be 5
 
+    -- v0.30.39: For loop parsing tests
+    let for1 = test_for_token();
+    let for2 = test_for_simple();
+    let for3 = test_for_range();
+    let for4 = test_for_body();
+    let for5 = test_for_in_let();
+    let for_passed = for1 + for2 + for3 + for4 + for5;
+    let u13 = println(for_passed);  -- Should be 5
+
     let u4 = println(999);  -- End marker
 
-    parse_passed + ast_passed + struct_passed + enum_passed + integration_passed + generic_passed + typeparam_passed + string_passed + lambda_passed + while_passed;  -- Should be 56
+    parse_passed + ast_passed + struct_passed + enum_passed + integration_passed + generic_passed + typeparam_passed + string_passed + lambda_passed + while_passed + for_passed;  -- Should be 61
