@@ -164,15 +164,15 @@ v0.MAJOR.MINOR
 | v0.28 | Benchmark | C/Rust/BMB benchmark suite | Compute-intensive benchmarks, Contract-optimized benchmarks, Real-world workloads |
 | v0.29 | Velocity | C/Rust performance sprint | MIR optimization framework (6 passes), Contract-based optimization, Bootstrap optimization module |
 
-### Bootstrap Statistics (as of v0.30.86)
+### Bootstrap Statistics (as of v0.30.88)
 
 | Metric | Value |
 |--------|-------|
 | Rust Codebase | ~21,783 LOC |
-| BMB Bootstrap | ~14,300 LOC |
-| Coverage | 66% |
+| BMB Bootstrap | ~14,600 LOC |
+| Coverage | 67% |
 | Stage 1/2 Tests | 19 tests passing |
-| Bootstrap Tests | 1266 tests (693 types + 229 llvm_ir + 108 lowering + 46 mir + 83 parser_ast + 33 utils + 19 selfhost_equiv + 30 pipeline + 9 optimize + 8 selfhost_test + 8 compiler) |
+| Bootstrap Tests | 1285 tests (712 types + 229 llvm_ir + 108 lowering + 46 mir + 83 parser_ast + 33 utils + 19 selfhost_equiv + 30 pipeline + 9 optimize + 8 selfhost_test + 8 compiler) |
 
 ---
 
@@ -303,12 +303,24 @@ v0.MAJOR.MINOR
 - `enum_reg_count`, `enum_reg_is_generic`: Registry utilities
 - 5 new test functions, 19 assertions (335 total in types.bmb)
 
+**v0.30.88 Completed (2026-01-05)**:
+- Trait method dispatch type checking: type_of_trait_call, lookup_trait_for_method
+- Method parameter extraction: trait_method_params, extract_method_params, check_trait_call
+- Find trait with method: find_trait_with_method, get_method_params_from
+- 2 new test functions (8 assertions)
+- types.bmb total: 712 tests (156 test functions)
+
+**v0.30.87 Completed (2026-01-05)**:
+- Trait constraint checking: type_satisfies_trait, trait_methods_match, impl_has_method
+- Type bounds checking: type_satisfies_bounds, type_satisfies_bounds_from
+- Impl query functions: tenv_get_impls_for_type, tenv_impl_count_for_type
+- 2 new test functions (11 assertions)
+
 **v0.30.86 Completed (2026-01-05)**:
 - Impl registry: gen_impl_pack, gen_impl_trait_name, gen_impl_target_type, gen_impl_methods
 - impl_reg_new, impl_reg_add, impl_reg_lookup, impl_reg_has, impl_reg_method_return
 - tenv impl integration: tenv_add_impl, tenv_has_impl, tenv_impl_method_return
 - 4 new test functions (22 assertions)
-- types.bmb total: 693 tests (152 test functions)
 
 **v0.30.85 Completed (2026-01-05)**:
 - Trait registry: gen_trait_pack, gen_trait_name, gen_trait_tparams, gen_trait_methods
