@@ -164,15 +164,15 @@ v0.MAJOR.MINOR
 | v0.28 | Benchmark | C/Rust/BMB benchmark suite | Compute-intensive benchmarks, Contract-optimized benchmarks, Real-world workloads |
 | v0.29 | Velocity | C/Rust performance sprint | MIR optimization framework (6 passes), Contract-based optimization, Bootstrap optimization module |
 
-### Bootstrap Statistics (as of v0.30.34)
+### Bootstrap Statistics (as of v0.30.35)
 
 | Metric | Value |
 |--------|-------|
 | Rust Codebase | ~21,783 LOC |
-| BMB Bootstrap | ~11,700 LOC |
+| BMB Bootstrap | ~11,800 LOC |
 | Coverage | 54% |
 | Stage 1/2 Tests | 19 tests passing |
-| Bootstrap Tests | 925 tests (600 types + 119 llvm_ir + 64 lowering + 46 mir + 42 parser_ast + 33 utils + 19 selfhost_equiv + 14 pipeline + 9 optimize + 8 selfhost_test + 8 compiler) |
+| Bootstrap Tests | 934 tests (600 types + 119 llvm_ir + 64 lowering + 46 mir + 51 parser_ast + 33 utils + 19 selfhost_equiv + 14 pipeline + 9 optimize + 8 selfhost_test + 8 compiler) |
 
 ---
 
@@ -302,6 +302,15 @@ v0.MAJOR.MINOR
 - `enum_reg_variant_type`: Resolve variant type with type args through registry lookup
 - `enum_reg_count`, `enum_reg_is_generic`: Registry utilities
 - 5 new test functions, 19 assertions (335 total in types.bmb)
+
+**v0.30.35 Completed (2026-01-05)**:
+- Lambda expression parsing: Full lambda syntax support in parser_ast.bmb
+- TK_PIPE (309): Token for | pipe character
+- symbol_code extended: Map | (ASCII 124) to TK_PIPE
+- parse_lambda: Parse "fn |params| body" or "fn |params| -> type body"
+- parse_lambda_params, parse_lambda_params_more: Lambda parameter parsing
+- parse_primary extended: Handle TK_FN followed by TK_PIPE as lambda
+- Total: 51 tests passing in parser_ast.bmb (42 + 9 new)
 
 **v0.30.34 Completed (2026-01-05)**:
 - Lambda/closure MIR lowering: Closure support in lowering.bmb

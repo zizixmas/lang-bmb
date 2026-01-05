@@ -60,6 +60,7 @@ fn TK_RPAREN() -> i64 = 306;
 fn TK_LBRACE() -> i64 = 307;  -- v0.22.0: { for struct body
 fn TK_RBRACE() -> i64 = 308;  -- v0.22.0: } for struct body
 fn TK_DOT() -> i64 = 301;     -- v0.22.0: . for field access
+fn TK_PIPE() -> i64 = 309;    -- v0.30.35: | for lambda params
 
 fn TK_ARROW() -> i64 = 321;
 fn TK_DOTDOT() -> i64 = 323;
@@ -161,6 +162,7 @@ fn symbol_code(c: i64) -> i64 =
     else if c == 41 then 306
     else if c == 123 then 307
     else if c == 125 then 308
+    else if c == 124 then 309  -- v0.30.35: | for lambda params
     else if c == 43 then 400
     else if c == 45 then 401
     else if c == 42 then 402
@@ -684,6 +686,7 @@ fn parse_primary(src: String, pos: i64) -> String =
         else pack_result(unpack_pos(r), "(neg " + unpack_ast(r) + ")")
     else if kind == TK_NEW() then parse_struct_init(src, end)  -- v0.22.0: struct init
     else if kind == TK_MATCH() then parse_match(src, end)      -- v0.22.1: match expr
+    else if kind == TK_FN() then parse_lambda(src, end)        -- v0.30.35: lambda expr
     else pack_result(pos, make_error("expr"));
 
 fn parse_call_or_var(src: String, pos: i64, name: String) -> String =
@@ -737,6 +740,79 @@ fn parse_if(src: String, pos: i64) -> String =
                     let re = parse_expr(src, tok_end(t2));
                     if is_error(unpack_ast(re)) then re
                     else pack_result(unpack_pos(re), "(if " + unpack_ast(rc) + " " + unpack_ast(rt) + " " + unpack_ast(re) + ")");
+
+-- ============================================================
+-- v0.30.35: Lambda Expression Parser
+-- ============================================================
+
+-- Parse lambda expression: fn |params| body or fn |params| -> type body
+-- AST format: (fn |params| body) to match lowering.bmb expectations
+fn parse_lambda(src: String, pos: i64) -> String =
+    -- pos is after 'fn', should be at '|'
+    let t1 = next_token_raw(src, pos);
+    if tok_kind(t1) != TK_PIPE() then pack_result(pos, make_error("lambda-pipe"))
+    else
+        let rp = parse_lambda_params(src, tok_end(t1), "");
+        if is_error(unpack_ast(rp)) then rp
+        else
+            -- Check for optional return type: -> type
+            let t2 = next_token_raw(src, unpack_pos(rp));
+            if tok_kind(t2) == TK_ARROW() then
+                let rt = parse_type(src, tok_end(t2));
+                if is_error(unpack_ast(rt)) then rt
+                else
+                    let rb = parse_expr(src, unpack_pos(rt));
+                    if is_error(unpack_ast(rb)) then rb
+                    else pack_result(unpack_pos(rb), "(fn |" + unpack_ast(rp) + "| -> " + unpack_ast(rt) + " " + unpack_ast(rb) + ")")
+            else
+                -- No return type, parse body directly
+                let rb = parse_expr(src, unpack_pos(rp));
+                if is_error(unpack_ast(rb)) then rb
+                else pack_result(unpack_pos(rb), "(fn |" + unpack_ast(rp) + "| " + unpack_ast(rb) + ")");
+
+-- Parse lambda parameters: name: type, name: type, ...
+-- Returns params as string: "x: i64, y: i64" or "" for no params
+fn parse_lambda_params(src: String, pos: i64, params: String) -> String =
+    let tok = next_token_raw(src, pos);
+    let kind = tok_kind(tok);
+    -- Empty params: ||
+    if kind == TK_PIPE() then pack_result(tok_end(tok), params)
+    else if kind == TK_IDENT() then
+        let ns = skip_all(src, pos);
+        let ne = tok_end(tok);
+        let name = src.slice(ns, ne);
+        let t2 = next_token_raw(src, ne);
+        if tok_kind(t2) != TK_COLON() then pack_result(ne, make_error("lambda-param-colon"))
+        else
+            let rt = parse_type(src, tok_end(t2));
+            if is_error(unpack_ast(rt)) then rt
+            else
+                let new_params = if params == "" then name + ": " + unpack_ast(rt)
+                                 else params + ", " + name + ": " + unpack_ast(rt);
+                parse_lambda_params_more(src, unpack_pos(rt), new_params)
+    else pack_result(pos, make_error("lambda-param"));
+
+-- Continue parsing more lambda parameters after comma
+fn parse_lambda_params_more(src: String, pos: i64, params: String) -> String =
+    let tok = next_token_raw(src, pos);
+    let kind = tok_kind(tok);
+    if kind == TK_PIPE() then pack_result(tok_end(tok), params)
+    else if kind == TK_COMMA() then
+        let t2 = next_token_raw(src, tok_end(tok));
+        if tok_kind(t2) != TK_IDENT() then pack_result(tok_end(tok), make_error("lambda-param-name"))
+        else
+            let ns = skip_all(src, tok_end(tok));
+            let ne = tok_end(t2);
+            let name = src.slice(ns, ne);
+            let t3 = next_token_raw(src, ne);
+            if tok_kind(t3) != TK_COLON() then pack_result(ne, make_error("lambda-param-colon"))
+            else
+                let rt = parse_type(src, tok_end(t3));
+                if is_error(unpack_ast(rt)) then rt
+                else
+                    let new_params = params + ", " + name + ": " + unpack_ast(rt);
+                    parse_lambda_params_more(src, unpack_pos(rt), new_params)
+    else pack_result(pos, make_error("lambda-param-end"));
 
 fn parse_let(src: String, pos: i64) -> String =
     let t1 = next_token_raw(src, pos);
@@ -1211,6 +1287,79 @@ fn test_string_literal() -> i64 =
 
     t1 + t2 + t3;
 
+-- ============================================================
+-- v0.30.35: Lambda Parsing Tests
+-- ============================================================
+
+-- Test TK_PIPE token constant and lexer
+fn test_lambda_pipe_token() -> i64 =
+    -- Test 1: TK_PIPE constant is 309
+    let t1 = if TK_PIPE() == 309 then 1 else 0;
+
+    -- Test 2: Lexer recognizes pipe character
+    let tok2 = next_token_raw("|x|", 0);
+    let kind2 = tok_kind(tok2);
+    let t2 = if kind2 == TK_PIPE() then 1 else 0;
+
+    -- Test 3: symbol_code maps | correctly
+    let t3 = if symbol_code(124) == 309 then 1 else 0;
+
+    t1 + t2 + t3;
+
+-- Test lambda with single parameter
+fn test_lambda_single_param() -> i64 =
+    let src = "fn test() -> i64 = fn |x: i64| x + 1;";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0
+    else if ast_contains(ast, "(fn |x: i64|") then 1
+    else 0;
+
+-- Test lambda with multiple parameters
+fn test_lambda_multi_param() -> i64 =
+    let src = "fn test() -> i64 = fn |a: i64, b: i64| a + b;";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0
+    else if ast_contains(ast, "(fn |a: i64, b: i64|") then 1
+    else 0;
+
+-- Test lambda with no parameters
+fn test_lambda_no_param() -> i64 =
+    let src = "fn test() -> i64 = fn || 42;";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0
+    else if ast_contains(ast, "(fn ||") then 1
+    else 0;
+
+-- Test lambda with return type
+fn test_lambda_with_type() -> i64 =
+    let src = "fn test() -> i64 = fn |x: i64| -> i64 x + 1;";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0
+    else if ast_contains(ast, "-> i64") then 1
+    else 0;
+
+-- Test lambda in let binding
+fn test_lambda_in_let() -> i64 =
+    let src = "fn test() -> i64 = let f = fn |x: i64| x * 2; f;";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0
+    else if ast_contains(ast, "(fn |x: i64|") then 1
+    else 0;
+
+-- Test lambda as function argument
+fn test_lambda_as_arg() -> i64 =
+    let src = "fn test() -> i64 = apply(fn |x: i64| x);";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0
+    else if ast_contains(ast, "(fn |x: i64|") and ast_contains(ast, "(call <apply>") then 1
+    else 0;
+
 -- Helper to check if ast contains substring
 fn ast_contains(ast: String, pattern: String) -> bool =
     ast_contains_at(ast, pattern, 0);
@@ -1279,6 +1428,15 @@ fn main() -> i64 =
     -- v0.30.32: String literal tests
     let str1 = test_string_literal();
 
+    -- v0.30.35: Lambda parsing tests
+    let lam1 = test_lambda_pipe_token();
+    let lam2 = test_lambda_single_param();
+    let lam3 = test_lambda_multi_param();
+    let lam4 = test_lambda_no_param();
+    let lam5 = test_lambda_with_type();
+    let lam6 = test_lambda_in_let();
+    let lam7 = test_lambda_as_arg();
+
     let u1 = println(888);  -- Middle marker
 
     let parse_passed = t1 + t2 + t3 + t4 + t5;
@@ -1305,6 +1463,9 @@ fn main() -> i64 =
     let string_passed = str1;
     let u10 = println(string_passed);  -- Should be 3
 
+    let lambda_passed = lam1 + lam2 + lam3 + lam4 + lam5 + lam6 + lam7;
+    let u11 = println(lambda_passed);  -- Should be 9 (3 from token tests + 6 parsing tests)
+
     let u4 = println(999);  -- End marker
 
-    parse_passed + ast_passed + struct_passed + enum_passed + integration_passed + generic_passed + typeparam_passed + string_passed;  -- Should be 42
+    parse_passed + ast_passed + struct_passed + enum_passed + integration_passed + generic_passed + typeparam_passed + string_passed + lambda_passed;  -- Should be 51
