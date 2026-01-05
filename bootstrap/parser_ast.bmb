@@ -40,6 +40,7 @@ fn TK_STRUCT() -> i64 = 118;  -- v0.22.0: struct keyword
 fn TK_NEW() -> i64 = 119;     -- v0.22.0: new keyword for struct init
 fn TK_ENUM() -> i64 = 120;    -- v0.22.1: enum keyword
 fn TK_MATCH() -> i64 = 121;   -- v0.22.1: match keyword
+fn TK_WHILE() -> i64 = 122;   -- v0.30.37: while keyword
 
 fn TK_I32() -> i64 = 150;
 fn TK_I64() -> i64 = 151;
@@ -145,6 +146,7 @@ fn lookup_keyword(w: String) -> i64 =
     else if w == "new" then 119     -- v0.22.0
     else if w == "enum" then 120    -- v0.22.1
     else if w == "match" then 121   -- v0.22.1
+    else if w == "while" then 122   -- v0.30.37
     else if w == "i32" then 150
     else if w == "i64" then 151
     else if w == "f64" then 152
@@ -675,6 +677,7 @@ fn parse_primary(src: String, pos: i64) -> String =
     else if kind == TK_IDENT() then parse_call_or_var(src, end, text)
     else if kind == TK_LPAREN() then parse_paren(src, end)
     else if kind == TK_IF() then parse_if(src, end)
+    else if kind == TK_WHILE() then parse_while(src, end)  -- v0.30.37
     else if kind == TK_LET() then parse_let(src, end)
     else if kind == TK_NOT() then
         let r = parse_primary(src, end);
@@ -813,6 +816,27 @@ fn parse_lambda_params_more(src: String, pos: i64, params: String) -> String =
                     let new_params = params + ", " + name + ": " + unpack_ast(rt);
                     parse_lambda_params_more(src, unpack_pos(rt), new_params)
     else pack_result(pos, make_error("lambda-param-end"));
+
+-- ============================================================
+-- v0.30.37: While Expression Parser
+-- ============================================================
+
+-- Parse while expression: while condition { body }
+-- AST format: (while condition body)
+fn parse_while(src: String, pos: i64) -> String =
+    -- pos is after 'while', parse condition
+    let rc = parse_expr(src, pos);
+    if is_error(unpack_ast(rc)) then rc
+    else
+        let t1 = next_token_raw(src, unpack_pos(rc));
+        if tok_kind(t1) != TK_LBRACE() then pack_result(unpack_pos(rc), make_error("while-lbrace"))
+        else
+            let rb = parse_expr(src, tok_end(t1));
+            if is_error(unpack_ast(rb)) then rb
+            else
+                let t2 = next_token_raw(src, unpack_pos(rb));
+                if tok_kind(t2) != TK_RBRACE() then pack_result(unpack_pos(rb), make_error("while-rbrace"))
+                else pack_result(tok_end(t2), "(while " + unpack_ast(rc) + " " + unpack_ast(rb) + ")");
 
 fn parse_let(src: String, pos: i64) -> String =
     let t1 = next_token_raw(src, pos);
@@ -1360,6 +1384,51 @@ fn test_lambda_as_arg() -> i64 =
     else if ast_contains(ast, "(fn |x: i64|") and ast_contains(ast, "(call <apply>") then 1
     else 0;
 
+-- ============================================================
+-- v0.30.37: While Expression Parsing Tests
+-- ============================================================
+
+-- Test 1: while keyword token
+fn test_while_token() -> i64 =
+    let tok = next_token_raw("while true { 1 }", 0);
+    if tok_kind(tok) == TK_WHILE() then 1 else 0;
+
+-- Test 2: simple while loop
+fn test_while_simple() -> i64 =
+    let src = "fn test() -> i64 = while true { 0 };";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0
+    else if ast_contains(ast, "(while (bool true) (int 0))") then 1
+    else 0;
+
+-- Test 3: while with condition expression
+fn test_while_condition() -> i64 =
+    let src = "fn test(x: i64) -> i64 = while x > 0 { x };";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0
+    else if ast_contains(ast, "(while") and ast_contains(ast, "(op >") then 1
+    else 0;
+
+-- Test 4: while with complex body
+fn test_while_body() -> i64 =
+    let src = "fn test(x: i64) -> i64 = while true { x + 1 };";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0
+    else if ast_contains(ast, "(while") and ast_contains(ast, "(op +") then 1
+    else 0;
+
+-- Test 5: while in let binding
+fn test_while_in_let() -> i64 =
+    let src = "fn test(n: i64) -> i64 = let result = while true { n }; result;";
+    let result = parse_program(src, 0, "");
+    let ast = unpack_ast(result);
+    if is_error(ast) then 0
+    else if ast_contains(ast, "(while") and ast_contains(ast, "(let <result>") then 1
+    else 0;
+
 -- Helper to check if ast contains substring
 fn ast_contains(ast: String, pattern: String) -> bool =
     ast_contains_at(ast, pattern, 0);
@@ -1466,6 +1535,15 @@ fn main() -> i64 =
     let lambda_passed = lam1 + lam2 + lam3 + lam4 + lam5 + lam6 + lam7;
     let u11 = println(lambda_passed);  -- Should be 9 (3 from token tests + 6 parsing tests)
 
+    -- v0.30.37: While expression parsing tests
+    let wh1 = test_while_token();
+    let wh2 = test_while_simple();
+    let wh3 = test_while_condition();
+    let wh4 = test_while_body();
+    let wh5 = test_while_in_let();
+    let while_passed = wh1 + wh2 + wh3 + wh4 + wh5;
+    let u12 = println(while_passed);  -- Should be 5
+
     let u4 = println(999);  -- End marker
 
-    parse_passed + ast_passed + struct_passed + enum_passed + integration_passed + generic_passed + typeparam_passed + string_passed + lambda_passed;  -- Should be 51
+    parse_passed + ast_passed + struct_passed + enum_passed + integration_passed + generic_passed + typeparam_passed + string_passed + lambda_passed + while_passed;  -- Should be 56
