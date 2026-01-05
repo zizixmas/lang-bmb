@@ -164,15 +164,15 @@ v0.MAJOR.MINOR
 | v0.28 | Benchmark | C/Rust/BMB benchmark suite | Compute-intensive benchmarks, Contract-optimized benchmarks, Real-world workloads |
 | v0.29 | Velocity | C/Rust performance sprint | MIR optimization framework (6 passes), Contract-based optimization, Bootstrap optimization module |
 
-### Bootstrap Statistics (as of v0.30.35)
+### Bootstrap Statistics (as of v0.30.36)
 
 | Metric | Value |
 |--------|-------|
 | Rust Codebase | ~21,783 LOC |
-| BMB Bootstrap | ~11,800 LOC |
-| Coverage | 54% |
+| BMB Bootstrap | ~11,900 LOC |
+| Coverage | 55% |
 | Stage 1/2 Tests | 19 tests passing |
-| Bootstrap Tests | 934 tests (600 types + 119 llvm_ir + 64 lowering + 46 mir + 51 parser_ast + 33 utils + 19 selfhost_equiv + 14 pipeline + 9 optimize + 8 selfhost_test + 8 compiler) |
+| Bootstrap Tests | 943 tests (600 types + 119 llvm_ir + 73 lowering + 46 mir + 51 parser_ast + 33 utils + 19 selfhost_equiv + 14 pipeline + 9 optimize + 8 selfhost_test + 8 compiler) |
 
 ---
 
@@ -302,6 +302,16 @@ v0.MAJOR.MINOR
 - `enum_reg_variant_type`: Resolve variant type with type args through registry lookup
 - `enum_reg_count`, `enum_reg_is_generic`: Registry utilities
 - 5 new test functions, 19 assertions (335 total in types.bmb)
+
+**v0.30.36 Completed (2026-01-05)**:
+- Block/Unit MIR lowering: Block and unit expression support in lowering.bmb
+- is_block_node: Detect block expressions "(block inner_expr)"
+- is_unit_node: Detect unit expressions "()" exactly
+- block_inner_expr: Extract inner expression from block AST
+- lower_block: Lower block by delegating to inner expression
+- lower_unit: Generate MIR UNIT constant for unit expressions
+- lower_expr extended: Handle block and unit nodes
+- Total: 73 tests passing in lowering.bmb (64 + 9 new)
 
 **v0.30.35 Completed (2026-01-05)**:
 - Lambda expression parsing: Full lambda syntax support in parser_ast.bmb

@@ -160,6 +160,24 @@ fn is_lambda_node(s: String) -> bool =
         let c4 = s.char_at(4);  -- '|'
         c0 == 40 and c1 == 102 and c2 == 110 and c3 == 32 and c4 == 124;
 
+-- v0.30.36: Block expression support
+-- Block format: (block inner_expr)
+fn is_block_node(s: String) -> bool =
+    if s.len() < 9 then false  -- minimum: "(block x)"
+    else let c0 = s.char_at(0);  -- '('
+        let c1 = s.char_at(1);  -- 'b'
+        let c2 = s.char_at(2);  -- 'l'
+        let c3 = s.char_at(3);  -- 'o'
+        let c4 = s.char_at(4);  -- 'c'
+        let c5 = s.char_at(5);  -- 'k'
+        let c6 = s.char_at(6);  -- ' '
+        c0 == 40 and c1 == 98 and c2 == 108 and c3 == 111 and c4 == 99 and c5 == 107 and c6 == 32;
+
+-- v0.30.36: Unit expression support
+-- Unit format: exactly "()"
+fn is_unit_node(s: String) -> bool =
+    s.len() == 2 and s.char_at(0) == 40 and s.char_at(1) == 41;
+
 fn has_double_colon(s: String, pos: i64) -> bool =
     if pos + 1 >= s.len() then false
     else if s.char_at(pos) == 58 and s.char_at(pos + 1) == 58 then true  -- '::'
@@ -532,6 +550,9 @@ fn lower_expr(ast: String, temp: i64, block: i64) -> String =
     else if is_match_node(ast) then lower_match(ast, temp, block)
     -- v0.30.34: Lambda/closure support
     else if is_lambda_node(ast) then lower_lambda(ast, temp, block)
+    -- v0.30.36: Block and unit expressions
+    else if is_block_node(ast) then lower_block(ast, temp, block)
+    else if is_unit_node(ast) then lower_unit(ast, temp, block)
     else pack_lower_result(temp, block, "%error", "  ; unknown: " + get_node_type(ast));
 
 -- Lower integer literal: (int 42)
@@ -616,6 +637,25 @@ fn lower_lambda(ast: String, temp: i64, block: i64) -> String =
         let body_text = unpack_text(body_result);
         let combined = if body_text.len() > 0 then closure_text + "|" + body_text else closure_text;
         pack_lower_result(unpack_temp(body_result), unpack_block(body_result), dest, combined);
+
+-- v0.30.36: Lower block expression: (block inner_expr)
+-- Block expressions simply lower to their inner expression
+fn block_inner_expr(ast: String) -> String =
+    let len = ast.len();
+    if len < 9 then ""  -- minimum: "(block x)"
+    else ast.slice(7, len - 1);  -- skip "(block " and trailing ")"
+
+fn lower_block(ast: String, temp: i64, block: i64) -> String =
+    let inner = block_inner_expr(ast);
+    if inner == "" then pack_lower_result(temp, block, "%error", "  ; block: empty body")
+    else lower_expr(inner, temp, block);
+
+-- v0.30.36: Lower unit expression: ()
+-- Unit expressions lower to a unit constant
+fn lower_unit(ast: String, temp: i64, block: i64) -> String =
+    let dest = place_temp(temp);
+    let text = "  " + dest + " = UNIT";
+    pack_lower_result(temp + 1, block, dest, text);
 
 -- Lower variable reference: (var <name>)
 fn lower_var(ast: String, temp: i64, block: i64) -> String =
@@ -1270,6 +1310,27 @@ fn main() -> i64 =
     let lambda_lower_tests = ll1 + ll2 + ll3;
     let u28 = println(lambda_lower_tests);  -- Should be 3
 
+    -- Test 26: v0.30.36 Block/Unit node detection (4 tests)
+    let bu1 = if is_block_node("(block (int 42))") then 1 else 0;
+    let bu2 = if is_block_node("(block (var <x>))") then 1 else 0;
+    let bu3 = if is_unit_node("()") then 1 else 0;
+    let bu4 = if is_unit_node("(int 42)") then 0 else 1;  -- int is not unit
+    let block_unit_node_tests = bu1 + bu2 + bu3 + bu4;
+    let u29 = println(block_unit_node_tests);  -- Should be 4
+
+    -- Test 27: v0.30.36 Block inner extraction (2 tests)
+    let bi1 = if block_inner_expr("(block (int 42))") == "(int 42)" then 1 else 0;
+    let bi2 = if block_inner_expr("(block (op + (var <x>) (int 1)))") == "(op + (var <x>) (int 1))" then 1 else 0;
+    let block_inner_tests = bi1 + bi2;
+    let u30 = println(block_inner_tests);  -- Should be 2
+
+    -- Test 28: v0.30.36 Block/Unit lowering (3 tests)
+    let bl1 = test_lower_contains("(block (int 42))", "I:42");  -- block lowers inner
+    let bl2 = test_lower_contains("(block (bool true))", "B:1");  -- block with bool (true = B:1)
+    let bl3 = test_lower_contains("()", "UNIT");  -- unit lowering
+    let block_unit_lower_tests = bl1 + bl2 + bl3;
+    let u31 = println(block_unit_lower_tests);  -- Should be 3
+
     let u22 = println(888);  -- Separator
 
     let total = node_tests + extract_tests + child_tests + int_tests + bool_tests +
@@ -1277,8 +1338,9 @@ fn main() -> i64 =
                 call_tests + fn_tests + prog_tests + struct_node_tests +
                 struct_extract_tests + struct_init_tests + field_access_tests +
                 enum_node_tests + enum_extract_tests + enum_variant_tests + match_tests +
-                string_tests + lambda_node_tests + lambda_body_tests + lambda_lower_tests;
-    let u23 = println(total);  -- Should be 64 (55 + 9 lambda tests)
+                string_tests + lambda_node_tests + lambda_body_tests + lambda_lower_tests +
+                block_unit_node_tests + block_inner_tests + block_unit_lower_tests;
+    let u23 = println(total);  -- Should be 73 (64 + 9 block/unit tests)
 
     let u24 = println(999);  -- End marker
 
