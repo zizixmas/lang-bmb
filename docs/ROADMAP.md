@@ -95,7 +95,7 @@ v0.MAJOR.MINOR
 | v0.19-v0.23 | Bootstrap | MIR completion, Stage 1/2 verification | ✅ Complete |
 | v0.24-v0.29 | Polish | Examples, AI Query, benchmarks, optimization | ✅ Complete |
 | **v0.30** | **Pure** | **Rust code complete removal (Self-Hosting)** | 📋 Planned |
-| **v0.31** | **Docs** | **Documentation completion + website launch** | 📋 Planned |
+| **v0.31** | **Docs** | **Language refinements (RFCs) + Documentation + website** | 📋 Planned |
 | **v0.32** | **Ecosystem** | **100+ packages + community** | 📋 Planned |
 | **v1.0.0-rc** | **Golden** | **Final verification + stability promise** | 📋 Planned |
 
@@ -927,11 +927,33 @@ $ diff stage2/bmb stage3/bmb
 
 ### v0.31 Docs - Documentation Completion
 
-**Goal**: Comprehensive documentation and website launch
+**Goal**: Comprehensive documentation, language refinement, and website launch
 
 **Difficulty**: ⭐⭐⭐ (Medium)
 
-**Duration Estimate**: 4-6 weeks
+**Duration Estimate**: 6-8 weeks
+
+#### Phase 31.0: Language Refinements (RFCs)
+
+| Task | Description | Priority | Effort | RFC |
+|------|-------------|----------|--------|-----|
+| 31.0.1 | Remove @check annotation | P0 | 1 day | RFC-0003 |
+| 31.0.2 | Add @trust "reason" mandatory reason | P0 | 1 day | RFC-0003 |
+| 31.0.3 | Add `todo` keyword | P0 | 2 days | RFC-0004 |
+| 31.0.4 | Add module header system | P0 | 1 week | RFC-0002 |
+| 31.0.5 | Add contract hash duplicate detection | P1 | 3 days | - |
+| 31.0.6 | Update SPECIFICATION.md | P0 | 1 day | - |
+
+**Deliverables**:
+- @check removed, @trust requires reason
+- `todo` keyword for incremental development
+- Module headers for AI-friendly navigation
+- Contract duplicate warning in build
+
+**Philosophy Alignment**:
+- P0 Performance: No runtime contract checks (@check removed)
+- AI-Native: Module headers enable fast navigation
+- Incremental Development: `todo` supports contract-first workflow
 
 #### Phase 31.1: Language Reference
 

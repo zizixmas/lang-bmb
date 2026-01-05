@@ -60,7 +60,8 @@ BMB is an AI-native programming language designed for:
 | Bindings | let, var, mut, rec |
 | Quantifiers | forall, exists |
 | Memory | own, ref, drop, move, copy |
-| Verification | pure, trust, check, contract, satisfies |
+| Verification | pure, trust, contract, satisfies |
+| Development | todo |
 
 ### 2.2 Operators
 
@@ -154,8 +155,33 @@ Functions have pre (preconditions) and post (postconditions).
 | Annotation | Behavior |
 |------------|----------|
 | (none) | Full SMT verification required |
-| @trust | Skip verification (programmer guarantee) |
-| @check | Runtime assertion on verification timeout |
+| @trust "reason" | Skip verification (programmer guarantee with documented reason) |
+
+**Design Principle**: BMB compiled code contains NO runtime contract checks. All contracts are either proven by SMT at compile-time or trusted by the programmer via `@trust`.
+
+**Rationale** (RFC-0003):
+- Runtime checks violate P0 Performance (zero overhead)
+- Runtime checks are equivalent to dynamic type checking
+- `@trust` with mandatory reason enables code review
+
+### 5.3 Incremental Development
+
+| Keyword | Behavior |
+|---------|----------|
+| todo "message" | Placeholder for unimplemented code |
+
+```bmb
+fn complex_algorithm(data: Data) -> Result
+  pre valid(data)
+  post correct(ret)
+= todo "implementation pending"
+```
+
+**Behavior** (RFC-0004):
+- Parse/Type check: Valid, contracts verified
+- Compile: Generates panic stub
+- Runtime: Panic with message if reached
+- Build flags: `--no-todo` (error), `--list-todo` (list all)
 
 ## 6. Contract-Based Optimization
 
@@ -192,6 +218,8 @@ See full grammar in source code grammar.lalrpop.
 | pre/post | Complete |
 | forall/exists | Complete |
 | old(expr) | Complete |
-| @trust/@check | Complete |
+| @trust "reason" | Complete |
+| todo keyword | Planned (v0.31) |
+| module header | Planned (v0.31) |
 | Z3 integration | Complete |
 | SMT-LIB2 generation | Complete |
