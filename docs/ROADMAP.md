@@ -303,6 +303,16 @@ v0.MAJOR.MINOR
 - `enum_reg_count`, `enum_reg_is_generic`: Registry utilities
 - 5 new test functions, 19 assertions (335 total in types.bmb)
 
+**v0.30.28 Completed (2026-01-05)**:
+- Generic field access type checking: Fixed type_of_field to handle generic types
+- parse_type_base: Extract base type from generic (e.g., "Vec<i64>" → "Vec")
+- parse_type_args: Extract type arguments (e.g., "Vec<i64>" → "i64")
+- type_str_find_angle: Find '<' position in type string
+- type_str_find_close_angle: Find matching '>' with depth tracking
+- type_has_args: Check if type has generic arguments
+- locals_find_comma_depth: Handle commas inside generic type args
+- Total: 587 tests passing (11 new tests)
+
 **v0.30.27 Completed (2026-01-05)**:
 - Struct instantiation type checking: Enhanced type_of_new with field validation
 - expr_new_field_count: Count field initializers in new expression
@@ -812,13 +822,13 @@ $ bmb doc --check
 
 For detailed analysis of the remaining work, see [GAP_ANALYSIS.md](./GAP_ANALYSIS.md).
 
-**Key Metrics (as of v0.30.27)**:
+**Key Metrics (as of v0.30.28)**:
 - Rust code to remove: ~21,783 LOC
 - BMB bootstrap code: ~11,600 LOC (53% coverage)
 - Gap to close: ~11,400 LOC additional BMB
-- Bootstrap tests passing: 576 tests
+- Bootstrap tests passing: 587 tests
 
 ---
 
 **Last Updated**: 2026-01-05
-**Version**: v0.30.27 → v1.0.0-rc Planning Document
+**Version**: v0.30.28 → v1.0.0-rc Planning Document
