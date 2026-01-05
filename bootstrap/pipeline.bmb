@@ -780,8 +780,32 @@ fn main() -> i64 =
     let t7 = n1 + n2 + n3 + n4;
     let u7 = println(t7);
 
+    -- v0.30.92: Test 8: Multi-operand expressions (4 tests)
+    let m1 = test_pipeline("a + b + c + d", "+ %_t1, %d");
+    let m2 = test_pipeline("a * b * c", "* %_t0, %c");
+    let m3 = test_pipeline("a - b - c - d", "- %_t1, %d");
+    let m4 = test_pipeline("x / y / z", "/ %_t0, %z");
+    let t8 = m1 + m2 + m3 + m4;
+    let u8a = println(t8);
+
+    -- v0.30.92: Test 9: Mixed operations (4 tests)
+    let sh1 = test_pipeline("a + b * c", "+ %a");  -- a + (b*c) or (a+b)*c
+    let sh2 = test_pipeline("x * y + z", "+ %_t0, %z");
+    let sh3 = test_pipeline("a - b + c", "+ %_t0, %c");
+    let sh4 = test_pipeline("x + y - z", "- %_t0, %z");
+    let t9 = sh1 + sh2 + sh3 + sh4;
+    let u9a = println(t9);
+
+    -- v0.30.92: Test 10: Combined expression pipeline (4 tests)
+    let cb1 = test_pipeline("a + b - c", "- %_t0, %c");
+    let cb2 = test_pipeline("x and y or z", "or %_t0, %z");
+    let cb3 = test_pipeline("a < b and c > d", "and");
+    let cb4 = test_pipeline("-a + b", "+ %_t0, %b");
+    let t10 = cb1 + cb2 + cb3 + cb4;
+    let u10a = println(t10);
+
     let u8 = println(888);
-    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7;
+    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10;
     let u9 = println(total);
     let u10 = println(999);
 

@@ -63,13 +63,13 @@ This document provides a comprehensive analysis of the requirements for BMB v0.3
 
 | File | Size | LOC | Status | Test Coverage |
 |------|------|-----|--------|---------------|
-| llvm_ir.bmb | 92KB | 2,366 | Complete | 229 tests (51 test functions) |
+| llvm_ir.bmb | 94KB | 2,400 | Complete | 239 tests (52 test functions) |
 | lowering.bmb | 53KB | 1,280 | Complete | 108 tests |
-| compiler.bmb | 53KB | 1,202 | Complete | 8 tests |
+| compiler.bmb | 53KB | 1,202 | Complete | 2 tests |
 | parser_ast.bmb | 98KB | 2,390 | Complete | 104 tests (Struct/Enum/Trait/Impl/Array/Index/MethodCall) |
-| pipeline.bmb | 34KB | 788 | Complete | 30 tests |
+| pipeline.bmb | 35KB | 810 | Complete | 42 tests |
 | parser_test.bmb | 25KB | 641 | Complete | 15 categories |
-| types.bmb | 301KB | 8,105 | Complete | 717 tests (157 test functions, +String concat type checking) |
+| types.bmb | 310KB | 8,210 | Complete | 733 tests (159 test functions) |
 | parser.bmb | 22KB | 605 | Complete | Syntax validation |
 | mir.bmb | 20KB | 552 | Complete | 46 tests |
 | selfhost_test.bmb | 23KB | 536 | Complete | 8 tests |

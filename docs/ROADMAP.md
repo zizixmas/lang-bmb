@@ -164,15 +164,15 @@ v0.MAJOR.MINOR
 | v0.28 | Benchmark | C/Rust/BMB benchmark suite | Compute-intensive benchmarks, Contract-optimized benchmarks, Real-world workloads |
 | v0.29 | Velocity | C/Rust performance sprint | MIR optimization framework (6 passes), Contract-based optimization, Bootstrap optimization module |
 
-### Bootstrap Statistics (as of v0.30.89)
+### Bootstrap Statistics (as of v0.30.92)
 
 | Metric | Value |
 |--------|-------|
 | Rust Codebase | ~21,783 LOC |
-| BMB Bootstrap | ~14,700 LOC |
-| Coverage | 67% |
+| BMB Bootstrap | ~14,800 LOC |
+| Coverage | 68% |
 | Stage 1/2 Tests | 19 tests passing |
-| Bootstrap Tests | 1290 tests (717 types + 229 llvm_ir + 108 lowering + 46 mir + 83 parser_ast + 33 utils + 19 selfhost_equiv + 30 pipeline + 9 optimize + 8 selfhost_test + 8 compiler) |
+| Bootstrap Tests | 1322 tests (733 types + 239 llvm_ir + 108 lowering + 46 mir + 83 parser_ast + 33 utils + 19 selfhost_equiv + 42 pipeline + 9 optimize + 8 selfhost_test + 2 compiler) |
 
 ---
 
@@ -316,6 +316,24 @@ v0.MAJOR.MINOR
 - Mixed type errors: i64+String and String+i64 properly detected
 - 1 new test function (5 assertions)
 - types.bmb total: 717 tests (157 test functions)
+
+**v0.30.90 Completed (2026-01-06)**:
+- Trait method dispatch IR testing: test_method_dispatch_edge in llvm_ir.bmb (10 tests)
+- Edge cases for method dispatch: unsupported methods, various argument counts, method call parsing
+- Trait dispatch edge cases: test_trait_dispatch_edge in types.bmb (8 tests)
+- Multiple traits with overlapping method names, lookup resolution
+- llvm_ir.bmb total: 239 tests (52 test functions)
+- types.bmb total: 725 tests (158 test functions)
+
+**v0.30.91 Completed (2026-01-06)**:
+- Return type annotation edge cases: test_return_type_edge in types.bmb (8 tests)
+- Tests for if-then-else, let bindings, nested let, bool returns, type mismatch detection
+- types.bmb total: 733 tests (159 test functions)
+
+**v0.30.92 Completed (2026-01-06)**:
+- Pipeline integration verification: 3 new test groups in pipeline.bmb (12 tests)
+- Multi-operand expressions, mixed operations, combined expressions
+- pipeline.bmb total: 42 tests (10 test groups)
 
 **v0.30.87 Completed (2026-01-05)**:
 - Trait constraint checking: type_satisfies_trait, trait_methods_match, impl_has_method

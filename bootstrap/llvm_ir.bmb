@@ -2236,6 +2236,49 @@ fn test_pipeline_integration() -> i64 =
 
     t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
 
+-- v0.30.90: Method dispatch edge cases and unsupported method handling
+fn test_method_dispatch_edge() -> i64 =
+    -- Test 1: Unsupported method returns comment
+    let um1 = gen_method_dispatch("%_t1", "%recv", "unknown_method", "");
+    let t1 = if has_pattern(um1, "; unsupported method", 0) then 1 else 0;
+
+    -- Test 2: Unsupported method includes method name in comment
+    let t2 = if has_pattern(um1, "unknown_method", 0) then 1 else 0;
+
+    -- Test 3: Method dispatch with empty args for len
+    let d1 = gen_method_dispatch("%_t2", "%str", "len", "");
+    let t3 = if has_pattern(d1, "@bmb_string_len", 0) then 1 else 0;
+
+    -- Test 4: Method dispatch with single arg for char_at
+    let d2 = gen_method_dispatch("%_t3", "%str", "char_at", "%idx");
+    let t4 = if has_pattern(d2, "getelementptr", 0) then 1 else 0;
+
+    -- Test 5: Method dispatch with two args for slice
+    let d3 = gen_method_dispatch("%_t4", "%str", "slice", "%start, %end");
+    let t5 = if has_pattern(d3, "@bmb_string_slice", 0) then 1 else 0;
+
+    -- Test 6: Array method dispatch with value arg
+    let d4 = gen_method_dispatch("%_t5", "%arr", "array_push", "%val");
+    let t6 = if has_pattern(d4, "@bmb_array_push", 0) then 1 else 0;
+
+    -- Test 7: Array set with two args
+    let d5 = gen_method_dispatch("%_t6", "%arr", "array_set", "%idx, %val");
+    let t7 = if has_pattern(d5, "@bmb_array_set", 0) then 1 else 0;
+
+    -- Test 8: Full method call line parsing with complex receiver
+    let mc1 = "  %result = MethodCall %_t0.concat(%_t1)";
+    let m1 = parse_method_call_method(mc1);
+    let t8 = if m1 == "concat" then 1 else 0;
+
+    -- Test 9: Method call args extraction
+    let a1 = parse_method_call_args("  %r = MethodCall %recv.slice(%a, %b)");
+    let t9 = if has_pattern(a1, "%a", 0) then 1 else 0;
+
+    -- Test 10: has_method_call_keyword detection
+    let t10 = if has_method_call_keyword("  %x = MethodCall %y.len()", 0) then 1 else 0;
+
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10;
+
 fn main() -> i64 =
     let u0 = println(777);
     let r1 = test_type_mapping();
@@ -2359,8 +2402,11 @@ fn main() -> i64 =
     -- v0.30.82 pipeline integration tests
     let r51 = test_pipeline_integration();
     let u51 = println(r51);
+    -- v0.30.90 method dispatch edge case tests
+    let r52 = test_method_dispatch_edge();
+    let u52 = println(r52);
     let u_end = println(888);
-    let total = r1 + r2 + r3 + r4 + r5 + r6 + r7 + r8 + r9 + r10 + r11 + r12 + r13 + r14 + r15 + r16 + r17 + r18 + r19 + r20 + r21 + r22 + r23 + r24 + r25 + r26 + r27 + r28 + r29 + r30 + r31 + r32 + r33 + r34 + r35 + r36 + r37 + r38 + r39 + r40 + r41 + r42 + r43 + r44 + r45 + r46 + r47 + r48 + r49 + r50 + r51;
+    let total = r1 + r2 + r3 + r4 + r5 + r6 + r7 + r8 + r9 + r10 + r11 + r12 + r13 + r14 + r15 + r16 + r17 + r18 + r19 + r20 + r21 + r22 + r23 + r24 + r25 + r26 + r27 + r28 + r29 + r30 + r31 + r32 + r33 + r34 + r35 + r36 + r37 + r38 + r39 + r40 + r41 + r42 + r43 + r44 + r45 + r46 + r47 + r48 + r49 + r50 + r51 + r52;
     let u_tot = println(total);
     let u_fin = println(999);
     total;
