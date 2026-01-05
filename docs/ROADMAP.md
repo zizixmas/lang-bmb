@@ -303,6 +303,17 @@ v0.MAJOR.MINOR
 - `enum_reg_count`, `enum_reg_is_generic`: Registry utilities
 - 5 new test functions, 19 assertions (335 total in types.bmb)
 
+**v0.30.21 Completed (2026-01-05)**:
+- Function body type checking: Complete program-wide type validation pipeline
+- ast_extract_fn_body: Extract function body expression from AST
+- ast_extract_param_name, ast_extract_param_type: Parameter parsing
+- ast_extract_params_section, ast_count_params, ast_get_param_at: Params section utilities
+- ast_params_to_locals: Convert function params to locals environment
+- check_fn_body: Validate function body type matches declared return type
+- check_program_functions: Check all functions in a program
+- typecheck_program: Full pipeline - build tenv, then validate all functions
+- Total: 509 tests passing (18 new tests)
+
 **v0.30.20 Completed (2026-01-05)**:
 - Expression type checking: type_of_expr for S-expression AST inference
 - Local variable environment: locals_new, locals_add, locals_lookup

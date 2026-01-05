@@ -4230,6 +4230,252 @@ fn expr_find_close_angle(ast: String, pos: i64) -> i64 =
     else expr_find_close_angle(ast, pos + 1);
 
 -- ============================================================================
+-- v0.30.21: Function Body Type Checking
+-- ============================================================================
+-- Complete type checking pipeline: parse → tenv → check each function body
+
+-- Extract function body from AST
+-- Input: "(fn <foo> (params (p <x> i64)) i64 (op + (var <x>) (int 1)))"
+-- Output: "(op + (var <x>) (int 1))"
+fn ast_extract_fn_body(ast: String) -> String =
+    let p_pos = ast_find_pattern(ast, "(params ", 0);
+    if p_pos < 0 then ""
+    else
+        let params_end = ast_find_close_paren(ast, p_pos + 1);
+        if params_end < 0 then ""
+        else
+            -- Skip return type to find body start
+            let ret_start = ast_skip_ws(ast, params_end);
+            let ret_end = ast_find_return_type_end(ast, ret_start);
+            let body_start = ast_skip_ws(ast, ret_end);
+            -- Body is an S-expression, find its end
+            if body_start >= ast.len() then ""
+            else if ast.char_at(body_start) != 40 then ""  -- must start with (
+            else
+                let body_end = ast_find_close_paren(ast, body_start + 1);
+                ast.slice(body_start, body_end);
+
+-- Extract parameter name from (p <name> type)
+fn ast_extract_param_name(param: String) -> String =
+    let angle_pos = ast_find_pattern(param, "<", 0);
+    if angle_pos < 0 then ""
+    else
+        let close = expr_find_close_angle(param, angle_pos + 1);
+        if close < 0 then ""
+        else param.slice(angle_pos + 1, close);
+
+-- Extract parameter type from (p <name> type)
+fn ast_extract_param_type(param: String) -> String =
+    let angle_pos = ast_find_pattern(param, "<", 0);
+    if angle_pos < 0 then ""
+    else
+        let close = expr_find_close_angle(param, angle_pos + 1);
+        if close < 0 then ""
+        else
+            let type_start = ast_skip_ws(param, close + 1);
+            let type_end = ast_find_param_type_end(param, type_start);
+            param.slice(type_start, type_end);
+
+fn ast_find_param_type_end(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then pos
+    else
+        let c = s.char_at(pos);
+        if c == 41 or c == 32 then pos  -- ) or space
+        else ast_find_param_type_end(s, pos + 1);
+
+-- Extract single param at index from params section
+-- Input: "(params (p <x> i64) (p <y> String))", index 0
+-- Output: "(p <x> i64)"
+fn ast_get_param_at(params_section: String, idx: i64) -> String =
+    ast_get_param_at_rec(params_section, 8, idx, 0);  -- skip "(params "
+
+fn ast_get_param_at_rec(s: String, pos: i64, target: i64, current: i64) -> String =
+    if pos >= s.len() then ""
+    else
+        let c = s.char_at(pos);
+        if c == 41 then ""  -- closing paren of params section
+        else if c == 40 then  -- start of (p ...)
+            let end = ast_find_close_paren(s, pos + 1);
+            if current == target then s.slice(pos, end)
+            else ast_get_param_at_rec(s, end, target, current + 1)
+        else ast_get_param_at_rec(s, pos + 1, target, current);
+
+-- Count parameters in params section
+fn ast_count_params(params_section: String) -> i64 =
+    ast_count_params_rec(params_section, 8, 0);  -- skip "(params "
+
+fn ast_count_params_rec(s: String, pos: i64, count: i64) -> i64 =
+    if pos >= s.len() then count
+    else
+        let c = s.char_at(pos);
+        if c == 41 then count  -- end of params section
+        else if c == 40 then  -- found a param
+            let end = ast_find_close_paren(s, pos + 1);
+            ast_count_params_rec(s, end, count + 1)
+        else ast_count_params_rec(s, pos + 1, count);
+
+-- Extract params section from function AST
+fn ast_extract_params_section(ast: String) -> String =
+    let p_pos = ast_find_pattern(ast, "(params ", 0);
+    if p_pos < 0 then ""
+    else
+        let end = ast_find_close_paren(ast, p_pos + 1);
+        ast.slice(p_pos, end);
+
+-- Build locals from function params
+-- Converts params to locals format: "name:type;name:type"
+fn ast_params_to_locals(ast: String) -> String =
+    let params = ast_extract_params_section(ast);
+    if params == "" then locals_new()
+    else
+        let count = ast_count_params(params);
+        build_locals_from_params(params, count, 0, locals_new());
+
+fn build_locals_from_params(params: String, count: i64, idx: i64, acc: String) -> String =
+    if idx >= count then acc
+    else
+        let param = ast_get_param_at(params, idx);
+        let name = ast_extract_param_name(param);
+        let typ = ast_extract_param_type(param);
+        let new_acc = locals_add(acc, name, typ);
+        build_locals_from_params(params, count, idx + 1, new_acc);
+
+-- Check function body type matches return type
+-- Returns empty string on success, error message on failure
+fn check_fn_body(tenv: String, ast: String) -> String =
+    let name = ast_extract_def_name(ast, "fn");
+    let ret_type = ast_extract_return_type(ast);
+    let body = ast_extract_fn_body(ast);
+    let locals = ast_params_to_locals(ast);
+    if body == "" then "ERR:no body in function " + name
+    else
+        let body_type = type_of_expr(tenv, locals, body);
+        if is_error_str(body_type) then body_type
+        else if body_type == ret_type then ""  -- success
+        else "ERR:function " + name + " body type " + body_type + " != " + ret_type;
+
+-- Check all functions in a program
+-- Input: program AST "(program (fn ...) (struct ...) (fn ...))"
+-- Returns empty string on success, first error on failure
+fn check_program_functions(tenv: String, program: String) -> String =
+    let count = ast_program_item_count(program);
+    check_program_functions_rec(tenv, program, count, 0);
+
+fn check_program_functions_rec(tenv: String, program: String, count: i64, idx: i64) -> String =
+    if idx >= count then ""  -- all functions passed
+    else
+        let item = ast_program_item_at(program, idx);
+        let kind = ast_item_kind(item);
+        if kind == ITEM_FN() then
+            let result = check_fn_body(tenv, item);
+            if result != "" then result  -- error found
+            else check_program_functions_rec(tenv, program, count, idx + 1)
+        else check_program_functions_rec(tenv, program, count, idx + 1);
+
+-- Full program type check: build tenv, then check all function bodies
+fn typecheck_program(program: String) -> String =
+    let tenv = tenv_from_program_ast(program);
+    check_program_functions(tenv, program);
+
+-- ============================================================================
+-- v0.30.21 Tests
+-- ============================================================================
+
+fn test_ast_extract_fn_body() -> i64 =
+    let ast1 = "(fn <add1> (params (p <x> i64)) i64 (op + (var <x>) (int 1)))";
+    let body1 = ast_extract_fn_body(ast1);
+    let r1 = if body1 == "(op + (var <x>) (int 1))" then 1 else 0;
+
+    let ast2 = "(fn <const> (params ) i64 (int 42))";
+    let body2 = ast_extract_fn_body(ast2);
+    let r2 = if body2 == "(int 42)" then 1 else 0;
+
+    r1 + r2;
+
+fn test_ast_param_extraction() -> i64 =
+    let param1 = "(p <x> i64)";
+    let name1 = ast_extract_param_name(param1);
+    let r1 = if name1 == "x" then 1 else 0;
+
+    let type1 = ast_extract_param_type(param1);
+    let r2 = if type1 == "i64" then 1 else 0;
+
+    let param2 = "(p <foo> String)";
+    let name2 = ast_extract_param_name(param2);
+    let r3 = if name2 == "foo" then 1 else 0;
+
+    let type2 = ast_extract_param_type(param2);
+    let r4 = if type2 == "String" then 1 else 0;
+
+    r1 + r2 + r3 + r4;
+
+fn test_ast_params_section() -> i64 =
+    let ast = "(fn <foo> (params (p <x> i64) (p <y> bool)) i64 (int 1))";
+    let params = ast_extract_params_section(ast);
+    let r1 = if params == "(params (p <x> i64) (p <y> bool))" then 1 else 0;
+
+    let count = ast_count_params(params);
+    let r2 = if count == 2 then 1 else 0;
+
+    let p0 = ast_get_param_at(params, 0);
+    let r3 = if p0 == "(p <x> i64)" then 1 else 0;
+
+    let p1 = ast_get_param_at(params, 1);
+    let r4 = if p1 == "(p <y> bool)" then 1 else 0;
+
+    r1 + r2 + r3 + r4;
+
+fn test_ast_params_to_locals() -> i64 =
+    let ast = "(fn <foo> (params (p <x> i64) (p <y> bool)) i64 (int 1))";
+    let locals = ast_params_to_locals(ast);
+
+    let tx = locals_lookup(locals, "x");
+    let r1 = if tx == "i64" then 1 else 0;
+
+    let ty = locals_lookup(locals, "y");
+    let r2 = if ty == "bool" then 1 else 0;
+
+    r1 + r2;
+
+fn test_check_fn_body() -> i64 =
+    let tenv = tenv_new();
+
+    -- Valid function: returns i64, body is i64
+    let ast1 = "(fn <const42> (params ) i64 (int 42))";
+    let r1 = check_fn_body(tenv, ast1);
+    let t1 = if r1 == "" then 1 else 0;
+
+    -- Valid function with parameter
+    let ast2 = "(fn <add1> (params (p <x> i64)) i64 (op + (var <x>) (int 1)))";
+    let r2 = check_fn_body(tenv, ast2);
+    let t2 = if r2 == "" then 1 else 0;
+
+    -- Invalid: declared i64 but body is bool
+    let ast3 = "(fn <bad> (params ) i64 (bool 1))";
+    let r3 = check_fn_body(tenv, ast3);
+    let t3 = if is_error_str(r3) then 1 else 0;
+
+    t1 + t2 + t3;
+
+fn test_typecheck_program() -> i64 =
+    -- Simple valid program
+    let prog1 = "(program (fn <const42> (params ) i64 (int 42)))";
+    let r1 = typecheck_program(prog1);
+    let t1 = if r1 == "" then 1 else 0;
+
+    -- Program with type error
+    let prog2 = "(program (fn <bad> (params ) i64 (bool 0)))";
+    let r2 = typecheck_program(prog2);
+    let t2 = if is_error_str(r2) then 1 else 0;
+
+    -- Multiple functions, all valid
+    let prog3 = "(program (fn <f1> (params ) i64 (int 1)) (fn <f2> (params ) bool (bool 1)))";
+    let r3 = typecheck_program(prog3);
+    let t3 = if r3 == "" then 1 else 0;
+
+    t1 + t2 + t3;
+
+-- ============================================================================
 -- v0.30.20 Tests
 -- ============================================================================
 
@@ -5037,10 +5283,29 @@ fn main() -> i64 =
     let t110 = test_type_let();
     let p110 = println(t110);  -- Expected: 2
 
+    -- v0.30.21: Function body type checking tests
+    let t111 = test_ast_extract_fn_body();
+    let p111 = println(t111);  -- Expected: 2
+
+    let t112 = test_ast_param_extraction();
+    let p112 = println(t112);  -- Expected: 4
+
+    let t113 = test_ast_params_section();
+    let p113 = println(t113);  -- Expected: 4
+
+    let t114 = test_ast_params_to_locals();
+    let p114 = println(t114);  -- Expected: 2
+
+    let t115 = test_check_fn_body();
+    let p115 = println(t115);  -- Expected: 3
+
+    let t116 = test_typecheck_program();
+    let p116 = println(t116);  -- Expected: 3
+
     let u1 = println(888);  -- Separator
 
-    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33 + t34 + t35 + t36 + t37 + t38 + t39 + t40 + t41 + t42 + t43 + t44 + t45 + t46 + t47 + t48 + t49 + t50 + t51 + t52 + t53 + t54 + t55 + t56 + t57 + t58 + t59 + t60 + t61 + t62 + t63 + t64 + t65 + t66 + t67 + t68 + t69 + t70 + t71 + t72 + t73 + t74 + t75 + t76 + t77 + t78 + t79 + t80 + t81 + t82 + t83 + t84 + t85 + t86 + t87 + t88 + t89 + t90 + t91 + t92 + t93 + t94 + t95 + t96 + t97 + t98 + t99 + t100 + t101 + t102 + t103 + t104 + t105 + t106 + t107 + t108 + t109 + t110;
-    let u2 = println(total);  -- Expected: 491
+    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33 + t34 + t35 + t36 + t37 + t38 + t39 + t40 + t41 + t42 + t43 + t44 + t45 + t46 + t47 + t48 + t49 + t50 + t51 + t52 + t53 + t54 + t55 + t56 + t57 + t58 + t59 + t60 + t61 + t62 + t63 + t64 + t65 + t66 + t67 + t68 + t69 + t70 + t71 + t72 + t73 + t74 + t75 + t76 + t77 + t78 + t79 + t80 + t81 + t82 + t83 + t84 + t85 + t86 + t87 + t88 + t89 + t90 + t91 + t92 + t93 + t94 + t95 + t96 + t97 + t98 + t99 + t100 + t101 + t102 + t103 + t104 + t105 + t106 + t107 + t108 + t109 + t110 + t111 + t112 + t113 + t114 + t115 + t116;
+    let u2 = println(total);  -- Expected: 509
 
     let u3 = println(999);  -- End marker
     total;

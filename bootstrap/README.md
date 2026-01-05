@@ -121,7 +121,7 @@ Comprehensive test suite with 15 test categories.
 14. Deep nesting
 15. Nested function calls
 
-### types.bmb (165KB) - v0.30.20
+### types.bmb (175KB) - v0.30.21
 Type checker foundation for BMB.
 
 **Features:**
@@ -290,6 +290,16 @@ Type checker foundation for BMB.
 - Struct construction/field access: `type_of_new`, `type_of_field`
 - Error propagation: `is_error_str` for String-based type error detection
 
+**Features (v0.30.21):**
+- Function body type checking: Complete program-wide type validation pipeline
+- `ast_extract_fn_body`: Extract function body expression from AST
+- `ast_extract_param_name`, `ast_extract_param_type`: Parameter parsing
+- `ast_extract_params_section`, `ast_count_params`, `ast_get_param_at`: Params section utilities
+- `ast_params_to_locals`: Convert function params to locals environment
+- `check_fn_body`: Validate function body type matches declared return type
+- `check_program_functions`: Check all functions in a program
+- `typecheck_program`: Full pipeline - build tenv, then validate all functions
+
 **Test output:**
 ```
 777 (start marker)
@@ -402,8 +412,14 @@ Type checker foundation for BMB.
 3  (type binop tests)                 ; v0.30.20
 3  (type if tests)                    ; v0.30.20
 2  (type let tests)                   ; v0.30.20
+2  (fn body extract tests)            ; v0.30.21
+4  (param extraction tests)           ; v0.30.21
+4  (params section tests)             ; v0.30.21
+2  (params to locals tests)           ; v0.30.21
+3  (check fn body tests)              ; v0.30.21
+3  (typecheck program tests)          ; v0.30.21
 888 (separator)
-491 (total passed)
+509 (total passed)
 999 (end marker)
 ```
 
