@@ -303,6 +303,18 @@ v0.MAJOR.MINOR
 - `enum_reg_count`, `enum_reg_is_generic`: Registry utilities
 - 5 new test functions, 19 assertions (335 total in types.bmb)
 
+**v0.30.23 Completed (2026-01-05)**:
+- Match expression type checking: type_of_match for pattern matching
+- Match scrutinee extraction: match_scrutinee from (match expr (arms ...))
+- Arms section parsing: match_arms_section, match_arm_count, match_arm_at
+- Single arm type checking: type_of_match_arm with pattern/body extraction
+- Pattern extraction: arm_pattern, arm_body from (arm (pattern ...) body)
+- Variant/binding extraction: pattern_variant, pattern_binding
+- Binding scope extension: extend_locals_with_binding for pattern variables
+- Type consistency checking: Validates all match arms return same type
+- Error detection: ERR:match arm types differ for mismatched branches
+- Total: 532 tests passing (15 new tests)
+
 **v0.30.22 Completed (2026-01-05)**:
 - Generic function body type checking: Type parameter scope for function bodies
 - Modified check_fn_body to extract and set type parameters in tenv

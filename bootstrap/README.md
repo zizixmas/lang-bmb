@@ -121,7 +121,7 @@ Comprehensive test suite with 15 test categories.
 14. Deep nesting
 15. Nested function calls
 
-### types.bmb (209KB) - v0.30.22
+### types.bmb (220KB) - v0.30.23
 Type checker foundation for BMB.
 
 **Features:**
@@ -309,6 +309,17 @@ Type checker foundation for BMB.
 - Correctly validates generic return types match body types (T == T)
 - Detects type mismatches in generic functions (T vs U)
 
+**Features (v0.30.23):**
+- Match expression type checking: `type_of_match` for pattern matching
+- Match scrutinee extraction: `match_scrutinee` from `(match expr (arms ...))`
+- Arms section parsing: `match_arms_section`, `match_arm_count`, `match_arm_at`
+- Single arm type checking: `type_of_match_arm` with pattern/body extraction
+- Pattern extraction: `arm_pattern`, `arm_body` from `(arm (pattern ...) body)`
+- Variant/binding extraction: `pattern_variant`, `pattern_binding`
+- Binding scope extension: `extend_locals_with_binding` for pattern variables
+- Type consistency checking: Validates all match arms return same type
+- Error detection: "ERR:match arm types differ" for mismatched branches
+
 **Test output:**
 ```
 777 (start marker)
@@ -429,8 +440,12 @@ Type checker foundation for BMB.
 3  (typecheck program tests)          ; v0.30.21
 5  (check fn body generic tests)      ; v0.30.22
 3  (typecheck program generic tests)  ; v0.30.22
+4  (match helper tests)               ; v0.30.23
+4  (pattern extraction tests)         ; v0.30.23
+4  (arm parsing tests)                ; v0.30.23
+3  (type_of_match tests)              ; v0.30.23
 888 (separator)
-517 (total passed)
+532 (total passed)
 999 (end marker)
 ```
 

@@ -4021,6 +4021,7 @@ fn type_of_expr(tenv: String, locals: String, ast: String) -> String =
     else if kind == EXPR_CALL() then type_of_call(tenv, locals, ast)
     else if kind == EXPR_NEW() then type_of_new(tenv, locals, ast)
     else if kind == EXPR_FIELD() then type_of_field(tenv, locals, ast)
+    else if kind == EXPR_MATCH() then type_of_match(tenv, locals, ast)
     else "ERR:unknown expression";
 
 -- Type of variable reference
@@ -4228,6 +4229,215 @@ fn expr_find_close_angle(ast: String, pos: i64) -> i64 =
     if pos >= ast.len() then 0 - 1
     else if ast.char_at(pos) == 62 then pos  -- '>'
     else expr_find_close_angle(ast, pos + 1);
+
+-- ============================================================================
+-- v0.30.23: Match Expression Type Checking
+-- ============================================================================
+-- Match expression AST format: (match expr (arms (arm pattern body) ...))
+-- Pattern format: (pattern <Variant>) or (pattern <Variant> <binding>)
+
+-- Type of match expression
+-- All arms must have the same result type
+fn type_of_match(tenv: String, locals: String, ast: String) -> String =
+    -- Extract scrutinee and check its type
+    let scrutinee = match_scrutinee(ast);
+    if scrutinee == "" then "ERR:match missing scrutinee"
+    else
+        let scrut_type = type_of_expr(tenv, locals, scrutinee);
+        if is_error_str(scrut_type) then scrut_type
+        else
+            -- Extract arms section and type check each arm
+            let arms = match_arms_section(ast);
+            if arms == "" then "ERR:match missing arms"
+            else
+                let arm_count = match_arm_count(arms);
+                if arm_count == 0 then "ERR:match has no arms"
+                else type_check_match_arms(tenv, locals, scrut_type, arms, arm_count, 0, "");
+
+-- Type check all match arms, returning common result type
+fn type_check_match_arms(tenv: String, locals: String, scrut_type: String, arms: String, count: i64, idx: i64, result_type: String) -> String =
+    if idx >= count then
+        if result_type == "" then "ERR:no arms checked"
+        else result_type
+    else
+        let arm = match_arm_at(arms, idx);
+        let arm_type = type_of_match_arm(tenv, locals, scrut_type, arm);
+        if is_error_str(arm_type) then arm_type
+        else if result_type == "" then
+            -- First arm sets the expected result type
+            type_check_match_arms(tenv, locals, scrut_type, arms, count, idx + 1, arm_type)
+        else if arm_type == result_type then
+            -- Consistent with previous arms
+            type_check_match_arms(tenv, locals, scrut_type, arms, count, idx + 1, result_type)
+        else "ERR:match arm types differ: " + result_type + " vs " + arm_type;
+
+-- Helper: extend locals with pattern binding if present
+-- Avoids nested let/if which parser doesn't support
+fn extend_locals_with_binding(tenv: String, locals: String, scrut_type: String, variant: String, binding: String) -> String =
+    if binding == "" then locals
+    else
+        let var_type = tenv_enum_variant_type(tenv, scrut_type, "", variant);
+        if var_type == "" then locals
+        else locals_add(locals, binding, var_type);
+
+-- Type check single match arm
+-- Returns type of body expression
+fn type_of_match_arm(tenv: String, locals: String, scrut_type: String, arm: String) -> String =
+    let pattern = arm_pattern(arm);
+    let body = arm_body(arm);
+    if pattern == "" then "ERR:arm missing pattern"
+    else if body == "" then "ERR:arm missing body"
+    else
+        let binding = pattern_binding(pattern);
+        let variant = pattern_variant(pattern);
+        let arm_locals = extend_locals_with_binding(tenv, locals, scrut_type, variant, binding);
+        type_of_expr(tenv, arm_locals, body);
+
+-- Extract scrutinee from (match expr (arms ...))
+fn match_scrutinee(ast: String) -> String =
+    -- "(match " is 7 chars, scrutinee starts after
+    let start = match_skip_prefix(ast, 0);
+    if start < 0 then ""
+    else match_extract_expr(ast, start);
+
+-- Skip "(match " prefix
+fn match_skip_prefix(ast: String, pos: i64) -> i64 =
+    if ast.len() < 7 then 0 - 1
+    else match_check_prefix(ast);
+
+fn match_check_prefix(ast: String) -> i64 =
+    let c1 = ast.char_at(1);
+    let c2 = ast.char_at(2);
+    if c1 == 109 and c2 == 97 then 7
+    else 0 - 1;
+
+-- Extract S-expression at position
+fn match_extract_expr(ast: String, start: i64) -> String =
+    if start >= ast.len() then ""
+    else if ast.char_at(start) == 40 then match_extract_from(ast, start)
+    else "";
+
+fn match_extract_from(ast: String, start: i64) -> String =
+    let end = ast_find_close_paren(ast, start + 1);
+    if end < 0 then ""
+    else ast.slice(start, end);
+
+-- Extract arms section from (match expr (arms ...))
+fn match_arms_section(ast: String) -> String =
+    let pos = ast_find_pattern(ast, "(arms", 0);
+    if pos < 0 then ""
+    else match_arms_extract(ast, pos);
+
+fn match_arms_extract(ast: String, pos: i64) -> String =
+    let end = ast_find_close_paren(ast, pos + 1);
+    if end < 0 then ""
+    else ast.slice(pos, end);
+
+-- Count arms in (arms (arm ...) (arm ...) ...)
+fn match_arm_count(arms: String) -> i64 =
+    match_count_arms_from(arms, 5, 0);  -- skip "(arms"
+
+fn match_count_arms_from(arms: String, pos: i64, count: i64) -> i64 =
+    if pos >= arms.len() then count
+    else
+        let pos2 = ast_skip_ws(arms, pos);
+        if pos2 >= arms.len() then count
+        else if arms.char_at(pos2) == 41 then count  -- ')'
+        else if arms.char_at(pos2) == 40 then  -- '('
+            let end = ast_find_close_paren(arms, pos2 + 1);
+            if end < 0 then count
+            else match_count_arms_from(arms, end, count + 1)
+        else match_count_arms_from(arms, pos2 + 1, count);
+
+-- Get arm at index from (arms (arm ...) (arm ...) ...)
+fn match_arm_at(arms: String, idx: i64) -> String =
+    match_find_arm(arms, 5, idx, 0);  -- skip "(arms"
+
+fn match_find_arm(arms: String, pos: i64, target: i64, current: i64) -> String =
+    if pos >= arms.len() then ""
+    else
+        let pos2 = ast_skip_ws(arms, pos);
+        if pos2 >= arms.len() then ""
+        else if arms.char_at(pos2) == 41 then ""  -- ')'
+        else if arms.char_at(pos2) == 40 then  -- '('
+            let end = ast_find_close_paren(arms, pos2 + 1);
+            if end < 0 then ""
+            else if current == target then arms.slice(pos2, end)
+            else match_find_arm(arms, end, target, current + 1)
+        else match_find_arm(arms, pos2 + 1, target, current);
+
+-- Extract pattern from (arm pattern body)
+fn arm_pattern(arm: String) -> String =
+    -- "(arm " is 5 chars, pattern starts after
+    let start = ast_skip_ws(arm, 5);
+    if start >= arm.len() then ""
+    else if arm.char_at(start) == 40 then  -- '('
+        let end = ast_find_close_paren(arm, start + 1);
+        if end < 0 then ""
+        else arm.slice(start, end)
+    else "";
+
+-- Helper for arm_body: extract body after pattern
+fn arm_body_after_pattern(arm: String, pattern_end: i64) -> String =
+    let body_start = ast_skip_ws(arm, pattern_end);
+    if body_start >= arm.len() then ""
+    else if arm.char_at(body_start) != 40 then ""
+    else arm_body_extract(arm, body_start);
+
+fn arm_body_extract(arm: String, body_start: i64) -> String =
+    let body_end = ast_find_close_paren(arm, body_start + 1);
+    if body_end < 0 then ""
+    else arm.slice(body_start, body_end);
+
+-- Extract body from (arm pattern body)
+fn arm_body(arm: String) -> String =
+    let pattern_start = ast_skip_ws(arm, 5);
+    if pattern_start >= arm.len() then ""
+    else if arm.char_at(pattern_start) != 40 then ""
+    else arm_body_find_pattern_end(arm, pattern_start);
+
+fn arm_body_find_pattern_end(arm: String, pattern_start: i64) -> String =
+    let pattern_end = ast_find_close_paren(arm, pattern_start + 1);
+    if pattern_end < 0 then ""
+    else arm_body_after_pattern(arm, pattern_end);
+
+-- Extract variant name from (pattern <Variant>) or (pattern <Variant> <binding>)
+fn pattern_variant(pattern: String) -> String =
+    -- "(pattern <" is 10 chars, variant name follows
+    let start = ast_find_pattern(pattern, "(pattern <", 0);
+    if start < 0 then ""
+    else
+        let name_start = start + 10;
+        let name_end = pattern_find_close_angle(pattern, name_start);
+        if name_end < 0 then ""
+        else pattern.slice(name_start, name_end);
+
+-- Helper for pattern_binding: extract after first angle
+fn pattern_binding_after_first(pattern: String, first_close: i64) -> String =
+    let second_open = pattern_find_open_angle(pattern, first_close + 1);
+    if second_open < 0 then ""
+    else pattern_binding_extract(pattern, second_open);
+
+fn pattern_binding_extract(pattern: String, second_open: i64) -> String =
+    let second_close = pattern_find_close_angle(pattern, second_open + 1);
+    if second_close < 0 then ""
+    else pattern.slice(second_open + 1, second_close);
+
+-- Extract binding from (pattern <Variant> <binding>)
+fn pattern_binding(pattern: String) -> String =
+    let first_close = pattern_find_close_angle(pattern, 10);
+    if first_close < 0 then ""
+    else pattern_binding_after_first(pattern, first_close);
+
+fn pattern_find_close_angle(pattern: String, pos: i64) -> i64 =
+    if pos >= pattern.len() then 0 - 1
+    else if pattern.char_at(pos) == 62 then pos  -- '>'
+    else pattern_find_close_angle(pattern, pos + 1);
+
+fn pattern_find_open_angle(pattern: String, pos: i64) -> i64 =
+    if pos >= pattern.len() then 0 - 1
+    else if pattern.char_at(pos) == 60 then pos  -- '<'
+    else pattern_find_open_angle(pattern, pos + 1);
 
 -- ============================================================================
 -- v0.30.21: Function Body Type Checking
@@ -4532,6 +4742,90 @@ fn test_typecheck_program_generic() -> i64 =
     let t3 = if is_error_str(r3) then 1 else 0;
 
     t1 + t2 + t3;
+
+-- ============================================================================
+-- v0.30.23 Tests: Match Expression Type Checking
+-- ============================================================================
+
+-- Test match AST extraction helpers
+fn test_match_helpers() -> i64 =
+    let ast = "(match (var <x>) (arms (arm (pattern <Some> <v>) (var <v>)) (arm (pattern <None>) (int 0))))";
+
+    -- Test scrutinee extraction
+    let scrut = match_scrutinee(ast);
+    let r1 = if scrut == "(var <x>)" then 1 else 0;
+
+    -- Test arms section extraction
+    let arms = match_arms_section(ast);
+    let r2 = if arms.len() > 10 then 1 else 0;  -- should have content
+
+    -- Test arm count
+    let count = match_arm_count(arms);
+    let r3 = if count == 2 then 1 else 0;
+
+    -- Test first arm extraction
+    let arm0 = match_arm_at(arms, 0);
+    let r4 = if arm0.len() > 0 then 1 else 0;
+
+    r1 + r2 + r3 + r4;
+
+-- Test pattern extraction
+fn test_pattern_extraction() -> i64 =
+    -- Pattern with binding
+    let pat1 = "(pattern <Some> <v>)";
+    let var1 = pattern_variant(pat1);
+    let r1 = if var1 == "Some" then 1 else 0;
+    let bind1 = pattern_binding(pat1);
+    let r2 = if bind1 == "v" then 1 else 0;
+
+    -- Pattern without binding
+    let pat2 = "(pattern <None>)";
+    let var2 = pattern_variant(pat2);
+    let r3 = if var2 == "None" then 1 else 0;
+    let bind2 = pattern_binding(pat2);
+    let r4 = if bind2 == "" then 1 else 0;
+
+    r1 + r2 + r3 + r4;
+
+-- Test arm parsing
+fn test_arm_parsing() -> i64 =
+    let arm1 = "(arm (pattern <Some> <v>) (var <v>))";
+    let pat1 = arm_pattern(arm1);
+    let r1 = if pat1 == "(pattern <Some> <v>)" then 1 else 0;
+    let body1 = arm_body(arm1);
+    let r2 = if body1 == "(var <v>)" then 1 else 0;
+
+    let arm2 = "(arm (pattern <None>) (int 0))";
+    let pat2 = arm_pattern(arm2);
+    let r3 = if pat2 == "(pattern <None>)" then 1 else 0;
+    let body2 = arm_body(arm2);
+    let r4 = if body2 == "(int 0)" then 1 else 0;
+
+    r1 + r2 + r3 + r4;
+
+-- Test match expression type checking
+fn test_type_of_match() -> i64 =
+    -- Set up tenv (note: generic enums need full type args for binding resolution)
+    let tenv = tenv_new();
+
+    -- Test 1: Match with consistent arm types (both i64)
+    let ast1 = "(match (var <b>) (arms (arm (pattern <True>) (int 1)) (arm (pattern <False>) (int 0))))";
+    let locals1 = locals_add(locals_new(), "b", "Bool");
+    let t1 = type_of_match(tenv, locals1, ast1);
+    let r1 = if t1 == "i64" then 1 else 0;
+
+    -- Test 2: Match with inconsistent arm types (should fail)
+    let ast2 = "(match (var <b>) (arms (arm (pattern <True>) (int 1)) (arm (pattern <False>) (bool 0))))";
+    let t2 = type_of_match(tenv, locals1, ast2);
+    let r2 = if is_error_str(t2) then 1 else 0;
+
+    -- Test 3: Match with all bool arms
+    let ast3 = "(match (var <x>) (arms (arm (pattern <A>) (bool 1)) (arm (pattern <B>) (bool 0))))";
+    let locals3 = locals_add(locals_new(), "x", "AB");
+    let t3 = type_of_match(tenv, locals3, ast3);
+    let r3 = if t3 == "bool" then 1 else 0;
+
+    r1 + r2 + r3;
 
 -- ============================================================================
 -- v0.30.20 Tests
@@ -5367,10 +5661,23 @@ fn main() -> i64 =
     let t118 = test_typecheck_program_generic();
     let p118 = println(t118);  -- Expected: 3
 
+    -- v0.30.23: Match expression type checking tests
+    let t119 = test_match_helpers();
+    let p119 = println(t119);  -- Expected: 4
+
+    let t120 = test_pattern_extraction();
+    let p120 = println(t120);  -- Expected: 4
+
+    let t121 = test_arm_parsing();
+    let p121 = println(t121);  -- Expected: 4
+
+    let t122 = test_type_of_match();
+    let p122 = println(t122);  -- Expected: 3
+
     let u1 = println(888);  -- Separator
 
-    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33 + t34 + t35 + t36 + t37 + t38 + t39 + t40 + t41 + t42 + t43 + t44 + t45 + t46 + t47 + t48 + t49 + t50 + t51 + t52 + t53 + t54 + t55 + t56 + t57 + t58 + t59 + t60 + t61 + t62 + t63 + t64 + t65 + t66 + t67 + t68 + t69 + t70 + t71 + t72 + t73 + t74 + t75 + t76 + t77 + t78 + t79 + t80 + t81 + t82 + t83 + t84 + t85 + t86 + t87 + t88 + t89 + t90 + t91 + t92 + t93 + t94 + t95 + t96 + t97 + t98 + t99 + t100 + t101 + t102 + t103 + t104 + t105 + t106 + t107 + t108 + t109 + t110 + t111 + t112 + t113 + t114 + t115 + t116 + t117 + t118;
-    let u2 = println(total);  -- Expected: 517
+    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33 + t34 + t35 + t36 + t37 + t38 + t39 + t40 + t41 + t42 + t43 + t44 + t45 + t46 + t47 + t48 + t49 + t50 + t51 + t52 + t53 + t54 + t55 + t56 + t57 + t58 + t59 + t60 + t61 + t62 + t63 + t64 + t65 + t66 + t67 + t68 + t69 + t70 + t71 + t72 + t73 + t74 + t75 + t76 + t77 + t78 + t79 + t80 + t81 + t82 + t83 + t84 + t85 + t86 + t87 + t88 + t89 + t90 + t91 + t92 + t93 + t94 + t95 + t96 + t97 + t98 + t99 + t100 + t101 + t102 + t103 + t104 + t105 + t106 + t107 + t108 + t109 + t110 + t111 + t112 + t113 + t114 + t115 + t116 + t117 + t118 + t119 + t120 + t121 + t122;
+    let u2 = println(total);  -- Expected: 532
 
     let u3 = println(999);  -- End marker
     total;
