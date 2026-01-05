@@ -1183,6 +1183,7 @@ fn find_method_call_pos(s: String, pos: i64) -> i64 =
 
 -- Dispatch to specific method implementation
 -- v0.30.78: Added array_len, array_get, array_set for explicit array operations
+-- v0.30.80: Added array_push, array_pop, array_clear for array mutation
 fn gen_method_dispatch(dest: String, recv: String, method: String, args: String) -> String =
     -- String methods
     if method == "len" then gen_method_len(dest, recv)
@@ -1192,6 +1193,10 @@ fn gen_method_dispatch(dest: String, recv: String, method: String, args: String)
     else if method == "array_len" then gen_method_array_len(dest, recv)
     else if method == "array_get" then gen_method_array_get(dest, recv, args)
     else if method == "array_set" then gen_method_array_set(dest, recv, args)
+    -- Array mutation methods (v0.30.80)
+    else if method == "array_push" then gen_method_array_push(dest, recv, args)
+    else if method == "array_pop" then gen_method_array_pop(dest, recv)
+    else if method == "array_clear" then gen_method_array_clear(dest, recv)
     else "; unsupported method: " + method;
 
 -- v0.30.74: String.len() -> call @bmb_string_len
@@ -1242,6 +1247,20 @@ fn gen_method_array_set(dest: String, recv: String, args: String) -> String =
     let idx = extract_first_arg(args);
     let val = extract_second_arg(args);
     "call void @bmb_array_set(i8* " + recv + ", i64 " + idx + ", i64 " + val + ")|" + dest + " = add i64 0, 0";
+
+-- v0.30.80: Array push/pop methods
+-- array_push: Append element to array (returns new length)
+fn gen_method_array_push(dest: String, recv: String, args: String) -> String =
+    let val = trim_ws(args);
+    dest + " = call i64 @bmb_array_push(i8* " + recv + ", i64 " + val + ")";
+
+-- array_pop: Remove last element (returns removed value)
+fn gen_method_array_pop(dest: String, recv: String) -> String =
+    dest + " = call i64 @bmb_array_pop(i8* " + recv + ")";
+
+-- array_clear: Remove all elements (returns void)
+fn gen_method_array_clear(dest: String, recv: String) -> String =
+    "call void @bmb_array_clear(i8* " + recv + ")|" + dest + " = add i64 0, 0";
 
 -- Generate LLVM function header from MIR header
 fn gen_mir_fn_header(line: String) -> String =
@@ -1313,9 +1332,37 @@ fn gen_extern_array_get() -> String =
 fn gen_extern_array_set() -> String =
     "declare void @bmb_array_set(i8*, i64, i64)";
 
+-- v0.30.80: Array mutation runtime declarations
+fn gen_extern_array_push() -> String =
+    "declare i64 @bmb_array_push(i8*, i64)";
+
+fn gen_extern_array_pop() -> String =
+    "declare i64 @bmb_array_pop(i8*)";
+
+fn gen_extern_array_clear() -> String =
+    "declare void @bmb_array_clear(i8*)";
+
+-- v0.30.81: String and memory runtime declarations
+fn gen_extern_string_concat() -> String =
+    "declare i8* @bmb_string_concat(i8*, i8*)";
+
+fn gen_extern_string_eq() -> String =
+    "declare i1 @bmb_string_eq(i8*, i8*)";
+
+fn gen_extern_alloc() -> String =
+    "declare i8* @bmb_alloc(i64)";
+
+fn gen_extern_free() -> String =
+    "declare void @bmb_free(i8*)";
+
 -- Generate all runtime declarations
 fn gen_runtime_decls() -> String =
-    gen_extern_println() + "|" + gen_extern_abs() + "|" + gen_extern_min() + "|" + gen_extern_max() + "|" + gen_extern_string_len() + "|" + gen_extern_string_slice() + "|" + gen_extern_array_len() + "|" + gen_extern_array_get() + "|" + gen_extern_array_set();
+    let basic = gen_extern_println() + "|" + gen_extern_abs() + "|" + gen_extern_min() + "|" + gen_extern_max();
+    let string = gen_extern_string_len() + "|" + gen_extern_string_slice() + "|" + gen_extern_string_concat() + "|" + gen_extern_string_eq();
+    let array = gen_extern_array_len() + "|" + gen_extern_array_get() + "|" + gen_extern_array_set();
+    let array_mut = gen_extern_array_push() + "|" + gen_extern_array_pop() + "|" + gen_extern_array_clear();
+    let memory = gen_extern_alloc() + "|" + gen_extern_free();
+    basic + "|" + string + "|" + array + "|" + array_mut + "|" + memory;
 
 -- Example: Complete add function from MIR to LLVM IR
 -- MIR input:
@@ -2062,7 +2109,97 @@ fn test_array_method_ir() -> i64 =
     let e2 = gen_extern_array_get();
     let t10 = if has_pattern(e2, "declare i64 @bmb_array_get", 0) then 1 else 0;
 
-    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10;
+    -- v0.30.80: Push/Pop/Clear tests
+    -- Test 11: gen_method_array_push generates call
+    let ap1 = gen_method_array_push("%_t4", "%arr", "%_t3");
+    let t11 = if has_pattern(ap1, "@bmb_array_push", 0) then 1 else 0;
+
+    -- Test 12: gen_method_array_pop generates call
+    let apop1 = gen_method_array_pop("%_t5", "%arr");
+    let t12 = if has_pattern(apop1, "@bmb_array_pop", 0) then 1 else 0;
+
+    -- Test 13: gen_method_array_clear generates call
+    let ac1 = gen_method_array_clear("%_t6", "%arr");
+    let t13 = if has_pattern(ac1, "@bmb_array_clear", 0) then 1 else 0;
+
+    -- Test 14: gen_method_dispatch routes array_push
+    let dp1 = gen_method_dispatch("%_t4", "%arr", "array_push", "%val");
+    let t14 = if has_pattern(dp1, "@bmb_array_push", 0) then 1 else 0;
+
+    -- Test 15: gen_method_dispatch routes array_pop
+    let dp2 = gen_method_dispatch("%_t5", "%arr", "array_pop", "");
+    let t15 = if has_pattern(dp2, "@bmb_array_pop", 0) then 1 else 0;
+
+    -- Test 16: gen_extern_array_push declaration
+    let ep1 = gen_extern_array_push();
+    let t16 = if has_pattern(ep1, "declare i64 @bmb_array_push", 0) then 1 else 0;
+
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16;
+
+-- v0.30.81: Test enhanced runtime declarations
+fn test_runtime_decls() -> i64 =
+    -- Test 1: gen_extern_string_concat declaration
+    let sc1 = gen_extern_string_concat();
+    let t1 = if has_pattern(sc1, "@bmb_string_concat", 0) then 1 else 0;
+
+    -- Test 2: gen_extern_string_eq declaration
+    let se1 = gen_extern_string_eq();
+    let t2 = if has_pattern(se1, "@bmb_string_eq", 0) then 1 else 0;
+
+    -- Test 3: gen_extern_alloc declaration
+    let a1 = gen_extern_alloc();
+    let t3 = if has_pattern(a1, "@bmb_alloc", 0) then 1 else 0;
+
+    -- Test 4: gen_extern_free declaration
+    let f1 = gen_extern_free();
+    let t4 = if has_pattern(f1, "@bmb_free", 0) then 1 else 0;
+
+    -- Test 5: gen_runtime_decls includes string_concat
+    let rd = gen_runtime_decls();
+    let t5 = if has_pattern(rd, "@bmb_string_concat", 0) then 1 else 0;
+
+    -- Test 6: gen_runtime_decls includes alloc
+    let t6 = if has_pattern(rd, "@bmb_alloc", 0) then 1 else 0;
+
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.82: Pipeline integration tests
+fn test_pipeline_integration() -> i64 =
+    -- Test 1: Simple function pipeline
+    let fn1 = gen_function("fn add(a: i64, b: i64) -> i64 {|entry:|  %_t0 = + %a, %b|  return %_t0|}");
+    let t1 = if has_pattern(fn1, "define i64 @add", 0) then 1 else 0;
+
+    -- Test 2: Function with comparison
+    let fn2 = gen_function("fn gt(a: i64, b: i64) -> bool {|entry:|  %_t0 = > %a, %b|  return %_t0|}");
+    let t2 = if has_pattern(fn2, "icmp sgt", 0) then 1 else 0;
+
+    -- Test 3: Function with branches (conditional)
+    let fn3 = gen_function("fn max(a: i64, b: i64) -> i64 {|entry:|  %_t0 = > %a, %b|  branch %_t0, then_0, else_0|then_0:|  %_t1 = copy %a|  goto merge_0|else_0:|  %_t2 = copy %b|  goto merge_0|merge_0:|  return %_t1|}");
+    let t3 = if has_pattern(fn3, "br i1", 0) then 1 else 0;
+
+    -- Test 4: gen_module_header contains target
+    let hdr = gen_module_header();
+    let t4 = if has_pattern(hdr, "target triple", 0) then 1 else 0;
+
+    -- Test 5: gen_runtime_decls contains println
+    let decls = gen_runtime_decls();
+    let t5 = if has_pattern(decls, "@println", 0) then 1 else 0;
+
+    -- Test 6: Multi-function program
+    let prog = gen_program("fn one() -> i64 {|entry:|  %_t0 = const I:1|  return %_t0|}||fn two() -> i64 {|entry:|  %_t0 = const I:2|  return %_t0|}");
+    let t6_a = if has_pattern(prog, "@one", 0) then 1 else 0;
+    let t6_b = if has_pattern(prog, "@two", 0) then 1 else 0;
+    let t6 = if t6_a == 1 and t6_b == 1 then 1 else 0;
+
+    -- Test 7: String constant in function
+    let fn4 = gen_function("fn greet() -> String {|entry:|  %_t0 = const S:hello|  return %_t0|}");
+    let t7 = if has_pattern(fn4, "hello", 0) then 1 else 0;
+
+    -- Test 8: Unary negation
+    let fn5 = gen_function("fn negate(x: i64) -> i64 {|entry:|  %_t0 = neg %x|  return %_t0|}");
+    let t8 = if has_pattern(fn5, "sub i64 0", 0) then 1 else 0;
+
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
 
 fn main() -> i64 =
     let u0 = println(777);
@@ -2181,8 +2318,14 @@ fn main() -> i64 =
     -- v0.30.79 array method IR tests
     let r49 = test_array_method_ir();
     let u49 = println(r49);
+    -- v0.30.81 runtime declarations tests
+    let r50 = test_runtime_decls();
+    let u50 = println(r50);
+    -- v0.30.82 pipeline integration tests
+    let r51 = test_pipeline_integration();
+    let u51 = println(r51);
     let u_end = println(888);
-    let total = r1 + r2 + r3 + r4 + r5 + r6 + r7 + r8 + r9 + r10 + r11 + r12 + r13 + r14 + r15 + r16 + r17 + r18 + r19 + r20 + r21 + r22 + r23 + r24 + r25 + r26 + r27 + r28 + r29 + r30 + r31 + r32 + r33 + r34 + r35 + r36 + r37 + r38 + r39 + r40 + r41 + r42 + r43 + r44 + r45 + r46 + r47 + r48 + r49;
+    let total = r1 + r2 + r3 + r4 + r5 + r6 + r7 + r8 + r9 + r10 + r11 + r12 + r13 + r14 + r15 + r16 + r17 + r18 + r19 + r20 + r21 + r22 + r23 + r24 + r25 + r26 + r27 + r28 + r29 + r30 + r31 + r32 + r33 + r34 + r35 + r36 + r37 + r38 + r39 + r40 + r41 + r42 + r43 + r44 + r45 + r46 + r47 + r48 + r49 + r50 + r51;
     let u_tot = println(total);
     let u_fin = println(999);
     total;
