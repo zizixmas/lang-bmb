@@ -189,6 +189,8 @@ Gap to Close:
 - ✅ String literal type checking (v0.30.29: EXPR_STRING, quote char detection)
 - ✅ Block expression type checking (v0.30.30: EXPR_BLOCK, type_of_block, block_inner_expr)
 - ✅ Unit type support (v0.30.31: EXPR_UNIT, "()" type representation)
+- ✅ Parser string literal support (v0.30.32: TK_STRING, find_string_end, parse_primary extension)
+- ✅ MIR string lowering (v0.30.33: is_string_node, lower_string, S: prefix)
 
 ### What Bootstrap CANNOT Do Yet
 
@@ -302,11 +304,11 @@ $ diff stage2/bmb stage3/bmb
 
 v0.30 "Pure" represents the culmination of the BMB self-hosting journey. With Stage 1/2 verification complete and the bootstrap covering the full compilation pipeline, the remaining work is substantial but achievable within the 2026 Q4 timeline.
 
-**Key Metrics** (as of v0.30.31):
+**Key Metrics** (as of v0.30.33):
 - Rust code to remove: ~21,783 LOC
 - BMB bootstrap code: ~11,700 LOC (54% coverage)
 - Gap to close: ~11,300 LOC additional BMB
-- Bootstrap tests passing: 600 tests (types.bmb)
+- Bootstrap tests passing: 916 tests (600 types + 119 llvm_ir + 55 lowering + 46 mir + 42 parser_ast + ...)
 - Estimated effort: 6-9 months
 
 ---

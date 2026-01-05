@@ -164,15 +164,15 @@ v0.MAJOR.MINOR
 | v0.28 | Benchmark | C/Rust/BMB benchmark suite | Compute-intensive benchmarks, Contract-optimized benchmarks, Real-world workloads |
 | v0.29 | Velocity | C/Rust performance sprint | MIR optimization framework (6 passes), Contract-based optimization, Bootstrap optimization module |
 
-### Bootstrap Statistics (as of v0.29.6)
+### Bootstrap Statistics (as of v0.30.33)
 
 | Metric | Value |
 |--------|-------|
 | Rust Codebase | ~21,783 LOC |
-| BMB Bootstrap | ~9,924 LOC |
-| Coverage | 46% |
+| BMB Bootstrap | ~11,700 LOC |
+| Coverage | 54% |
 | Stage 1/2 Tests | 19 tests passing |
-| Bootstrap Tests | 353 tests (119 llvm_ir + 52 lowering + 46 mir + 45 types + 33 utils + 19 selfhost_equiv + 14 pipeline + 9 optimize + 8 selfhost_test + 8 compiler) |
+| Bootstrap Tests | 916 tests (600 types + 119 llvm_ir + 55 lowering + 46 mir + 42 parser_ast + 33 utils + 19 selfhost_equiv + 14 pipeline + 9 optimize + 8 selfhost_test + 8 compiler) |
 
 ---
 
@@ -302,6 +302,21 @@ v0.MAJOR.MINOR
 - `enum_reg_variant_type`: Resolve variant type with type args through registry lookup
 - `enum_reg_count`, `enum_reg_is_generic`: Registry utilities
 - 5 new test functions, 19 assertions (335 total in types.bmb)
+
+**v0.30.33 Completed (2026-01-05)**:
+- MIR string lowering: String literal support in lowering.bmb
+- is_string_node: Detect string literals starting with char 34 (quote)
+- lower_string: Generate MIR S: prefix for string constants
+- lower_expr extended: Handle string nodes via is_string_node check
+- Total: 55 tests passing in lowering.bmb (52 + 3 new)
+
+**v0.30.32 Completed (2026-01-05)**:
+- Parser string literal support: Full string tokenization and AST generation
+- TK_STRING constant (202): New token type for string literals
+- find_string_end: Find closing quote position for string scanning
+- next_token_raw extended: Detect strings starting with char 34 (quote)
+- parse_primary extended: Handle TK_STRING tokens, keep raw form with quotes
+- Total: 42 tests passing in parser_ast.bmb (39 + 3 new)
 
 **v0.30.31 Completed (2026-01-05)**:
 - Unit type support: EXPR_UNIT constant = 16

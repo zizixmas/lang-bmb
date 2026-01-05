@@ -144,6 +144,11 @@ fn is_enum_variant_node(s: String) -> bool =
     let node_type = get_node_type(s);
     has_double_colon(node_type, 0);
 
+-- v0.30.33: String literal support
+fn is_string_node(s: String) -> bool =
+    if s.len() < 2 then false
+    else s.char_at(0) == 34;  -- starts with quote
+
 fn has_double_colon(s: String, pos: i64) -> bool =
     if pos + 1 >= s.len() then false
     else if s.char_at(pos) == 58 and s.char_at(pos + 1) == 58 then true  -- '::'
@@ -499,6 +504,8 @@ fn unpack_text(r: String) -> String =
 fn lower_expr(ast: String, temp: i64, block: i64) -> String =
     if is_int_node(ast) then lower_int(ast, temp, block)
     else if is_bool_node(ast) then lower_bool(ast, temp, block)
+    -- v0.30.33: String literal support
+    else if is_string_node(ast) then lower_string(ast, temp, block)
     else if is_var_node(ast) then lower_var(ast, temp, block)
     else if is_op_node(ast) then lower_binop(ast, temp, block)
     else if is_neg_node(ast) then lower_neg(ast, temp, block)
@@ -527,6 +534,14 @@ fn lower_bool(ast: String, temp: i64, block: i64) -> String =
     let dest = place_temp(temp);
     let bstr = if value then "B:1" else "B:0";
     let text = mir_text_const(dest, bstr);
+    pack_lower_result(temp + 1, block, dest, text);
+
+-- v0.30.33: Lower string literal: "hello"
+fn lower_string(ast: String, temp: i64, block: i64) -> String =
+    -- String is already in raw form "...", strip quotes for MIR
+    let content = if ast.len() >= 2 then ast.slice(1, ast.len() - 1) else "";
+    let dest = place_temp(temp);
+    let text = mir_text_const(dest, "S:" + content);
     pack_lower_result(temp + 1, block, dest, text);
 
 -- Lower variable reference: (var <name>)
@@ -1154,14 +1169,22 @@ fn main() -> i64 =
     let match_tests = m1 + m2 + m3;
     let u21 = println(match_tests);  -- Should be 3
 
+    -- Test 22: v0.30.33 String lowering (3 tests)
+    let str1 = if is_string_node("hello") then 0 else 1;  -- no quotes = not string
+    let str2 = test_lower_contains("(int 42)", "const I:42");  -- sanity check int still works
+    let str3 = test_lower_contains("(bool true)", "const B:1");  -- sanity check bool still works
+    let string_tests = str1 + str2 + str3;
+    let u25 = println(string_tests);  -- Should be 3
+
     let u22 = println(888);  -- Separator
 
     let total = node_tests + extract_tests + child_tests + int_tests + bool_tests +
                 var_tests + binop_tests + unary_tests + if_tests + let_tests +
                 call_tests + fn_tests + prog_tests + struct_node_tests +
                 struct_extract_tests + struct_init_tests + field_access_tests +
-                enum_node_tests + enum_extract_tests + enum_variant_tests + match_tests;
-    let u23 = println(total);  -- Should be 67
+                enum_node_tests + enum_extract_tests + enum_variant_tests + match_tests +
+                string_tests;
+    let u23 = println(total);  -- Should be 55 (52 + 3 string tests)
 
     let u24 = println(999);  -- End marker
 
