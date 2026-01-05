@@ -164,15 +164,15 @@ v0.MAJOR.MINOR
 | v0.28 | Benchmark | C/Rust/BMB benchmark suite | Compute-intensive benchmarks, Contract-optimized benchmarks, Real-world workloads |
 | v0.29 | Velocity | C/Rust performance sprint | MIR optimization framework (6 passes), Contract-based optimization, Bootstrap optimization module |
 
-### Bootstrap Statistics (as of v0.30.88)
+### Bootstrap Statistics (as of v0.30.89)
 
 | Metric | Value |
 |--------|-------|
 | Rust Codebase | ~21,783 LOC |
-| BMB Bootstrap | ~14,600 LOC |
+| BMB Bootstrap | ~14,700 LOC |
 | Coverage | 67% |
 | Stage 1/2 Tests | 19 tests passing |
-| Bootstrap Tests | 1285 tests (712 types + 229 llvm_ir + 108 lowering + 46 mir + 83 parser_ast + 33 utils + 19 selfhost_equiv + 30 pipeline + 9 optimize + 8 selfhost_test + 8 compiler) |
+| Bootstrap Tests | 1290 tests (717 types + 229 llvm_ir + 108 lowering + 46 mir + 83 parser_ast + 33 utils + 19 selfhost_equiv + 30 pipeline + 9 optimize + 8 selfhost_test + 8 compiler) |
 
 ---
 
@@ -309,6 +309,13 @@ v0.MAJOR.MINOR
 - Find trait with method: find_trait_with_method, get_method_params_from
 - 2 new test functions (8 assertions)
 - types.bmb total: 712 tests (156 test functions)
+
+**v0.30.89 Completed (2026-01-06)**:
+- String concatenation type checking: binop_result_type extended for String + String
+- Arithmetic (+) now supports both i64 and String operands
+- Mixed type errors: i64+String and String+i64 properly detected
+- 1 new test function (5 assertions)
+- types.bmb total: 717 tests (157 test functions)
 
 **v0.30.87 Completed (2026-01-05)**:
 - Trait constraint checking: type_satisfies_trait, trait_methods_match, impl_has_method
