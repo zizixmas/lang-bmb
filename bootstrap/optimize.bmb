@@ -1,4 +1,4 @@
--- BMB Bootstrap MIR Optimizer (v0.30.159: Enhanced test suite)
+-- BMB Bootstrap MIR Optimizer (v0.30.171: Extended test coverage)
 -- Port of bmb/src/mir/optimize.rs to BMB
 --
 -- Optimization passes for MIR text format:
@@ -620,6 +620,141 @@ fn test_skip_ws_ext() -> i64 =
     let t4 = if skip_ws("   ", 0) == 3 then 1 else 0;
     t1 + t2 + t3 + t4;
 
+-- v0.30.171: Test simplify_branch function
+fn test_simplify_branch() -> i64 =
+    -- Test 1: Non-branch line unchanged
+    let table = const_table_empty();
+    let r1 = simplify_branch("  %x = const I:42", table);
+    let t1 = if r1 == "  %x = const I:42" then 1 else 0;
+    -- Test 2: Branch without const condition unchanged
+    let r2 = simplify_branch("  branch %c, then_0, else_0", table);
+    let t2 = if r2 == "  branch %c, then_0, else_0" then 1 else 0;
+    -- Test 3: Branch with const true (1) goes to then
+    let table3 = const_table_set(table, "%c", 1);
+    let r3 = simplify_branch("  branch %c, then_0, else_0", table3);
+    let t3 = if find_pattern(r3, "goto then_0", 0) >= 0 then 1 else 0;
+    -- Test 4: Branch with const false (0) goes to else
+    let table4 = const_table_set(table, "%c", 0);
+    let r4 = simplify_branch("  branch %c, then_0, else_0", table4);
+    let t4 = if find_pattern(r4, "goto else_0", 0) >= 0 then 1 else 0;
+    t1 + t2 + t3 + t4;
+
+-- v0.30.171: Test int_to_string boundaries
+fn test_int_to_string_bounds() -> i64 =
+    let t1 = if int_to_string(1) == "1" then 1 else 0;
+    let t2 = if int_to_string(9) == "9" then 1 else 0;
+    let t3 = if int_to_string(10) == "10" then 1 else 0;
+    let t4 = if int_to_string(99) == "99" then 1 else 0;
+    let t5 = if int_to_string(-1) == "-1" then 1 else 0;
+    let t6 = if int_to_string(-99) == "-99" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.171: Test is_whitespace edge cases
+fn test_is_whitespace_ext() -> i64 =
+    let t1 = if is_whitespace(32) then 1 else 0;   -- space
+    let t2 = if is_whitespace(9) then 1 else 0;    -- tab
+    let t3 = if is_whitespace(10) then 1 else 0;   -- newline
+    let t4 = if is_whitespace(13) then 1 else 0;   -- CR
+    let t5 = if not is_whitespace(0) then 1 else 0;   -- NUL
+    let t6 = if not is_whitespace(65) then 1 else 0;  -- 'A'
+    let t7 = if not is_whitespace(48) then 1 else 0;  -- '0'
+    let t8 = if not is_whitespace(33) then 1 else 0;  -- '!'
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+
+-- v0.30.171: Test is_digit boundaries
+fn test_is_digit_bounds() -> i64 =
+    let t1 = if is_digit(48) then 1 else 0;   -- '0'
+    let t2 = if is_digit(49) then 1 else 0;   -- '1'
+    let t3 = if is_digit(57) then 1 else 0;   -- '9'
+    let t4 = if not is_digit(47) then 1 else 0;  -- '/' before '0'
+    let t5 = if not is_digit(58) then 1 else 0;  -- ':' after '9'
+    let t6 = if not is_digit(0) then 1 else 0;   -- NUL
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.171: Test find_char edge cases
+fn test_find_char_bounds() -> i64 =
+    let t1 = if find_char("", 97, 0) == 0 - 1 then 1 else 0;  -- empty string
+    let t2 = if find_char("a", 97, 0) == 0 then 1 else 0;     -- single char found
+    let t3 = if find_char("abc", 99, 0) == 2 then 1 else 0;   -- last char
+    let t4 = if find_char("abc", 97, 1) == 0 - 1 then 1 else 0;  -- start after match
+    let t5 = if find_char("a:b", 58, 0) == 1 then 1 else 0;   -- colon
+    let t6 = if find_char("a|b", 124, 0) == 1 then 1 else 0;  -- pipe
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.171: Test find_pattern edge cases
+fn test_find_pattern_bounds() -> i64 =
+    let t1 = if find_pattern("", "a", 0) == 0 - 1 then 1 else 0;  -- empty string
+    let t2 = if find_pattern("abc", "", 0) == 0 then 1 else 0;    -- empty pattern
+    let t3 = if find_pattern("abc", "abcd", 0) == 0 - 1 then 1 else 0;  -- pattern too long
+    let t4 = if find_pattern("abc", "abc", 0) == 0 then 1 else 0;  -- exact match
+    let t5 = if find_pattern("abc", "c", 0) == 2 then 1 else 0;    -- at end
+    let t6 = if find_pattern("abcabc", "abc", 3) == 3 then 1 else 0;  -- second occurrence
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.171: Test is_const_inst variations
+fn test_is_const_inst_ext() -> i64 =
+    let t1 = if is_const_inst("  %_t0 = const I:0") then 1 else 0;
+    let t2 = if is_const_inst("  %x = const I:999999") then 1 else 0;
+    let t3 = if not is_const_inst("  %x = + %a, %b") then 1 else 0;
+    let t4 = if not is_const_inst("entry:") then 1 else 0;
+    let t5 = if not is_const_inst("  return %x") then 1 else 0;
+    let t6 = if not is_const_inst("  %x = copy %y") then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.171: Test is_binop_inst all operators
+fn test_is_binop_all_ops() -> i64 =
+    let t1 = if is_binop_inst("  %x = + %a, %b") then 1 else 0;
+    let t2 = if is_binop_inst("  %x = - %a, %b") then 1 else 0;
+    let t3 = if is_binop_inst("  %x = * %a, %b") then 1 else 0;
+    let t4 = if is_binop_inst("  %x = / %a, %b") then 1 else 0;
+    let t5 = if is_binop_inst("  %x = % %a, %b") then 1 else 0;
+    let t6 = if not is_binop_inst("  %x = & %a, %b") then 1 else 0;  -- & not supported
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.171: Test is_copy_inst variations
+fn test_is_copy_inst_ext() -> i64 =
+    let t1 = if is_copy_inst("  %a = copy %b") then 1 else 0;
+    let t2 = if is_copy_inst("  %_t0 = copy %_t1") then 1 else 0;
+    let t3 = if not is_copy_inst("  %x = const I:42") then 1 else 0;
+    let t4 = if not is_copy_inst("  %x = + %a, %b") then 1 else 0;
+    let t5 = if not is_copy_inst("  return %x") then 1 else 0;
+    let t6 = if not is_copy_inst("entry:") then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.171: Test is_branch_inst variations
+fn test_is_branch_inst_ext() -> i64 =
+    let t1 = if is_branch_inst("  branch %c, then_0, else_0") then 1 else 0;
+    let t2 = if is_branch_inst("branch %x, a, b") then 1 else 0;  -- no leading space
+    let t3 = if not is_branch_inst("  %x = const I:42") then 1 else 0;
+    let t4 = if not is_branch_inst("  return %x") then 1 else 0;
+    let t5 = if not is_branch_inst("entry:") then 1 else 0;
+    let t6 = if not is_branch_inst("  goto label") then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.171: Test is_return_inst variations
+fn test_is_return_inst_ext() -> i64 =
+    let t1 = if is_return_inst("  return %_t0") then 1 else 0;
+    let t2 = if is_return_inst("return %x") then 1 else 0;  -- no leading space
+    let t3 = if not is_return_inst("  %x = const I:42") then 1 else 0;
+    let t4 = if not is_return_inst("  branch %c, t, e") then 1 else 0;
+    let t5 = if not is_return_inst("entry:") then 1 else 0;
+    let t6 = if not is_return_inst("  %return = const I:1") then 1 else 0;  -- var named return
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.171: Test const_table multiple entries
+fn test_const_table_multi() -> i64 =
+    let t0 = const_table_empty();
+    let t1 = const_table_set(t0, "%a", 1);
+    let t2 = const_table_set(t1, "%b", 2);
+    let t3 = const_table_set(t2, "%c", 3);
+    let r1 = if const_table_get(t3, "%a") == 1 then 1 else 0;
+    let r2 = if const_table_get(t3, "%b") == 2 then 1 else 0;
+    let r3 = if const_table_get(t3, "%c") == 3 then 1 else 0;
+    let r4 = if const_table_has(t3, "%a") then 1 else 0;
+    let r5 = if not const_table_has(t3, "%d") then 1 else 0;
+    let r6 = if const_table_get(t3, "%d") == 0 - 99999999 then 1 else 0;  -- not found marker
+    r1 + r2 + r3 + r4 + r5 + r6;
+
 -- ============================================================================
 -- SECTION 11: Integration Tests
 -- ============================================================================
@@ -834,10 +969,38 @@ fn main() -> i64 =
     let ut25 = test_skip_ws_ext();
     let v25 = println(ut25);  -- Should be 4
 
-    let unit_total = ut1 + ut2 + ut3 + ut4 + ut5 + ut6 + ut7 + ut8 + ut9 + ut10 +
-                     ut11 + ut12 + ut13 + ut14 + ut15 + ut16 + ut17 + ut18 + ut19 + ut20 +
-                     ut21 + ut22 + ut23 + ut24 + ut25;
-    let v26 = println(unit_total);  -- Should be 126
+    -- v0.30.171: Extended unit tests (78 new assertions)
+    let ut26 = test_simplify_branch();
+    let v26x = println(ut26);  -- Should be 4
+    let ut27 = test_int_to_string_bounds();
+    let v27 = println(ut27);  -- Should be 6
+    let ut28 = test_is_whitespace_ext();
+    let v28 = println(ut28);  -- Should be 8
+    let ut29 = test_is_digit_bounds();
+    let v29 = println(ut29);  -- Should be 6
+    let ut30 = test_find_char_bounds();
+    let v30 = println(ut30);  -- Should be 6
+    let ut31 = test_find_pattern_bounds();
+    let v31 = println(ut31);  -- Should be 6
+    let ut32 = test_is_const_inst_ext();
+    let v32 = println(ut32);  -- Should be 6
+    let ut33 = test_is_binop_all_ops();
+    let v33 = println(ut33);  -- Should be 6
+    let ut34 = test_is_copy_inst_ext();
+    let v34 = println(ut34);  -- Should be 6
+    let ut35 = test_is_branch_inst_ext();
+    let v35 = println(ut35);  -- Should be 6
+    let ut36 = test_is_return_inst_ext();
+    let v36 = println(ut36);  -- Should be 6
+    let ut37 = test_const_table_multi();
+    let v37 = println(ut37);  -- Should be 6
+
+    let unit_base = ut1 + ut2 + ut3 + ut4 + ut5 + ut6 + ut7 + ut8 + ut9 + ut10 +
+                    ut11 + ut12 + ut13 + ut14 + ut15 + ut16 + ut17 + ut18 + ut19 + ut20 +
+                    ut21 + ut22 + ut23 + ut24 + ut25;
+    let unit_ext = ut26 + ut27 + ut28 + ut29 + ut30 + ut31 + ut32 + ut33 + ut34 + ut35 + ut36 + ut37;
+    let unit_total = unit_base + unit_ext;
+    let v26 = println(unit_total);  -- Should be 198 (126 base + 72 extended)
 
     let u2 = println(555);  -- Integration tests marker
 
@@ -864,6 +1027,6 @@ fn main() -> i64 =
 
     let total = unit_total + integration;
     let u4 = println(888);
-    let u5 = println(total);  -- Should be 155
+    let u5 = println(total);  -- Should be 227 (198 unit + 29 integration)
     let u6 = println(999);
     0;

@@ -1,6 +1,6 @@
 -- ============================================================================
 -- BMB Bootstrap Self-Hosting Stage 2: Equivalence Test
--- Version: v0.30.149: Enhanced test suite
+-- Version: v0.30.173: Extended test coverage
 --
 -- This file tests the equivalence between Rust compiler output and
 -- Bootstrap compiler output for the same BMB source patterns.
@@ -228,6 +228,72 @@ fn test_llvm_keywords() -> i64 =
     let s6 = if has_pattern("add i64 %a, %b", "add i64", 0) then 1 else 0;
     s1 + s2 + s3 + s4 + s5 + s6;
 
+-- v0.30.173: Test has_pattern with empty strings
+fn test_pattern_empty() -> i64 =
+    let s1 = if has_pattern("", "", 0) then 1 else 0;  -- empty matches empty
+    let s2 = if not has_pattern("", "a", 0) then 1 else 0;  -- can't find in empty
+    let s3 = if has_pattern("abc", "", 0) then 1 else 0;  -- empty pattern always found
+    let s4 = if not has_pattern("a", "ab", 0) then 1 else 0;  -- pattern too long
+    s1 + s2 + s3 + s4;
+
+-- v0.30.173: Test has_pattern with repeated characters
+fn test_pattern_repeated() -> i64 =
+    let s1 = if has_pattern("aaaa", "aa", 0) then 1 else 0;
+    let s2 = if has_pattern("abab", "ab", 0) then 1 else 0;
+    let s3 = if has_pattern("xxxxy", "y", 0) then 1 else 0;
+    let s4 = if has_pattern("abcabc", "abc", 0) then 1 else 0;
+    s1 + s2 + s3 + s4;
+
+-- v0.30.173: Test MIR variable patterns
+fn test_mir_variables() -> i64 =
+    let s1 = if has_pattern("%_t0", "%_t", 0) then 1 else 0;
+    let s2 = if has_pattern("%_t10", "%_t1", 0) then 1 else 0;
+    let s3 = if has_pattern("%result", "%r", 0) then 1 else 0;
+    let s4 = if has_pattern("%a = const", "%a =", 0) then 1 else 0;
+    let s5 = if has_pattern("call foo(%x)", "(%x)", 0) then 1 else 0;
+    let s6 = if has_pattern("return %val", "return %", 0) then 1 else 0;
+    s1 + s2 + s3 + s4 + s5 + s6;
+
+-- v0.30.173: Test LLVM type patterns
+fn test_llvm_types() -> i64 =
+    let s1 = if has_pattern("i64 %a", "i64", 0) then 1 else 0;
+    let s2 = if has_pattern("i32 %b", "i32", 0) then 1 else 0;
+    let s3 = if has_pattern("i1 %cond", "i1", 0) then 1 else 0;
+    let s4 = if has_pattern("i8* %ptr", "i8*", 0) then 1 else 0;
+    let s5 = if has_pattern("define i64", "define i64", 0) then 1 else 0;
+    let s6 = if has_pattern("ret i64 0", "ret i64", 0) then 1 else 0;
+    s1 + s2 + s3 + s4 + s5 + s6;
+
+-- v0.30.173: Test LLVM comparison operations
+fn test_llvm_cmp_ops() -> i64 =
+    let s1 = if has_pattern("icmp sgt", "sgt", 0) then 1 else 0;  -- signed greater
+    let s2 = if has_pattern("icmp slt", "slt", 0) then 1 else 0;  -- signed less
+    let s3 = if has_pattern("icmp sge", "sge", 0) then 1 else 0;  -- signed >=
+    let s4 = if has_pattern("icmp sle", "sle", 0) then 1 else 0;  -- signed <=
+    let s5 = if has_pattern("icmp eq", "eq", 0) then 1 else 0;   -- equal
+    let s6 = if has_pattern("icmp ne", "ne", 0) then 1 else 0;   -- not equal
+    s1 + s2 + s3 + s4 + s5 + s6;
+
+-- v0.30.173: Test LLVM arithmetic operations
+fn test_llvm_arith_ops() -> i64 =
+    let s1 = if has_pattern("add i64", "add", 0) then 1 else 0;
+    let s2 = if has_pattern("sub i64", "sub", 0) then 1 else 0;
+    let s3 = if has_pattern("mul i64", "mul", 0) then 1 else 0;
+    let s4 = if has_pattern("sdiv i64", "sdiv", 0) then 1 else 0;
+    let s5 = if has_pattern("srem i64", "srem", 0) then 1 else 0;
+    let s6 = if has_pattern("and i64", "and", 0) then 1 else 0;
+    s1 + s2 + s3 + s4 + s5 + s6;
+
+-- v0.30.173: Test pattern position variations
+fn test_pattern_positions() -> i64 =
+    let s1 = if has_pattern("hello world", "hello", 0) then 1 else 0;  -- at start
+    let s2 = if has_pattern("hello world", "world", 0) then 1 else 0;  -- at end
+    let s3 = if has_pattern("hello world", " ", 0) then 1 else 0;      -- in middle
+    let s4 = if has_pattern("abcdef", "cde", 0) then 1 else 0;         -- middle substring
+    let s5 = if has_pattern("abc123def", "123", 0) then 1 else 0;      -- digits in middle
+    let s6 = if has_pattern("a", "a", 0) then 1 else 0;                -- single char
+    s1 + s2 + s3 + s4 + s5 + s6;
+
 -- ============================================================================
 -- SECTION 7: Main Test Runner
 -- ============================================================================
@@ -257,8 +323,26 @@ fn main() -> i64 =
     let ut7 = test_llvm_keywords();
     let v7 = println(ut7);   -- Should be 6
 
-    let unit_total = ut1 + ut2 + ut3 + ut4 + ut5 + ut6 + ut7;
-    let v8 = println(unit_total);  -- Should be 29
+    -- v0.30.173: Extended unit tests (38 new assertions)
+    let ut8 = test_pattern_empty();
+    let v8x = println(ut8);  -- Should be 4
+    let ut9 = test_pattern_repeated();
+    let v9 = println(ut9);   -- Should be 4
+    let ut10 = test_mir_variables();
+    let v10 = println(ut10); -- Should be 6
+    let ut11 = test_llvm_types();
+    let v11 = println(ut11); -- Should be 6
+    let ut12 = test_llvm_cmp_ops();
+    let v12 = println(ut12); -- Should be 6
+    let ut13 = test_llvm_arith_ops();
+    let v13 = println(ut13); -- Should be 6
+    let ut14 = test_pattern_positions();
+    let v14 = println(ut14); -- Should be 6
+
+    let unit_base = ut1 + ut2 + ut3 + ut4 + ut5 + ut6 + ut7;
+    let unit_ext = ut8 + ut9 + ut10 + ut11 + ut12 + ut13 + ut14;
+    let unit_total = unit_base + unit_ext;
+    let v8 = println(unit_total);  -- Should be 67 (29 base + 38 extended)
 
     let u1 = println(555);  -- Integration tests marker
 
@@ -294,7 +378,7 @@ fn main() -> i64 =
 
     let total = unit_total + integration;
     let u24 = println(888);  -- Separator
-    let u25 = println(total);  -- Should be 48
+    let u25 = println(total);  -- Should be 86 (67 unit + 19 integration)
     let u26 = println(999);  -- End marker
 
     total;

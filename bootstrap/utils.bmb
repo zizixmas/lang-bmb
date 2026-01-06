@@ -1,4 +1,4 @@
--- BMB Bootstrap Utilities (v0.30.156: Enhanced test suite)
+-- BMB Bootstrap Utilities (v0.30.172: Extended test coverage)
 -- Shared utility functions for all bootstrap modules
 -- Consolidates common string operations to reduce code duplication
 --
@@ -611,6 +611,173 @@ fn test_skip_edge_cases() -> bool =
     let c3 = skip_comment("--", 0) == 2;   -- Comment at end (no newline)
     s1 and s2 and s3 and s4 and c1 and c2 and c3;
 
+-- ============================================================================
+-- SECTION 12: Extended Unit Tests (v0.30.172)
+-- ============================================================================
+
+-- v0.30.172: Test is_whitespace all cases
+fn test_is_whitespace_ext() -> i64 =
+    let t1 = if is_whitespace(32) then 1 else 0;   -- space
+    let t2 = if is_whitespace(9) then 1 else 0;    -- tab
+    let t3 = if is_whitespace(10) then 1 else 0;   -- newline
+    let t4 = if is_whitespace(13) then 1 else 0;   -- CR
+    let t5 = if not is_whitespace(0) then 1 else 0;
+    let t6 = if not is_whitespace(65) then 1 else 0;  -- 'A'
+    let t7 = if not is_whitespace(48) then 1 else 0;  -- '0'
+    let t8 = if not is_whitespace(95) then 1 else 0;  -- '_'
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+
+-- v0.30.172: Test is_digit all boundaries
+fn test_is_digit_ext() -> i64 =
+    let t1 = if is_digit(48) then 1 else 0;  -- '0'
+    let t2 = if is_digit(49) then 1 else 0;  -- '1'
+    let t3 = if is_digit(53) then 1 else 0;  -- '5'
+    let t4 = if is_digit(57) then 1 else 0;  -- '9'
+    let t5 = if not is_digit(47) then 1 else 0;  -- '/' before '0'
+    let t6 = if not is_digit(58) then 1 else 0;  -- ':' after '9'
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.172: Test is_alpha all boundaries
+fn test_is_alpha_ext() -> i64 =
+    let t1 = if is_alpha(65) then 1 else 0;   -- 'A'
+    let t2 = if is_alpha(77) then 1 else 0;   -- 'M'
+    let t3 = if is_alpha(90) then 1 else 0;   -- 'Z'
+    let t4 = if is_alpha(97) then 1 else 0;   -- 'a'
+    let t5 = if is_alpha(109) then 1 else 0;  -- 'm'
+    let t6 = if is_alpha(122) then 1 else 0;  -- 'z'
+    let t7 = if not is_alpha(64) then 1 else 0;   -- '@'
+    let t8 = if not is_alpha(91) then 1 else 0;   -- '['
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+
+-- v0.30.172: Test is_alnum_or_underscore
+fn test_is_alnum_underscore() -> i64 =
+    let t1 = if is_alnum_or_underscore(65) then 1 else 0;   -- 'A'
+    let t2 = if is_alnum_or_underscore(97) then 1 else 0;   -- 'a'
+    let t3 = if is_alnum_or_underscore(48) then 1 else 0;   -- '0'
+    let t4 = if is_alnum_or_underscore(95) then 1 else 0;   -- '_'
+    let t5 = if not is_alnum_or_underscore(32) then 1 else 0;  -- space
+    let t6 = if not is_alnum_or_underscore(45) then 1 else 0;  -- '-'
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.172: Test digit_to_int all digits
+fn test_digit_to_int_ext() -> i64 =
+    let t1 = if digit_to_int(48) == 0 then 1 else 0;
+    let t2 = if digit_to_int(49) == 1 then 1 else 0;
+    let t3 = if digit_to_int(53) == 5 then 1 else 0;
+    let t4 = if digit_to_int(57) == 9 then 1 else 0;
+    t1 + t2 + t3 + t4;
+
+-- v0.30.172: Test digit_char all digits
+fn test_digit_char_ext() -> i64 =
+    let t1 = if digit_char(0) == "0" then 1 else 0;
+    let t2 = if digit_char(1) == "1" then 1 else 0;
+    let t3 = if digit_char(2) == "2" then 1 else 0;
+    let t4 = if digit_char(3) == "3" then 1 else 0;
+    let t5 = if digit_char(4) == "4" then 1 else 0;
+    let t6 = if digit_char(5) == "5" then 1 else 0;
+    let t7 = if digit_char(6) == "6" then 1 else 0;
+    let t8 = if digit_char(7) == "7" then 1 else 0;
+    let t9 = if digit_char(8) == "8" then 1 else 0;
+    let t10 = if digit_char(9) == "9" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10;
+
+-- v0.30.172: Test int_to_string comprehensive
+fn test_int_to_string_ext() -> i64 =
+    let t1 = if int_to_string(0) == "0" then 1 else 0;
+    let t2 = if int_to_string(1) == "1" then 1 else 0;
+    let t3 = if int_to_string(9) == "9" then 1 else 0;
+    let t4 = if int_to_string(10) == "10" then 1 else 0;
+    let t5 = if int_to_string(99) == "99" then 1 else 0;
+    let t6 = if int_to_string(100) == "100" then 1 else 0;
+    let t7 = if int_to_string(-1) == "-1" then 1 else 0;
+    let t8 = if int_to_string(-99) == "-99" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+
+-- v0.30.172: Test parse_int comprehensive
+fn test_parse_int_ext() -> i64 =
+    let t1 = if parse_int("0", 0) == 0 then 1 else 0;
+    let t2 = if parse_int("123", 0) == 123 then 1 else 0;
+    let t3 = if parse_int("abc", 0) == 0 then 1 else 0;
+    let t4 = if parse_int("42abc", 0) == 42 then 1 else 0;
+    let t5 = if parse_int("007", 0) == 7 then 1 else 0;
+    let t6 = if parse_int("999999", 0) == 999999 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.172: Test find_char comprehensive
+fn test_find_char_ext() -> i64 =
+    let t1 = if find_char("hello", 104, 0) == 0 then 1 else 0;  -- 'h' at 0
+    let t2 = if find_char("hello", 101, 0) == 1 then 1 else 0;  -- 'e' at 1
+    let t3 = if find_char("hello", 111, 0) == 4 then 1 else 0;  -- 'o' at 4
+    let t4 = if find_char("hello", 120, 0) == 5 then 1 else 0;  -- 'x' not found
+    let t5 = if find_char("a:b", 58, 0) == 1 then 1 else 0;     -- ':' at 1
+    let t6 = if find_char("a|b|c", 124, 0) == 1 then 1 else 0;  -- '|' at 1
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.172: Test tok_encode/tok_kind/tok_end comprehensive
+fn test_tok_encoding_ext() -> i64 =
+    let tok1 = tok_encode(1, 100);
+    let t1 = if tok_kind(tok1) == 1 then 1 else 0;
+    let t2 = if tok_end(tok1) == 100 then 1 else 0;
+    let tok2 = tok_encode(5, 0);
+    let t3 = if tok_kind(tok2) == 5 then 1 else 0;
+    let t4 = if tok_end(tok2) == 0 then 1 else 0;
+    let tok3 = tok_encode(0, 999999);
+    let t5 = if tok_kind(tok3) == 0 then 1 else 0;
+    let t6 = if tok_end(tok3) == 999999 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.172: Test starts_with comprehensive
+fn test_starts_with_ext() -> i64 =
+    let t1 = if starts_with("hello", "hel", 0) then 1 else 0;
+    let t2 = if starts_with("hello", "lo", 3) then 1 else 0;
+    let t3 = if not starts_with("hello", "xyz", 0) then 1 else 0;
+    let t4 = if starts_with("", "", 0) then 1 else 0;  -- empty matches empty
+    let t5 = if starts_with("abc", "", 0) then 1 else 0;  -- empty prefix matches
+    let t6 = if not starts_with("", "a", 0) then 1 else 0;  -- can't match empty string
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.172: Test find_pattern comprehensive
+fn test_find_pattern_ext() -> i64 =
+    let t1 = if find_pattern("hello world", "world", 0) == 6 then 1 else 0;
+    let t2 = if find_pattern("hello", "ell", 0) == 1 then 1 else 0;
+    let t3 = if find_pattern("hello", "xyz", 0) == 5 then 1 else 0;  -- not found
+    let t4 = if find_pattern("abc", "abc", 0) == 0 then 1 else 0;  -- exact match
+    let t5 = if find_pattern("aaa", "a", 1) == 1 then 1 else 0;  -- find from pos 1
+    let t6 = if find_pattern("", "a", 0) == 0 then 1 else 0;  -- empty string
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.172: Test pack_result/unpack comprehensive
+fn test_result_packing_ext() -> i64 =
+    let r1 = pack_result(42, "test");
+    let t1 = if r1 == "42:test" then 1 else 0;
+    let t2 = if unpack_pos(r1) == 42 then 1 else 0;
+    let t3 = if unpack_ast(r1) == "test" then 1 else 0;
+    let r2 = pack_result(0, "");
+    let t4 = if r2 == "0:" then 1 else 0;
+    let t5 = if unpack_pos(r2) == 0 then 1 else 0;
+    let t6 = if unpack_ast(r2) == "" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.172: Test error handling comprehensive
+fn test_error_handling_ext() -> i64 =
+    let t1 = if is_error("ERR:message") then 1 else 0;
+    let t2 = if is_error("ERR:") then 1 else 0;
+    let t3 = if not is_error("error") then 1 else 0;
+    let t4 = if not is_error("") then 1 else 0;
+    let t5 = if make_error("test") == "ERR:test" then 1 else 0;
+    let t6 = if get_error_msg("ERR:hello") == "hello" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.172: Test skip_ws comprehensive
+fn test_skip_ws_ext() -> i64 =
+    let t1 = if skip_ws("", 0) == 0 then 1 else 0;
+    let t2 = if skip_ws("abc", 0) == 0 then 1 else 0;
+    let t3 = if skip_ws("  abc", 0) == 2 then 1 else 0;
+    let t4 = if skip_ws("   ", 0) == 3 then 1 else 0;
+    let t5 = if skip_ws("x  y", 1) == 3 then 1 else 0;
+    let t6 = if skip_ws("a", 1) == 1 then 1 else 0;  -- pos at end
+    t1 + t2 + t3 + t4 + t5 + t6;
+
 -- Run all tests
 fn run_utils_tests() -> i64 =
     let t1 = if test_is_digit() then 1 else 0;
@@ -669,12 +836,69 @@ fn run_utils_tests() -> i64 =
     + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33
     + t34 + t35 + t36 + t37 + t38 + t39 + t40 + t41 + t42 + t43 + t44 + t45 + t46 + t47;
 
+-- v0.30.172: Run extended tests (returns count of passed assertions)
+fn run_extended_tests() -> i64 =
+    let e1 = test_is_whitespace_ext();
+    let e2 = test_is_digit_ext();
+    let e3 = test_is_alpha_ext();
+    let e4 = test_is_alnum_underscore();
+    let e5 = test_digit_to_int_ext();
+    let e6 = test_digit_char_ext();
+    let e7 = test_int_to_string_ext();
+    let e8 = test_parse_int_ext();
+    let e9 = test_find_char_ext();
+    let e10 = test_tok_encoding_ext();
+    let e11 = test_starts_with_ext();
+    let e12 = test_find_pattern_ext();
+    let e13 = test_result_packing_ext();
+    let e14 = test_error_handling_ext();
+    let e15 = test_skip_ws_ext();
+    e1 + e2 + e3 + e4 + e5 + e6 + e7 + e8 + e9 + e10 + e11 + e12 + e13 + e14 + e15;
+
 -- Main test entry
 fn main() -> i64 =
-    let u1 = println(111);  -- Start marker
+    let u1 = println(777);  -- Start marker
     let passed = run_utils_tests();
-    let u2 = println(passed);  -- Should be 47
-    let u3 = println(888);  -- End marker
-    let total = 47;  -- v0.30.156: 38 + 9 new function tests
-    -- Returns number of passed tests (47 = all pass)
-    passed;
+    let u2 = println(passed);  -- Should be 47 (base tests)
+
+    -- v0.30.172: Extended tests (98 new assertions)
+    let ext1 = test_is_whitespace_ext();
+    let v1 = println(ext1);  -- Should be 8
+    let ext2 = test_is_digit_ext();
+    let v2 = println(ext2);  -- Should be 6
+    let ext3 = test_is_alpha_ext();
+    let v3 = println(ext3);  -- Should be 8
+    let ext4 = test_is_alnum_underscore();
+    let v4 = println(ext4);  -- Should be 6
+    let ext5 = test_digit_to_int_ext();
+    let v5 = println(ext5);  -- Should be 4
+    let ext6 = test_digit_char_ext();
+    let v6 = println(ext6);  -- Should be 10
+    let ext7 = test_int_to_string_ext();
+    let v7 = println(ext7);  -- Should be 8
+    let ext8 = test_parse_int_ext();
+    let v8 = println(ext8);  -- Should be 6
+    let ext9 = test_find_char_ext();
+    let v9 = println(ext9);  -- Should be 6
+    let ext10 = test_tok_encoding_ext();
+    let v10 = println(ext10);  -- Should be 6
+    let ext11 = test_starts_with_ext();
+    let v11 = println(ext11);  -- Should be 6
+    let ext12 = test_find_pattern_ext();
+    let v12 = println(ext12);  -- Should be 6
+    let ext13 = test_result_packing_ext();
+    let v13 = println(ext13);  -- Should be 6
+    let ext14 = test_error_handling_ext();
+    let v14 = println(ext14);  -- Should be 6
+    let ext15 = test_skip_ws_ext();
+    let v15 = println(ext15);  -- Should be 6
+
+    let extended = ext1 + ext2 + ext3 + ext4 + ext5 + ext6 + ext7 + ext8 + ext9 + ext10 + ext11 + ext12 + ext13 + ext14 + ext15;
+    let v16 = println(extended);  -- Should be 98
+
+    let total = passed + extended;
+    let u3 = println(888);  -- Separator marker
+    let u4 = println(total);  -- Should be 145 (47 base + 98 extended)
+    let u5 = println(999);  -- End marker
+    -- Returns number of passed tests
+    total;
