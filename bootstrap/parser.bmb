@@ -1,4 +1,4 @@
--- BMB Parser written in BMB (v0.30.142: Enhanced test suite)
+-- BMB Parser written in BMB (v0.30.152: Enhanced test suite)
 -- A simple recursive descent parser for the BMB language
 -- Uses functional/recursive style to work within BMB's grammar constraints
 --
@@ -641,6 +641,82 @@ fn test_error_codes() -> i64 =
     let t6 = if PR_ERR_EXPECTED_SEMI() == 5 then 1 else 0;
     t1 + t2 + t3 + t4 + t5 + t6;
 
+-- Test character classification (v0.30.152)
+fn test_char_class() -> i64 =
+    let t1 = if is_whitespace(32) then 1 else 0;   -- space
+    let t2 = if is_whitespace(9) then 1 else 0;    -- tab
+    let t3 = if is_whitespace(10) then 1 else 0;   -- newline
+    let t4 = if not is_whitespace(65) then 1 else 0;  -- 'A'
+    let t5 = if is_digit(48) then 1 else 0;  -- '0'
+    let t6 = if is_digit(57) then 1 else 0;  -- '9'
+    let t7 = if not is_digit(47) then 1 else 0;  -- before '0'
+    let t8 = if is_alpha(65) then 1 else 0;  -- 'A'
+    let t9 = if is_alpha(90) then 1 else 0;  -- 'Z'
+    let t10 = if is_alpha(97) then 1 else 0;  -- 'a'
+    let t11 = if is_alpha(122) then 1 else 0;  -- 'z'
+    let t12 = if not is_alpha(64) then 1 else 0;  -- '@' before 'A'
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12;
+
+-- Test keyword lookup (v0.30.152)
+fn test_keyword_lookup() -> i64 =
+    let t1 = if lookup_keyword("fn") == 100 then 1 else 0;
+    let t2 = if lookup_keyword("let") == 101 then 1 else 0;
+    let t3 = if lookup_keyword("if") == 102 then 1 else 0;
+    let t4 = if lookup_keyword("then") == 103 then 1 else 0;
+    let t5 = if lookup_keyword("else") == 104 then 1 else 0;
+    let t6 = if lookup_keyword("true") == 105 then 1 else 0;
+    let t7 = if lookup_keyword("false") == 106 then 1 else 0;
+    let t8 = if lookup_keyword("and") == 107 then 1 else 0;
+    let t9 = if lookup_keyword("or") == 108 then 1 else 0;
+    let t10 = if lookup_keyword("not") == 109 then 1 else 0;
+    let t11 = if lookup_keyword("i64") == 151 then 1 else 0;
+    let t12 = if lookup_keyword("bool") == 153 then 1 else 0;
+    let t13 = if lookup_keyword("foo") == 201 then 1 else 0;  -- identifier
+    let t14 = if lookup_keyword("xyz") == 201 then 1 else 0;  -- identifier
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14;
+
+-- Test symbol code lookup (v0.30.152)
+fn test_symbol_code() -> i64 =
+    let t1 = if symbol_code(58) == 300 then 1 else 0;   -- :
+    let t2 = if symbol_code(46) == 301 then 1 else 0;   -- .
+    let t3 = if symbol_code(61) == 302 then 1 else 0;   -- =
+    let t4 = if symbol_code(59) == 303 then 1 else 0;   -- ;
+    let t5 = if symbol_code(44) == 304 then 1 else 0;   -- ,
+    let t6 = if symbol_code(40) == 305 then 1 else 0;   -- (
+    let t7 = if symbol_code(41) == 306 then 1 else 0;   -- )
+    let t8 = if symbol_code(43) == 400 then 1 else 0;   -- +
+    let t9 = if symbol_code(45) == 401 then 1 else 0;   -- -
+    let t10 = if symbol_code(42) == 402 then 1 else 0;  -- *
+    let t11 = if symbol_code(60) == 405 then 1 else 0;  -- <
+    let t12 = if symbol_code(62) == 406 then 1 else 0;  -- >
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12;
+
+-- Test two-char token detection (v0.30.152)
+fn test_two_char() -> i64 =
+    let t1 = if check_two_char("::", 0) == 3202 then 1 else 0;  -- ::
+    let t2 = if check_two_char("->", 0) == 3212 then 1 else 0;  -- ->
+    let t3 = if check_two_char("=>", 0) == 3222 then 1 else 0;  -- =>
+    let t4 = if check_two_char("..", 0) == 3232 then 1 else 0;  -- ..
+    let t5 = if check_two_char("==", 0) == 4102 then 1 else 0;  -- ==
+    let t6 = if check_two_char("!=", 0) == 4112 then 1 else 0;  -- !=
+    let t7 = if check_two_char("<=", 0) == 4122 then 1 else 0;  -- <=
+    let t8 = if check_two_char(">=", 0) == 4132 then 1 else 0;  -- >=
+    let t9 = if check_two_char("ab", 0) == 0 then 1 else 0;  -- not a two-char token
+    let t10 = if check_two_char("+", 0) == 0 then 1 else 0;  -- too short
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10;
+
+-- Test skip functions (v0.30.152)
+fn test_skip_functions() -> i64 =
+    let t1 = if skip_ws("  abc", 0) == 2 then 1 else 0;  -- skip 2 spaces
+    let t2 = if skip_ws("abc", 0) == 0 then 1 else 0;  -- no whitespace
+    let t3 = if skip_ws("", 0) == 0 then 1 else 0;  -- empty string
+    let t4 = if skip_to_eol("abc", 0) == 3 then 1 else 0;  -- to end (no newline)
+    let t5 = if skip_to_eol("abcdef", 0) == 6 then 1 else 0;  -- to end
+    let t6 = if find_ident_end("abc123 ", 0) == 6 then 1 else 0;  -- alpha + num
+    let t7 = if find_ident_end("foo_bar ", 0) == 7 then 1 else 0;  -- with underscore
+    let t8 = if find_number_end("123abc", 0) == 3 then 1 else 0;  -- digits only
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+
 -- ============================================================
 -- Main: Parse a test program
 -- ============================================================
@@ -656,7 +732,7 @@ fn test_parse(src: String, expected: i64) -> i64 =
 fn main() -> i64 =
     let u0 = println(777);  -- Start marker
 
-    -- Unit tests (v0.30.142)
+    -- Unit tests (v0.30.152)
     let ut1 = test_token_constants();
     let v1 = println(ut1);  -- Should be 8
     let ut2 = test_type_tokens();
@@ -673,50 +749,41 @@ fn main() -> i64 =
     let v7 = println(ut7);  -- Should be 4
     let ut8 = test_error_codes();
     let v8 = println(ut8);  -- Should be 6
-    let unit_total = ut1 + ut2 + ut3 + ut4 + ut5 + ut6 + ut7 + ut8;
-    let v9 = println(unit_total);  -- Should be 51
+
+    -- New unit tests (v0.30.152)
+    let ut9 = test_char_class();
+    let v9 = println(ut9);  -- Should be 12
+    let ut10 = test_keyword_lookup();
+    let v10 = println(ut10);  -- Should be 14
+    let ut11 = test_symbol_code();
+    let v11 = println(ut11);  -- Should be 12
+    let ut12 = test_two_char();
+    let v12 = println(ut12);  -- Should be 10
+    let ut13 = test_skip_functions();
+    let v13 = println(ut13);  -- Should be 8
+
+    let unit_total = ut1 + ut2 + ut3 + ut4 + ut5 + ut6 + ut7 + ut8 + ut9 + ut10 + ut11 + ut12 + ut13;
+    let v14 = println(unit_total);  -- Should be 107
 
     let u1 = println(555);  -- Integration tests marker
 
     -- Integration tests
-    -- Test 1: Simple function
     let t1 = test_parse("fn add(x: i64, y: i64) -> i64 = x + y;", 0);
-
-    -- Test 2: If expression
     let t2 = test_parse("fn max(a: i64, b: i64) -> i64 = if a > b then a else b;", 0);
-
-    -- Test 3: Let expression
     let t3 = test_parse("fn foo(x: i64) -> i64 = let y = x + 1; y;", 0);
-
-    -- Test 4: Boolean literals
     let t4 = test_parse("fn yes() -> bool = true;", 0);
-
-    -- Test 5: Comparison operators
     let t5 = test_parse("fn cmp(a: i64, b: i64) -> bool = a == b;", 0);
-
-    -- Test 6: Logical and
     let t6 = test_parse("fn both(a: bool, b: bool) -> bool = a and b;", 0);
-
-    -- Test 7: Function call
     let t7 = test_parse("fn double(x: i64) -> i64 = add(x, x);", 0);
-
-    -- Test 8: Nested if
     let t8 = test_parse("fn sign(x: i64) -> i64 = if x > 0 then 1 else if x < 0 then 0 - 1 else 0;", 0);
-
-    -- Test 9: No params
     let t9 = test_parse("fn zero() -> i64 = 0;", 0);
-
-    -- Test 10: Multiple functions
     let t10 = test_parse("fn a() -> i64 = 1; fn b() -> i64 = 2;", 0);
 
-    let u2 = println(888);  -- End marker
-
-    -- Count passed tests
     let integration = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10;
-    let u3 = println(integration);  -- Should be 10
+    let v15 = println(integration);  -- Should be 10
 
     let total = unit_total + integration;
-    let u4 = println(total);  -- Should be 61
-
-    let u5 = println(999);  -- Final marker
+    let u2 = println(888);  -- End marker
+    let u3 = println(total);  -- Should be 117
+    let u4 = println(999);  -- Final marker
     total;

@@ -172,7 +172,7 @@ v0.MAJOR.MINOR
 | BMB Bootstrap | ~15,000 LOC |
 | Coverage | 69% |
 | Stage 1/2 Tests | 48 tests passing |
-| Bootstrap Tests | 2,116 tests (746 types + 361 llvm_ir + 244 lowering + 138 pipeline + 113 parser_ast + 99 mir + 75 lexer + 63 optimize + 61 parser + 59 compiler + 56 selfhost_test + 48 selfhost_equiv + 38 utils + 15 parser_test) |
+| Bootstrap Tests | 2,284 tests (746 types + 361 llvm_ir + 244 lowering + 138 pipeline + 127 lexer + 119 compiler + 117 parser + 113 parser_ast + 99 mir + 63 optimize + 56 selfhost_test + 48 selfhost_equiv + 38 utils + 15 parser_test) |
 | Build Mode | Use `--release` for bootstrap tests (debug build stack overflow on large files) |
 | Stack-Limited Files | lowering.bmb (structural depth issue) |
 
