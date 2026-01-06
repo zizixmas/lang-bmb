@@ -1,6 +1,6 @@
 # Bootstrap Feature Gap Analysis
 
-> Version: v0.30.228
+> Version: v0.30.232
 > Date: 2025-01-07
 > Purpose: Document gaps between Rust compiler and BMB bootstrap implementation
 
@@ -33,7 +33,7 @@ The BMB bootstrap implements the **complete core compilation pipeline** (lexer �
 | AST Types | `ast/*.rs` | `parser_ast.bmb` | ✅ Partial | (included above) |
 | Type Checker | `types/mod.rs` | `types.bmb` | ✅ Generics+Tuples (v0.30.217) | 173 |
 | MIR | `mir/mod.rs` | `mir.bmb` | ✅ Complete | 59 |
-| Lowering | `mir/lower.rs` | `lowering.bmb` | ✅ Complete | 4 (stack limited) |
+| Lowering | `mir/lower.rs` | `lowering.bmb` | ✅ Complete | 4 fn + 79 groups (244 asserts) |
 | Optimizer | `mir/optimize.rs` | `optimize.bmb` | ✅ Complete | 56 |
 | LLVM Codegen | `codegen/llvm.rs`, `codegen/llvm_text.rs` | `llvm_ir.bmb` | ✅ Complete | 80 |
 | Pipeline | (main.rs) | `pipeline.bmb`, `compiler.bmb` | ✅ Complete | 117 |
@@ -169,24 +169,21 @@ The BMB bootstrap implements the **complete core compilation pipeline** (lexer �
 | lexer.bmb | 40 | Tokenization |
 | selfhost_equiv.bmb | 33 | Equivalence testing |
 
-### Low Coverage (<20 tests)
-| File | Tests | Reason |
-|------|-------|--------|
-| lowering.bmb | 4 | Stack overflow limitation |
+### Inline Test Pattern
+| File | Test Functions | Test Groups | Assertions | Design |
+|------|----------------|-------------|------------|--------|
+| lowering.bmb | 4 helpers | 79 | 244 | Inline tests in main() due to stack constraints |
+
+**Note**: lowering.bmb uses helper functions + inline tests to avoid stack overflow from many separate test functions. This pattern provides equivalent coverage (244 assertions) to other files.
 
 ## Recommendations
 
-### Next Priority (v0.30.221+)
+### Next Priority (v0.30.228+)
 
 1. **Bootstrap Interpreter** (P1)
    - Create `interp.bmb` with value encoding
    - Enable running bootstrap tests without Rust
    - Self-verification capability for true self-hosting
-
-2. **Lowering Test Coverage**
-   - Increase lowering.bmb tests (currently 4)
-   - Address stack overflow limitations
-   - Better MIR generation coverage
 
 ### Future Work (Post Self-Hosting)
 

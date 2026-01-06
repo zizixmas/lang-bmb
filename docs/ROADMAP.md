@@ -337,6 +337,13 @@ v0.MAJOR.MINOR
 - Multi-operand expressions, mixed operations, combined expressions
 - pipeline.bmb total: 42 tests (10 test groups)
 
+**v0.30.232 Completed (2026-01-07)**:
+- Phase 30.1.232-235: lowering.bmb test coverage analysis
+- **CORRECTED**: lowering.bmb has 4 helper functions + 79 test groups (244 assertions), NOT "4 tests"
+- Inline test pattern: tests in main() due to stack overflow with many separate test functions
+- Updated BOOTSTRAP_FEATURE_GAP.md: corrected test counts, added "Inline Test Pattern" section
+- Total bootstrap tests: 914 functions with proper coverage documentation
+
 **v0.30.228 Completed (2026-01-07)**:
 - Phase 30.1.228-231: Stage 2 verification analysis and documentation
 - **STAGE 2 VERIFIED**: 152 equivalence assertions passing (selfhost_equiv.bmb)
