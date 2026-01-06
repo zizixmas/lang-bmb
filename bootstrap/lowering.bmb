@@ -716,21 +716,212 @@ fn lambda_extract_body(ast: String) -> String =
         let end = find_close_paren(ast, start, 0);
         ast.slice(start, end + 1);  -- +1 to include closing paren
 
--- Lower lambda/closure expression
--- For now, just lower the body (following Rust compiler approach)
+-- ============================================================================
+-- v0.30.99: Closure Free Variable Analysis
+-- ============================================================================
+-- Detect free variables in lambda body and generate Capture instructions
+
+-- Extract lambda parameter section: (fn |(x: i64, y: i64)| body) → "x: i64, y: i64"
+-- Handles both formats: |(params)| and |params|
+fn lambda_extract_params(ast: String) -> String =
+    let pipe1 = lambda_find_pipe(ast, 4);  -- first |
+    let pipe2 = lambda_find_pipe(ast, pipe1 + 1);  -- second |
+    if pipe2 <= pipe1 + 1 then ""  -- no params
+    else
+        let raw = ast.slice(pipe1 + 1, pipe2);
+        -- Strip surrounding parentheses if present
+        strip_param_parens(raw);
+
+-- Strip surrounding parens from "(x: i64)" → "x: i64"
+fn strip_param_parens(s: String) -> String =
+    if s.len() < 2 then s
+    else if s.char_at(0) == 40 and s.char_at(s.len() - 1) == 41 then  -- '(' and ')'
+        s.slice(1, s.len() - 1)
+    else s;
+
+-- Extract parameter name from "name: type" or just "name"
+fn param_extract_name(param: String) -> String =
+    let colon = find_colon_in(param, 0);
+    if colon < 0 then trim_whitespace(param)
+    else trim_whitespace(param.slice(0, colon));
+
+fn find_colon_in(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then 0 - 1
+    else if s.char_at(pos) == 58 then pos  -- ':'
+    else find_colon_in(s, pos + 1);
+
+fn trim_whitespace(s: String) -> String =
+    let start = skip_leading_ws(s, 0);
+    let end = skip_trailing_ws(s, s.len());
+    if start >= end then "" else s.slice(start, end);
+
+fn skip_leading_ws(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then pos
+    else if is_whitespace(s.char_at(pos)) then skip_leading_ws(s, pos + 1)
+    else pos;
+
+fn skip_trailing_ws(s: String, pos: i64) -> i64 =
+    if pos <= 0 then 0
+    else if is_whitespace(s.char_at(pos - 1)) then skip_trailing_ws(s, pos - 1)
+    else pos;
+
+-- Collect parameter names as comma-separated string: "x,y,z"
+fn collect_param_names(params: String) -> String =
+    if params.len() == 0 then ""
+    else collect_param_names_at(params, 0, "");
+
+fn collect_param_names_at(params: String, pos: i64, acc: String) -> String =
+    if pos >= params.len() then acc
+    else
+        let comma = find_comma_at(params, pos);
+        let param = if comma < 0 then params.slice(pos, params.len())
+                    else params.slice(pos, comma);
+        let name = param_extract_name(param);
+        let new_acc = if acc.len() == 0 then name else acc + "," + name;
+        if comma < 0 then new_acc
+        else collect_param_names_at(params, comma + 1, new_acc);
+
+fn find_comma_at(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then 0 - 1
+    else if s.char_at(pos) == 44 then pos  -- ','
+    else find_comma_at(s, pos + 1);
+
+-- Check if name is in comma-separated list
+fn is_in_names(name: String, names: String) -> bool =
+    if names.len() == 0 then false
+    else is_in_names_at(name, names, 0);
+
+fn is_in_names_at(name: String, names: String, pos: i64) -> bool =
+    if pos >= names.len() then false
+    else
+        let comma = find_comma_at(names, pos);
+        let current = if comma < 0 then names.slice(pos, names.len())
+                      else names.slice(pos, comma);
+        if current == name then true
+        else if comma < 0 then false
+        else is_in_names_at(name, names, comma + 1);
+
+-- Collect variable references from expression: "(var <x>)" → "x"
+-- Returns comma-separated list of unique variable names
+fn collect_var_refs(ast: String) -> String =
+    collect_var_refs_at(ast, 0, "");
+
+fn collect_var_refs_at(ast: String, pos: i64, acc: String) -> String =
+    if pos >= ast.len() then acc
+    else
+        -- Look for "(var <" pattern
+        let var_pos = find_var_pattern(ast, pos);
+        if var_pos < 0 then acc
+        else
+            let name_start = var_pos + 6;  -- skip "(var <"
+            let name_end = find_char_in(ast, 62, name_start);  -- '>'
+            if name_end <= name_start then collect_var_refs_at(ast, var_pos + 1, acc)
+            else
+                let name = ast.slice(name_start, name_end);
+                -- Add to acc if not already present
+                let new_acc = if is_in_names(name, acc) then acc
+                              else if acc.len() == 0 then name
+                              else acc + "," + name;
+                collect_var_refs_at(ast, name_end + 1, new_acc);
+
+fn find_var_pattern(ast: String, pos: i64) -> i64 =
+    if pos + 5 >= ast.len() then 0 - 1
+    else if ast.char_at(pos) == 40 and ast.char_at(pos+1) == 118 and
+            ast.char_at(pos+2) == 97 and ast.char_at(pos+3) == 114 and
+            ast.char_at(pos+4) == 32 and ast.char_at(pos+5) == 60 then pos  -- "(var <"
+    else find_var_pattern(ast, pos + 1);
+
+fn find_char_in(s: String, c: i64, pos: i64) -> i64 =
+    if pos >= s.len() then 0 - 1
+    else if s.char_at(pos) == c then pos
+    else find_char_in(s, c, pos + 1);
+
+-- Filter out params from vars to get free variables
+fn filter_free_vars(vars: String, params: String) -> String =
+    if vars.len() == 0 then ""
+    else filter_free_vars_at(vars, params, 0, "");
+
+fn filter_free_vars_at(vars: String, params: String, pos: i64, acc: String) -> String =
+    if pos >= vars.len() then acc
+    else
+        let comma = find_comma_at(vars, pos);
+        let var_name = if comma < 0 then vars.slice(pos, vars.len())
+                       else vars.slice(pos, comma);
+        let new_acc = if is_in_names(var_name, params) then acc
+                      else if acc.len() == 0 then var_name
+                      else acc + "," + var_name;
+        if comma < 0 then new_acc
+        else filter_free_vars_at(vars, params, comma + 1, new_acc);
+
+-- Count comma-separated items
+fn count_names(names: String) -> i64 =
+    if names.len() == 0 then 0
+    else 1 + count_commas_in(names, 0);
+
+fn count_commas_in(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then 0
+    else if s.char_at(pos) == 44 then 1 + count_commas_in(s, pos + 1)
+    else count_commas_in(s, pos + 1);
+
+-- Get name at index in comma-separated list
+fn name_at_index(names: String, idx: i64) -> String =
+    name_at_index_helper(names, 0, 0, idx);
+
+fn name_at_index_helper(names: String, pos: i64, current: i64, target: i64) -> String =
+    if pos >= names.len() then ""
+    else
+        let comma = find_comma_at(names, pos);
+        if current == target then
+            if comma < 0 then names.slice(pos, names.len())
+            else names.slice(pos, comma)
+        else if comma < 0 then ""
+        else name_at_index_helper(names, comma + 1, current + 1, target);
+
+-- Generate Capture MIR instructions
+fn gen_captures(closure_place: String, free_vars: String, count: i64, idx: i64) -> String =
+    if idx >= count then ""
+    else
+        let var_name = name_at_index(free_vars, idx);
+        let capture_text = "  Capture " + closure_place + ", %" + var_name + ", " + int_to_string(idx);
+        let rest = gen_captures(closure_place, free_vars, count, idx + 1);
+        if rest.len() > 0 then capture_text + "|" + rest else capture_text;
+
+-- Lower lambda/closure expression (updated v0.30.99)
+-- Now with free variable analysis and Capture generation
 fn lower_lambda(ast: String, temp: i64, block: i64) -> String =
     let body = lambda_extract_body(ast);
     if body == "" then pack_lower_result(temp, block, "%error", "  ; lambda: empty body")
     else
+        -- Extract parameters and detect free variables
+        let params = lambda_extract_params(ast);
+        let param_names = collect_param_names(params);
+        let all_vars = collect_var_refs(body);
+        let free_vars = filter_free_vars(all_vars, param_names);
+        let capture_count = count_names(free_vars);
+
         -- Create a closure reference with unique ID
         let closure_id = temp;
         let dest = place_temp(temp);
-        -- For simple closures without captures, represent as function pointer
-        let closure_text = "  " + dest + " = CLOSURE:" + int_to_string(closure_id);
+
+        -- Generate closure instruction (with capture count if any)
+        let closure_text = if capture_count == 0 then
+            "  " + dest + " = CLOSURE:" + int_to_string(closure_id)
+        else
+            "  " + dest + " = CLOSURE:" + int_to_string(closure_id) + ":" + int_to_string(capture_count);
+
+        -- Generate Capture instructions for free variables
+        let capture_text = if capture_count == 0 then ""
+                           else gen_captures(dest, free_vars, capture_count, 0);
+
+        -- Combine closure + captures
+        let closure_with_captures = if capture_text.len() > 0 then
+            closure_text + "|" + capture_text
+        else closure_text;
+
         -- Lower body for the closure's inner function
         let body_result = lower_expr(body, temp + 1, block);
         let body_text = unpack_text(body_result);
-        let combined = if body_text.len() > 0 then closure_text + "|" + body_text else closure_text;
+        let combined = if body_text.len() > 0 then closure_with_captures + "|" + body_text else closure_with_captures;
         pack_lower_result(unpack_temp(body_result), unpack_block(body_result), dest, combined);
 
 -- v0.30.36: Lower block expression: (block inner_expr)
@@ -1219,11 +1410,99 @@ fn lower_index(ast: String, temp: i64, block: i64) -> String =
     pack_lower_result(ti + 1, bi, dest, combined);
 
 -- ============================================================================
--- v0.30.63: Method Call Lowering
+-- v0.30.98: TraitCall MIR Generation
 -- ============================================================================
+-- Distinguish built-in methods from trait methods and generate appropriate MIR.
+-- Built-in methods (String/Array) → MethodCall MIR
+-- User-defined trait methods → TraitCall MIR
+
+-- Check if a method is a built-in method (String/Array methods)
+-- Built-in methods are handled by the runtime, not trait dispatch
+fn is_builtin_method(name: String) -> bool =
+    -- String methods
+    if name == "len" then true
+    else if name == "slice" then true
+    else if name == "char_at" then true
+    else if name == "concat" then true
+    else if name == "eq" then true
+    -- Array methods
+    else if name == "get" then true
+    else if name == "set" then true
+    else if name == "push" then true
+    else if name == "pop" then true
+    else if name == "clear" then true
+    else false;
+
+-- Check if method looks like a trait method (non-builtin)
+fn is_trait_method(name: String) -> bool =
+    not is_builtin_method(name);
+
+-- Extract trait name hint from method name (for bootstrap, use method as trait)
+-- In full implementation, this would lookup the actual trait
+fn infer_trait_from_method(method: String) -> String =
+    -- Common trait method patterns
+    if method == "show" then "Display"
+    else if method == "fmt" then "Debug"
+    else if method == "clone" then "Clone"
+    else if method == "cmp" then "Ord"
+    else if method == "hash" then "Hash"
+    else if method == "iter" then "IntoIterator"
+    else if method == "next" then "Iterator"
+    else if method == "drop" then "Drop"
+    else if method == "default" then "Default"
+    else "Trait";  -- Generic fallback
+
+-- Lower trait method call: (method_call receiver <method> args) → TraitCall MIR
+-- MIR format: %dest = TraitCall Trait::method(%recv, %args)
+fn lower_trait_call(ast: String, temp: i64, block: i64) -> String =
+    let receiver_ast = get_child(ast, 0);
+    let method_name = get_method_name(ast);
+    let trait_name = infer_trait_from_method(method_name);
+
+    -- Lower receiver
+    let rr = lower_expr(receiver_ast, temp, block);
+    let tr = unpack_temp(rr);
+    let br = unpack_block(rr);
+    let pr = unpack_result_place(rr);
+    let textr = unpack_text(rr);
+
+    -- Lower arguments
+    let args_result = lower_method_args(ast, 2, tr, br, "");
+    let ta = unpack_temp(args_result);
+    let ba = unpack_block(args_result);
+    let args_str = unpack_result_place(args_result);
+    let texta = unpack_text(args_result);
+
+    let dest = place_temp(ta);
+    -- Generate TraitCall MIR: %dest = TraitCall Trait::method(%recv, %args)
+    let call_text = if args_str.len() == 0 then
+        "  " + dest + " = TraitCall " + trait_name + "::" + method_name + "(" + pr + ")"
+    else
+        "  " + dest + " = TraitCall " + trait_name + "::" + method_name + "(" + pr + ", " + args_str + ")";
+    let combined_recv = if textr.len() > 0 and texta.len() > 0 then textr + "|" + texta
+                        else if textr.len() > 0 then textr
+                        else texta;
+    let combined = if combined_recv.len() > 0 then combined_recv + "|" + call_text else call_text;
+    pack_lower_result(ta + 1, ba, dest, combined);
+
+-- ============================================================================
+-- v0.30.63: Method Call Lowering (updated v0.30.98)
+-- ============================================================================
+-- Now routes to MethodCall for built-in methods, TraitCall for trait methods
 
 -- Lower method call: (method_call receiver <method> arg1 arg2 ...)
 fn lower_method_call(ast: String, temp: i64, block: i64) -> String =
+    let receiver_ast = get_child(ast, 0);
+    let method_name = get_method_name(ast);
+
+    -- Route based on method type
+    if is_trait_method(method_name) then
+        lower_trait_call(ast, temp, block)
+    else
+        lower_method_call_builtin(ast, temp, block);
+
+-- Lower built-in method call: (method_call receiver <method> arg1 arg2 ...) → MethodCall MIR
+fn lower_method_call_builtin(ast: String, temp: i64, block: i64) -> String =
     let receiver_ast = get_child(ast, 0);
     let method_name = get_method_name(ast);
 
@@ -1786,11 +2065,101 @@ fn main() -> i64 =
     let method_node_tests = mcn1 + mcn2;
     let u45 = println(method_node_tests);  -- Should be 2
 
-    -- Test 43: v0.30.63 Method call lowering (2 tests)
-    let mcl1 = test_lower_contains("(method_call (var <x>) <foo>)", "MethodCall %x.foo()");
-    let mcl2 = test_lower_contains("(method_call (var <x>) <bar> (int 1))", "MethodCall %x.bar(");
+    -- Test 43: v0.30.63 Built-in method call lowering (2 tests) - uses MethodCall
+    let mcl1 = test_lower_contains("(method_call (var <x>) <len>)", "MethodCall %x.len()");
+    let mcl2 = test_lower_contains("(method_call (var <x>) <slice> (int 1) (int 5))", "MethodCall %x.slice(");
     let method_lower_tests = mcl1 + mcl2;
     let u46 = println(method_lower_tests);  -- Should be 2
+
+    -- Test 44: v0.30.98 is_builtin_method (6 tests)
+    let bm1 = if is_builtin_method("len") then 1 else 0;
+    let bm2 = if is_builtin_method("slice") then 1 else 0;
+    let bm3 = if is_builtin_method("push") then 1 else 0;
+    let bm4 = if is_builtin_method("show") then 0 else 1;  -- NOT builtin
+    let bm5 = if is_builtin_method("clone") then 0 else 1;  -- NOT builtin
+    let bm6 = if is_builtin_method("fmt") then 0 else 1;  -- NOT builtin
+    let builtin_method_tests = bm1 + bm2 + bm3 + bm4 + bm5 + bm6;
+    let u47 = println(builtin_method_tests);  -- Should be 6
+
+    -- Test 45: v0.30.98 is_trait_method (4 tests)
+    let tm1 = if is_trait_method("show") then 1 else 0;
+    let tm2 = if is_trait_method("clone") then 1 else 0;
+    let tm3 = if is_trait_method("len") then 0 else 1;  -- NOT trait (builtin)
+    let tm4 = if is_trait_method("custom_method") then 1 else 0;
+    let trait_method_tests = tm1 + tm2 + tm3 + tm4;
+    let u48 = println(trait_method_tests);  -- Should be 4
+
+    -- Test 46: v0.30.98 infer_trait_from_method (4 tests)
+    let it1 = if infer_trait_from_method("show") == "Display" then 1 else 0;
+    let it2 = if infer_trait_from_method("clone") == "Clone" then 1 else 0;
+    let it3 = if infer_trait_from_method("fmt") == "Debug" then 1 else 0;
+    let it4 = if infer_trait_from_method("unknown") == "Trait" then 1 else 0;
+    let infer_trait_tests = it1 + it2 + it3 + it4;
+    let u49 = println(infer_trait_tests);  -- Should be 4
+
+    -- Test 47: v0.30.98 TraitCall MIR generation (4 tests)
+    let tc1 = test_lower_contains("(method_call (var <x>) <show>)", "TraitCall Display::show(");
+    let tc2 = test_lower_contains("(method_call (var <x>) <clone>)", "TraitCall Clone::clone(");
+    let tc3 = test_lower_contains("(method_call (var <x>) <show>)", "%x)");
+    let tc4 = test_lower_contains("(method_call (var <x>) <cmp> (var <y>))", "TraitCall Ord::cmp(%x, %y)");
+    let trait_call_tests = tc1 + tc2 + tc3 + tc4;
+    let u50 = println(trait_call_tests);  -- Should be 4
+
+    -- Test 48: v0.30.99 lambda_extract_params (4 tests)
+    -- Uses actual lambda format: (fn |(params)| body)
+    let lep1 = if lambda_extract_params("(fn |(x: i64)| (var <x>))") == "x: i64" then 1 else 0;
+    let lep2 = if lambda_extract_params("(fn |(a: i64, b: i64)| (var <a>))") == "a: i64, b: i64" then 1 else 0;
+    let lep3 = if lambda_extract_params("(fn || (int 42))") == "" then 1 else 0;
+    let lep4 = if lambda_extract_params("(fn |(x: String)| (var <x>))") == "x: String" then 1 else 0;
+    let lambda_params_tests = lep1 + lep2 + lep3 + lep4;
+    let u51 = println(lambda_params_tests);  -- Should be 4
+
+    -- Test 49: v0.30.99 param_extract_name (3 tests)
+    let pen1 = if param_extract_name("x: i64") == "x" then 1 else 0;
+    let pen2 = if param_extract_name("name: String") == "name" then 1 else 0;
+    let pen3 = if param_extract_name("abc: bool") == "abc" then 1 else 0;
+    let param_name_tests = pen1 + pen2 + pen3;
+    let u52 = println(param_name_tests);  -- Should be 3
+
+    -- Test 50: v0.30.99 collect_param_names (3 tests)
+    let cpn1 = if collect_param_names("x: i64") == "x" then 1 else 0;
+    let cpn2 = if collect_param_names("a: i64, b: i64") == "a,b" then 1 else 0;
+    let cpn3 = if collect_param_names("") == "" then 1 else 0;
+    let collect_param_tests = cpn1 + cpn2 + cpn3;
+    let u53 = println(collect_param_tests);  -- Should be 3
+
+    -- Test 51: v0.30.99 count_names (3 tests)
+    let cn1 = if count_names("") == 0 then 1 else 0;
+    let cn2 = if count_names("x") == 1 then 1 else 0;
+    let cn3 = if count_names("a,b,c") == 3 then 1 else 0;
+    let count_names_tests = cn1 + cn2 + cn3;
+    let u54 = println(count_names_tests);  -- Should be 3
+
+    -- Test 52: v0.30.99 name_at_index (3 tests)
+    let nai1 = if name_at_index("x,y,z", 0) == "x" then 1 else 0;
+    let nai2 = if name_at_index("x,y,z", 1) == "y" then 1 else 0;
+    let nai3 = if name_at_index("x,y,z", 2) == "z" then 1 else 0;
+    let name_at_tests = nai1 + nai2 + nai3;
+    let u55 = println(name_at_tests);  -- Should be 3
+
+    -- Test 53: v0.30.99 filter_free_vars (4 tests)
+    let ffv1 = if filter_free_vars("x,y", "x") == "y" then 1 else 0;
+    let ffv2 = if filter_free_vars("a,b,c", "a,c") == "b" then 1 else 0;
+    let ffv3 = if filter_free_vars("x", "x") == "" then 1 else 0;
+    let ffv4 = if filter_free_vars("x,y,z", "") == "x,y,z" then 1 else 0;
+    let filter_free_tests = ffv1 + ffv2 + ffv3 + ffv4;
+    let u56 = println(filter_free_tests);  -- Should be 4
+
+    -- Test 54: v0.30.99 lower_lambda with capture (3 tests)
+    -- Lambda with free variable should generate Capture instruction
+    let llc1 = test_lower_contains("(fn |(x: i64)| (+ (var <x>) (var <y>)))", "Capture");
+    let llc2 = test_lower_contains("(fn |(x: i64)| (+ (var <x>) (var <y>)))", "CLOSURE:");
+    -- Lambda without free variable should NOT generate Capture
+    let llc3_result = lower_expr("(fn |(x: i64)| (var <x>))", 0, 0);
+    let llc3_text = unpack_text(llc3_result);
+    let llc3 = if str_contains(llc3_text, "Capture") then 0 else 1;
+    let lambda_capture_tests = llc1 + llc2 + llc3;
+    let u57 = println(lambda_capture_tests);  -- Should be 3
 
     let u22 = println(888);  -- Separator
 
@@ -1805,8 +2174,11 @@ fn main() -> i64 =
                 break_node_tests + continue_node_tests + break_continue_lower_tests +
                 range_encode_tests + range_lower_tests +
                 array_node_tests + array_lower_tests + index_node_tests + index_lower_tests +
-                method_node_tests + method_lower_tests;
-    let u23 = println(total);  -- Should be 108 (95 + 13 new tests)
+                method_node_tests + method_lower_tests +
+                builtin_method_tests + trait_method_tests + infer_trait_tests + trait_call_tests +
+                lambda_params_tests + param_name_tests + collect_param_tests +
+                count_names_tests + name_at_tests + filter_free_tests + lambda_capture_tests;
+    let u23 = println(total);  -- Should be 149 (126 + 23 new tests)
 
     let u24 = println(999);  -- End marker
 

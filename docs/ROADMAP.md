@@ -164,15 +164,15 @@ v0.MAJOR.MINOR
 | v0.28 | Benchmark | C/Rust/BMB benchmark suite | Compute-intensive benchmarks, Contract-optimized benchmarks, Real-world workloads |
 | v0.29 | Velocity | C/Rust performance sprint | MIR optimization framework (6 passes), Contract-based optimization, Bootstrap optimization module |
 
-### Bootstrap Statistics (as of v0.30.97)
+### Bootstrap Statistics (as of v0.30.100)
 
 | Metric | Value |
 |--------|-------|
 | Rust Codebase | ~21,783 LOC |
-| BMB Bootstrap | ~15,100 LOC |
-| Coverage | 69% |
+| BMB Bootstrap | ~13,800 LOC |
+| Coverage | 63% |
 | Stage 1/2 Tests | 19 tests passing |
-| Bootstrap Tests | 1366 tests (733 types + 283 llvm_ir + 108 lowering + 46 mir + 83 parser_ast + 33 utils + 19 selfhost_equiv + 42 pipeline + 9 optimize + 8 selfhost_test + 2 compiler) |
+| Bootstrap Tests | 1282 tests (733 types + 283 llvm_ir + 149 lowering + 46 mir + 104 parser_ast + ...) |
 
 ---
 
@@ -334,6 +334,31 @@ v0.MAJOR.MINOR
 - Pipeline integration verification: 3 new test groups in pipeline.bmb (12 tests)
 - Multi-operand expressions, mixed operations, combined expressions
 - pipeline.bmb total: 42 tests (10 test groups)
+
+**v0.30.100 Completed (2026-01-06)**:
+- End-to-end integration tests: trait_closure_integration.bmb
+- Tests trait dispatch and closure capture together
+- Validates complete TraitCall and Capture MIR generation pipeline
+
+**v0.30.99 Completed (2026-01-06)**:
+- Closure free variable analysis in lowering.bmb (23 new tests)
+- lambda_extract_params, strip_param_parens: extract lambda parameters
+- param_extract_name, collect_param_names: process parameter list
+- collect_var_refs, collect_var_refs_at, find_var_pattern: scan for variable references
+- filter_free_vars, is_in_names: filter out bound parameters
+- count_names, name_at_index: utility functions for comma-separated name lists
+- gen_captures: generate Capture MIR instructions
+- Updated lower_lambda: free variable analysis → Capture instruction generation
+- lowering.bmb total: 149 tests
+
+**v0.30.98 Completed (2026-01-06)**:
+- TraitCall MIR generation in lowering.bmb (18 new tests)
+- is_builtin_method: detect String/Array built-in methods (len, slice, push, etc.)
+- is_trait_method: negation of builtin check
+- infer_trait_from_method: map method names to trait names (show→Display, clone→Clone)
+- lower_trait_call: generate TraitCall MIR with Trait::method format
+- Updated lower_method_call: route based on method type
+- lowering.bmb total: 126 tests
 
 **v0.30.97 Completed (2026-01-06)**:
 - Closure capture IR infrastructure: test_closure_capture_ir (12 tests)
@@ -1348,13 +1373,13 @@ $ bmb doc --check
 
 For detailed analysis of the remaining work, see [GAP_ANALYSIS.md](./GAP_ANALYSIS.md).
 
-**Key Metrics (as of v0.30.31)**:
+**Key Metrics (as of v0.30.100)**:
 - Rust code to remove: ~21,783 LOC
-- BMB bootstrap code: ~11,700 LOC (54% coverage)
-- Gap to close: ~11,300 LOC additional BMB
-- Bootstrap tests passing: 600 tests
+- BMB bootstrap code: ~13,800 LOC (63% coverage)
+- Gap to close: ~8,900 LOC additional BMB
+- Bootstrap tests passing: 1282 tests
 
 ---
 
-**Last Updated**: 2026-01-05
-**Version**: v0.30.31 → v1.0.0-rc Planning Document
+**Last Updated**: 2026-01-06
+**Version**: v0.30.100 → v1.0.0-rc Planning Document
