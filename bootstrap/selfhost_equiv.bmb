@@ -1,6 +1,6 @@
 -- ============================================================================
 -- BMB Bootstrap Self-Hosting Stage 2: Equivalence Test
--- Version: v0.30.180: Enhanced test suite
+-- Version: v0.30.198: Extended test coverage
 --
 -- This file tests the equivalence between Rust compiler output and
 -- Bootstrap compiler output for the same BMB source patterns.
@@ -339,6 +339,60 @@ fn test_special_chars() -> i64 =
     (if has_pattern("@global_var", "@global", 0) then 1 else 0) +
     (if has_pattern("%local.1", "%local.", 0) then 1 else 0);
 
+-- v0.30.198: Test pattern prefix matching
+fn test_pattern_prefix() -> i64 =
+    (if has_pattern("define i64", "define", 0) then 1 else 0) +
+    (if has_pattern("declare void", "declare", 0) then 1 else 0) +
+    (if has_pattern("entry: block", "entry", 0) then 1 else 0) +
+    (if has_pattern("%_t0 = add", "%_t0", 0) then 1 else 0) +
+    (if has_pattern("@main() {", "@main", 0) then 1 else 0) +
+    (if has_pattern("ret i64 0", "ret", 0) then 1 else 0);
+
+-- v0.30.198: Test pattern suffix matching
+fn test_pattern_suffix() -> i64 =
+    (if has_pattern("ret i64 %0", "%0", 0) then 1 else 0) +
+    (if has_pattern("br label %exit", "%exit", 0) then 1 else 0) +
+    (if has_pattern("add i64 %a, %b", "%b", 0) then 1 else 0) +
+    (if has_pattern("call void @fn()", "()", 0) then 1 else 0) +
+    (if has_pattern("icmp eq i64 %x, 0", ", 0", 0) then 1 else 0) +
+    (if has_pattern("phi i64 [ %a, %bb ]", "]", 0) then 1 else 0);
+
+-- v0.30.198: Test MIR control flow patterns
+fn test_mir_control_flow() -> i64 =
+    (if has_pattern("branch %cond, %then, %else", "branch", 0) then 1 else 0) +
+    (if has_pattern("br merge_0", "br merge", 0) then 1 else 0) +
+    (if has_pattern("jump %target", "jump", 0) then 1 else 0) +
+    (if has_pattern("goto exit_block", "goto", 0) then 1 else 0) +
+    (if has_pattern("switch %val, default", "switch", 0) then 1 else 0) +
+    (if has_pattern("unreachable", "unreachable", 0) then 1 else 0);
+
+-- v0.30.198: Test LLVM control flow patterns
+fn test_llvm_control_flow() -> i64 =
+    (if has_pattern("br i1 %cond, label %t", "br i1", 0) then 1 else 0) +
+    (if has_pattern("br label %next", "br label", 0) then 1 else 0) +
+    (if has_pattern("switch i64 %val, label", "switch i64", 0) then 1 else 0) +
+    (if has_pattern("indirectbr ptr %addr", "indirectbr", 0) then 1 else 0) +
+    (if has_pattern("invoke void @fn()", "invoke", 0) then 1 else 0) +
+    (if has_pattern("resume { ptr, i32 }", "resume", 0) then 1 else 0);
+
+-- v0.30.198: Test LLVM global patterns
+fn test_llvm_global_patterns() -> i64 =
+    (if has_pattern("@.str = private", "@.str", 0) then 1 else 0) +
+    (if has_pattern("@global = constant i64", "constant", 0) then 1 else 0) +
+    (if has_pattern("@data = global [10 x i8]", "global [", 0) then 1 else 0) +
+    (if has_pattern("@alias = alias i64, ptr", "alias", 0) then 1 else 0) +
+    (if has_pattern("@func = external", "external", 0) then 1 else 0) +
+    (if has_pattern("@weak = weak global", "weak", 0) then 1 else 0);
+
+-- v0.30.198: Test pattern overlap detection
+fn test_pattern_overlap() -> i64 =
+    (if has_pattern("add add add", "add add", 0) then 1 else 0) +
+    (if has_pattern("i64 i64 i64", "i64 i64", 0) then 1 else 0) +
+    (if has_pattern("%%%", "%%", 0) then 1 else 0) +
+    (if has_pattern("aaabbb", "aab", 0) then 1 else 0) +
+    (if has_pattern("label label", "label", 0) then 1 else 0) +
+    (if has_pattern("entry:entry:", "entry:", 0) then 1 else 0);
+
 -- ============================================================================
 -- SECTION 7: Main Test Runner
 -- ============================================================================
@@ -396,11 +450,26 @@ fn main() -> i64 =
     let ut19 = test_special_chars();
     let v19 = println(ut19); -- Should be 6
 
+    -- v0.30.198: Extended unit tests (36 new assertions)
+    let ut20 = test_pattern_prefix();
+    let v20 = println(ut20); -- Should be 6
+    let ut21 = test_pattern_suffix();
+    let v21 = println(ut21); -- Should be 6
+    let ut22 = test_mir_control_flow();
+    let v22 = println(ut22); -- Should be 6
+    let ut23 = test_llvm_control_flow();
+    let v23 = println(ut23); -- Should be 6
+    let ut24 = test_llvm_global_patterns();
+    let v24 = println(ut24); -- Should be 6
+    let ut25 = test_pattern_overlap();
+    let v25 = println(ut25); -- Should be 6
+
     let unit_base = ut1 + ut2 + ut3 + ut4 + ut5 + ut6 + ut7;
     let unit_ext = ut8 + ut9 + ut10 + ut11 + ut12 + ut13 + ut14;
     let unit_new = ut15 + ut16 + ut17 + ut18 + ut19;
-    let unit_total = unit_base + unit_ext + unit_new;
-    let v8 = println(unit_total);  -- Should be 97 (29 base + 38 ext + 30 new)
+    let unit_v198 = ut20 + ut21 + ut22 + ut23 + ut24 + ut25;
+    let unit_total = unit_base + unit_ext + unit_new + unit_v198;
+    let v8 = println(unit_total);  -- Should be 133 (29 base + 38 ext + 30 new + 36 v198)
 
     let u1 = println(555);  -- Integration tests marker
 
@@ -436,7 +505,7 @@ fn main() -> i64 =
 
     let total = unit_total + integration;
     let u24 = println(888);  -- Separator
-    let u25 = println(total);  -- Should be 116 (97 unit + 19 integration)
+    let u25 = println(total);  -- Should be 152 (133 unit + 19 integration)
     let u26 = println(999);  -- End marker
 
     total;

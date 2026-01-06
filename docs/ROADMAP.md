@@ -172,7 +172,7 @@ v0.MAJOR.MINOR
 | BMB Bootstrap | ~26,023 LOC |
 | Coverage | 119% |
 | Stage 1/2 Tests | 48 tests passing |
-| Bootstrap Tests | 4,372 tests (746 types + 397 llvm_ir + 393 compiler + 334 mir + 343 pipeline + 324 parser_ast + 303 parser + 244 lowering + 280 selfhost_test + 263 optimize + 227 lexer + 221 parser_test + 181 utils + 116 selfhost_equiv) |
+| Bootstrap Tests | 4,514 tests (746 types + 397 llvm_ir + 393 compiler + 334 mir + 343 pipeline + 324 parser_ast + 303 parser + 244 lowering + 280 selfhost_test + 263 optimize + 263 lexer + 255 parser_test + 217 utils + 152 selfhost_equiv) |
 | Build Mode | Use `--release` for bootstrap tests (debug build stack overflow on large files) |
 | Stack-Limited Files | lowering.bmb (structural depth issue) |
 
@@ -336,6 +336,14 @@ v0.MAJOR.MINOR
 - Pipeline integration verification: 3 new test groups in pipeline.bmb (12 tests)
 - Multi-operand expressions, mixed operations, combined expressions
 - pipeline.bmb total: 42 tests (10 test groups)
+
+**v0.30.198 Completed (2026-01-06)**:
+- Phase 30.1.195-198: Bootstrap test coverage enhancement
+- lexer.bmb: 227 → 263 tests (+36) - token decode, whitespace boundary, ident start, two-char ops tests
+- utils.bmb: 181 → 217 tests (+36) - whitespace, digit, alpha boundaries, token encoding tests
+- parser_test.bmb: 221 → 255 tests (+34) - token constants, bool tokens, find_substring, is_alpha/is_digit tests
+- selfhost_equiv.bmb: 116 → 152 tests (+36) - pattern prefix/suffix, MIR/LLVM control flow, global patterns tests
+- Bootstrap test total: 4,514 tests across 14 files
 
 **v0.30.193 Completed (2026-01-06)**:
 - Phase 30.1.190-193: Bootstrap test coverage enhancement

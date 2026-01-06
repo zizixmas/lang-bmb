@@ -1,4 +1,4 @@
--- BMB Bootstrap Utilities (v0.30.182: Enhanced test suite)
+-- BMB Bootstrap Utilities (v0.30.196: Extended test suite)
 -- Shared utility functions for all bootstrap modules
 -- Consolidates common string operations to reduce code duplication
 --
@@ -832,6 +832,63 @@ fn test_tok_helpers() -> i64 =
     (if tok_is_eof(100) then 1 else 0) +
     (if not tok_is_eof(1000000) then 1 else 0);
 
+-- v0.30.196: Extended whitespace tests
+fn test_whitespace_all() -> i64 =
+    (if is_whitespace(9) then 1 else 0) +    -- tab
+    (if is_whitespace(10) then 1 else 0) +   -- newline
+    (if is_whitespace(13) then 1 else 0) +   -- CR
+    (if is_whitespace(32) then 1 else 0) +   -- space
+    (if not is_whitespace(65) then 1 else 0) +   -- 'A'
+    (if not is_whitespace(0) then 1 else 0);     -- null
+
+-- v0.30.196: Extended digit boundary tests
+fn test_digit_boundary() -> i64 =
+    (if not is_digit(47) then 1 else 0) +    -- '/'
+    (if is_digit(48) then 1 else 0) +        -- '0'
+    (if is_digit(53) then 1 else 0) +        -- '5'
+    (if is_digit(57) then 1 else 0) +        -- '9'
+    (if not is_digit(58) then 1 else 0) +    -- ':'
+    (if not is_digit(97) then 1 else 0);     -- 'a'
+
+-- v0.30.196: Extended alpha boundary tests
+fn test_alpha_boundary() -> i64 =
+    (if not is_alpha(64) then 1 else 0) +    -- '@'
+    (if is_alpha(65) then 1 else 0) +        -- 'A'
+    (if is_alpha(90) then 1 else 0) +        -- 'Z'
+    (if not is_alpha(91) then 1 else 0) +    -- '['
+    (if is_alpha(97) then 1 else 0) +        -- 'a'
+    (if is_alpha(122) then 1 else 0);        -- 'z'
+
+-- v0.30.196: Extended alnum tests
+fn test_alnum_all() -> i64 =
+    (if is_alnum(65) then 1 else 0) +        -- 'A'
+    (if is_alnum(48) then 1 else 0) +        -- '0'
+    (if is_alnum(122) then 1 else 0) +       -- 'z'
+    (if is_alnum(57) then 1 else 0) +        -- '9'
+    (if not is_alnum(32) then 1 else 0) +    -- ' '
+    (if not is_alnum(95) then 1 else 0);     -- '_'
+
+-- v0.30.196: Extended digit conversion tests
+fn test_digit_conv_all() -> i64 =
+    (if digit_to_int(48) == 0 then 1 else 0) +
+    (if digit_to_int(57) == 9 then 1 else 0) +
+    (if digit_char(0) == "0" then 1 else 0) +
+    (if digit_char(9) == "9" then 1 else 0) +
+    (if digit_char(5) == "5" then 1 else 0) +
+    (if digit_to_int(53) == 5 then 1 else 0);
+
+-- v0.30.196: Extended token encoding tests
+fn test_tok_encode_all() -> i64 =
+    let t1 = tok_encode(1, 10);
+    let t2 = tok_encode(5, 100);
+    let t3 = tok_encode(0, 0);
+    (if tok_kind(t1) == 1 then 1 else 0) +
+    (if tok_end(t1) == 10 then 1 else 0) +
+    (if tok_kind(t2) == 5 then 1 else 0) +
+    (if tok_end(t2) == 100 then 1 else 0) +
+    (if tok_kind(t3) == 0 then 1 else 0) +
+    (if tok_end(t3) == 0 then 1 else 0);
+
 -- Run all tests
 fn run_utils_tests() -> i64 =
     let t1 = if test_is_digit() then 1 else 0;
@@ -961,14 +1018,29 @@ fn main() -> i64 =
     let ext21 = test_tok_helpers();
     let v21 = println(ext21);  -- Should be 6
 
+    -- v0.30.196: Extended unit tests (36 new assertions)
+    let ext22 = test_whitespace_all();
+    let v22 = println(ext22);  -- Should be 6
+    let ext23 = test_digit_boundary();
+    let v23 = println(ext23);  -- Should be 6
+    let ext24 = test_alpha_boundary();
+    let v24 = println(ext24);  -- Should be 6
+    let ext25 = test_alnum_all();
+    let v25 = println(ext25);  -- Should be 6
+    let ext26 = test_digit_conv_all();
+    let v26 = println(ext26);  -- Should be 6
+    let ext27 = test_tok_encode_all();
+    let v27 = println(ext27);  -- Should be 6
+
     let extended = ext1 + ext2 + ext3 + ext4 + ext5 + ext6 + ext7 + ext8 + ext9 + ext10 + ext11 + ext12 + ext13 + ext14 + ext15;
     let new_tests = ext16 + ext17 + ext18 + ext19 + ext20 + ext21;
-    let v22 = println(extended);  -- Should be 98
-    let v23 = println(new_tests);  -- Should be 36
+    let v196_tests = ext22 + ext23 + ext24 + ext25 + ext26 + ext27;
+    let v28 = println(extended);  -- Should be 98
+    let v29 = println(new_tests);  -- Should be 36
 
-    let total = passed + extended + new_tests;
+    let total = passed + extended + new_tests + v196_tests;
     let u3 = println(888);  -- Separator marker
-    let u4 = println(total);  -- Should be 181 (47 base + 98 ext + 36 new)
+    let u4 = println(total);  -- Should be 217 (47 base + 98 ext + 36 new + 36 v196)
     let u5 = println(999);  -- End marker
     -- Returns number of passed tests
     total;

@@ -1,4 +1,4 @@
--- BMB Lexer written in BMB (v0.30.181: Enhanced test suite)
+-- BMB Lexer written in BMB (v0.30.195: Extended test suite)
 -- A simple hand-written lexer for the BMB language
 -- Uses functional/recursive style to work within BMB's grammar constraints
 --
@@ -603,6 +603,66 @@ fn test_process_number() -> i64 =
     (if token_len(t2) == 3 then 1 else 0) +
     (if token_len(t3) == 1 then 1 else 0);
 
+-- v0.30.195: Test token encoding/decoding
+fn test_token_decode_ext() -> i64 =
+    let t1 = 100000002;  -- kind=100, start=0, len=2
+    let t2 = 200005003;  -- kind=200, start=5, len=3
+    let t3 = 300010001;  -- kind=300, start=10, len=1
+    (if token_kind(t1) == 100 then 1 else 0) +
+    (if token_start(t1) == 0 then 1 else 0) +
+    (if token_len(t1) == 2 then 1 else 0) +
+    (if token_kind(t2) == 200 then 1 else 0) +
+    (if token_start(t2) == 5 then 1 else 0) +
+    (if token_len(t2) == 3 then 1 else 0);
+
+-- v0.30.195: Test whitespace boundary cases
+fn test_whitespace_boundary() -> i64 =
+    (if is_whitespace(8) then 0 else 1) +    -- before tab
+    (if is_whitespace(9) then 1 else 0) +    -- tab
+    (if is_whitespace(10) then 1 else 0) +   -- newline
+    (if is_whitespace(11) then 0 else 1) +   -- after newline
+    (if is_whitespace(13) then 1 else 0) +   -- CR
+    (if is_whitespace(32) then 1 else 0);    -- space
+
+-- v0.30.195: Test is_ident_start extended
+fn test_ident_start_ext() -> i64 =
+    (if is_ident_start(65) then 1 else 0) +    -- 'A'
+    (if is_ident_start(90) then 1 else 0) +    -- 'Z'
+    (if is_ident_start(97) then 1 else 0) +    -- 'a'
+    (if is_ident_start(122) then 1 else 0) +   -- 'z'
+    (if is_ident_start(95) then 1 else 0) +    -- '_'
+    (if not is_ident_start(48) then 1 else 0); -- '0' (not valid)
+
+-- v0.30.195: Test is_alnum_or_underscore extended
+fn test_alnum_underscore_ext() -> i64 =
+    (if is_alnum_or_underscore(65) then 1 else 0) +   -- 'A'
+    (if is_alnum_or_underscore(48) then 1 else 0) +   -- '0'
+    (if is_alnum_or_underscore(95) then 1 else 0) +   -- '_'
+    (if is_alnum_or_underscore(57) then 1 else 0) +   -- '9'
+    (if not is_alnum_or_underscore(64) then 1 else 0) + -- '@'
+    (if not is_alnum_or_underscore(32) then 1 else 0); -- ' '
+
+-- v0.30.195: Test two-char operators extended
+fn test_two_char_ops_ext() -> i64 =
+    (if check_two_char("->", 0) == 3212 then 1 else 0) +  -- ->
+    (if check_two_char("==", 0) == 4102 then 1 else 0) +  -- ==
+    (if check_two_char("!=", 0) == 4112 then 1 else 0) +  -- !=
+    (if check_two_char("<=", 0) == 4122 then 1 else 0) +  -- <=
+    (if check_two_char(">=", 0) == 4132 then 1 else 0) +  -- >=
+    (if check_two_char("::", 0) == 3202 then 1 else 0);   -- ::
+
+-- v0.30.195: Test token encoding completeness
+fn test_token_encoding_ext() -> i64 =
+    let t1 = 999000001;  -- kind=999, start=0, len=1
+    let t2 = 100099005;  -- kind=100, start=99, len=5
+    let t3 = 501000010; -- kind=501, start=0 (overflow test)
+    (if token_kind(t1) == 999 then 1 else 0) +
+    (if token_start(t1) == 0 then 1 else 0) +
+    (if token_start(t2) == 99 then 1 else 0) +
+    (if token_len(t2) == 5 then 1 else 0) +
+    (if token_len(t1) == 1 then 1 else 0) +
+    (if token_kind(t2) == 100 then 1 else 0);
+
 -- Tokenize and print, returning count
 fn tok_step(s: String, pos: i64, count: i64) -> i64 =
     let tok = next_token(s, pos);
@@ -696,11 +756,26 @@ fn main() -> i64 =
     let t34 = test_process_number();
     let u35 = println(t34);  -- Should be 6
 
-    let u36 = println(888);  -- End marker
+    -- v0.30.195: Extended unit tests (36 new assertions)
+    let t35 = test_token_decode_ext();
+    let u36 = println(t35);  -- Should be 6
+    let t36 = test_whitespace_boundary();
+    let u37 = println(t36);  -- Should be 6
+    let t37 = test_ident_start_ext();
+    let u38 = println(t37);  -- Should be 6
+    let t38 = test_alnum_underscore_ext();
+    let u39 = println(t38);  -- Should be 6
+    let t39 = test_two_char_ops_ext();
+    let u40 = println(t39);  -- Should be 6
+    let t40 = test_token_encoding_ext();
+    let u41 = println(t40);  -- Should be 6
+
+    let u42 = println(888);  -- End marker
     let base_total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18;
     let ext_total = t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28;
     let new_total = t29 + t30 + t31 + t32 + t33 + t34;
-    let total = base_total + ext_total + new_total;
-    let u37 = println(total);  -- Should be 227 (127 base + 64 ext + 36 new)
-    let u38 = println(999);  -- Final marker
+    let v195_total = t35 + t36 + t37 + t38 + t39 + t40;
+    let total = base_total + ext_total + new_total + v195_total;
+    let u43 = println(total);  -- Should be 263 (127 base + 64 ext + 36 new + 36 v195)
+    let u44 = println(999);  -- Final marker
     0;

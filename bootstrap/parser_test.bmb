@@ -1,4 +1,4 @@
--- BMB Parser Comprehensive Test (v0.30.183: Enhanced test suite)
+-- BMB Parser Comprehensive Test (v0.30.197: Extended test suite)
 -- Tests parser_ast.bmb with complex real-world patterns
 --
 -- Test Categories:
@@ -815,6 +815,60 @@ fn test_pack_unpack_edge() -> i64 =
     (if unpack_pos(r3) == 1 then 1 else 0) +
     (if unpack_ast(r3) == "" then 1 else 0);
 
+-- v0.30.197: Extended token constant tests
+fn test_token_constants() -> i64 =
+    (if TK_FN() == 100 then 1 else 0) +
+    (if TK_LET() == 101 then 1 else 0) +
+    (if TK_IF() == 102 then 1 else 0) +
+    (if TK_THEN() == 103 then 1 else 0) +
+    (if TK_ELSE() == 104 then 1 else 0) +
+    (if TK_MUT() == 117 then 1 else 0);
+
+-- v0.30.197: Extended boolean token tests
+fn test_bool_tokens() -> i64 =
+    (if TK_TRUE() == 105 then 1 else 0) +
+    (if TK_FALSE() == 106 then 1 else 0) +
+    (if TK_AND() == 107 then 1 else 0) +
+    (if TK_OR() == 108 then 1 else 0) +
+    (if TK_NOT() == 109 then 1 else 0) +
+    (if TK_PRE() == 110 then 1 else 0);
+
+-- v0.30.197: Extended skip_ws tests
+fn test_skip_ws_positions() -> i64 =
+    (if skip_ws("abc", 0) == 0 then 1 else 0) +
+    (if skip_ws("   abc", 0) == 3 then 1 else 0) +
+    (if skip_ws("", 0) == 0 then 1 else 0) +
+    (if skip_ws("x", 0) == 0 then 1 else 0) +
+    (if skip_ws("   ", 0) == 3 then 1 else 0) +
+    (if skip_ws("a  b", 1) == 3 then 1 else 0);
+
+-- v0.30.197: Extended find_substring tests
+fn test_find_substring_positions() -> i64 =
+    (if find_substring("abcdef", "cd", 0) == 2 then 1 else 0) +
+    (if find_substring("hello", "ll", 0) == 2 then 1 else 0) +
+    (if find_substring("abc", "xyz", 0) == 0 - 1 then 1 else 0) +
+    (if find_substring("hello", "he", 0) == 0 then 1 else 0) +
+    (if find_substring("", "a", 0) == 0 - 1 then 1 else 0) +
+    (if find_substring("abc", "abc", 0) == 0 then 1 else 0);
+
+-- v0.30.197: Extended is_alpha tests
+fn test_is_alpha_all() -> i64 =
+    (if is_alpha(65) then 1 else 0) +    -- 'A'
+    (if is_alpha(90) then 1 else 0) +    -- 'Z'
+    (if is_alpha(97) then 1 else 0) +    -- 'a'
+    (if is_alpha(122) then 1 else 0) +   -- 'z'
+    (if not is_alpha(64) then 1 else 0) +  -- '@'
+    (if not is_alpha(48) then 1 else 0);   -- '0'
+
+-- v0.30.197: Extended is_digit tests
+fn test_is_digit_all() -> i64 =
+    (if is_digit(48) then 1 else 0) +   -- '0'
+    (if is_digit(57) then 1 else 0) +   -- '9'
+    (if is_digit(53) then 1 else 0) +   -- '5'
+    (if not is_digit(47) then 1 else 0) +  -- '/'
+    (if not is_digit(58) then 1 else 0) +  -- ':'
+    (if not is_digit(97) then 1 else 0);   -- 'a'
+
 -- ============================================================
 -- Integration Test Cases
 -- ============================================================
@@ -1031,11 +1085,26 @@ fn main() -> i64 =
     let ut32 = test_pack_unpack_edge();
     let v32 = println(ut32); -- Should be 6
 
+    -- v0.30.197: Extended unit tests (36 new assertions)
+    let ut33 = test_token_constants();
+    let v33 = println(ut33); -- Should be 6
+    let ut34 = test_bool_tokens();
+    let v34 = println(ut34); -- Should be 6
+    let ut35 = test_skip_ws_positions();
+    let v35 = println(ut35); -- Should be 6
+    let ut36 = test_find_substring_positions();
+    let v36 = println(ut36); -- Should be 6
+    let ut37 = test_is_alpha_all();
+    let v37 = println(ut37); -- Should be 6
+    let ut38 = test_is_digit_all();
+    let v38 = println(ut38); -- Should be 6
+
     let unit_base = ut1 + ut2 + ut3 + ut4 + ut5 + ut6 + ut7 + ut8 + ut9 + ut10 + ut11 + ut12;
     let unit_ext = ut13 + ut14 + ut15 + ut16 + ut17 + ut18 + ut19 + ut20 + ut21 + ut22 + ut23 + ut24 + ut25 + ut26;
     let unit_new = ut27 + ut28 + ut29 + ut30 + ut31 + ut32;
-    let unit_total = unit_base + unit_ext + unit_new;
-    let v13 = println(unit_total);  -- Should be 206 (84 base + 86 extended + 36 new)
+    let unit_v197 = ut33 + ut34 + ut35 + ut36 + ut37 + ut38;
+    let unit_total = unit_base + unit_ext + unit_new + unit_v197;
+    let v13 = println(unit_total);  -- Should be 242 (84 base + 86 extended + 36 new + 36 v197)
 
     let u1 = println(555);  -- Integration tests marker
 
@@ -1061,7 +1130,7 @@ fn main() -> i64 =
     let u2 = println(888);  -- End marker
 
     let total = unit_total + integration;
-    let v15 = println(total);  -- Should be 221 (206 unit + 15 integration)
+    let v15 = println(total);  -- Should be 257 (242 unit + 15 integration)
 
     let u3 = println(999);  -- Final marker
 
