@@ -440,6 +440,35 @@ fn test_copy_table() -> i64 =
     let v2 = copy_table_get(t3, "%x");
     if v1 == "%b" and v2 == "%y" then 1 else 0;
 
+-- v0.30.130: Optimization passes edge cases (6 tests)
+fn test_opt_edge_cases() -> i64 =
+    -- Test 1: Subtraction folding (10 - 3 = 7)
+    let r1 = eval_binop("-", 10, 3);
+    let p1 = if r1 == 7 then 1 else 0;
+
+    -- Test 2: Multiplication folding (6 * 7 = 42)
+    let r2 = eval_binop("*", 6, 7);
+    let p2 = if r2 == 42 then 1 else 0;
+
+    -- Test 3: Division folding (100 / 5 = 20)
+    let r3 = eval_binop("/", 100, 5);
+    let p3 = if r3 == 20 then 1 else 0;
+
+    -- Test 4: Modulo folding (17 % 5 = 2)
+    let r4 = eval_binop("%", 17, 5);
+    let p4 = if r4 == 2 then 1 else 0;
+
+    -- Test 5: Statistics format
+    let stats = make_stats(3, 1, 2, 0);
+    let p5 = if find_pattern(stats, "const_fold:3", 0) >= 0 then 1 else 0;
+
+    -- Test 6: No optimization level 0
+    let mir = "  %_t0 = const I:5";
+    let opt = optimize_mir(mir, 0);
+    let p6 = if opt == mir then 1 else 0;
+
+    p1 + p2 + p3 + p4 + p5 + p6;
+
 fn main() -> i64 =
     let u1 = println(777);
     let t1 = println(test_const_table());
@@ -451,10 +480,12 @@ fn main() -> i64 =
     let t7 = println(test_is_checks());
     let t8 = println(test_optimize_mir());
     let t9 = println(test_copy_table());
+    let t10 = println(test_opt_edge_cases());
     let u2 = println(888);
     let total = test_const_table() + test_extract_dest() + test_extract_const() +
                 test_extract_binop() + test_eval_binop() + test_const_folding() +
-                test_is_checks() + test_optimize_mir() + test_copy_table();
+                test_is_checks() + test_optimize_mir() + test_copy_table() +
+                test_opt_edge_cases();
     let u3 = println(total);
     let u4 = println(999);
     0;

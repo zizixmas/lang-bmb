@@ -506,6 +506,31 @@ fn test_example_functions() -> i64 =
 
     p1 + p2;
 
+-- v0.30.129: MIR encoding edge cases (6 tests)
+fn test_encoding_edge_cases() -> i64 =
+    -- Test 1: Unary NOT encoding
+    let u1 = mir_text_unary("%n", unop_not(), "%b");
+    let p1 = if u1 == "  %n = not %b" then 1 else 0;
+
+    -- Test 2: All comparison operators
+    let cmp_eq = if binop_symbol(binop_eq()) == "==" then 1 else 0;
+    let cmp_lt = if binop_symbol(binop_lt()) == "<" then 1 else 0;
+
+    -- Test 3: Large temp numbers
+    let p3 = if place_temp(999) == "%_t999" then 1 else 0;
+
+    -- Test 4: Empty call with no args
+    let call1 = mir_text_call("%r", "noop", "");
+    let p4 = if call1 == "  %r = call noop()" then 1 else 0;
+
+    -- Test 5: Terminator kind detection
+    let p5 = if is_terminator(10) and is_terminator(11) and is_terminator(12) then 1 else 0;
+
+    -- Test 6: Non-terminator kind
+    let p6 = if is_terminator(1) then 0 else 1;
+
+    p1 + cmp_eq + cmp_lt + p3 + p4 + p5 + p6;
+
 -- ============================================================================
 -- Main Test Runner
 -- ============================================================================
@@ -543,10 +568,13 @@ fn main() -> i64 =
     let t10 = test_example_functions();
     let u10 = println(t10);
 
-    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10;
+    let t11 = test_encoding_edge_cases();
+    let u11 = println(t11);
 
-    let u11 = println(888);
-    let u12 = println(total);
-    let u13 = println(999);
+    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11;
+
+    let u12 = println(888);
+    let u13 = println(total);
+    let u14 = println(999);
 
     total;

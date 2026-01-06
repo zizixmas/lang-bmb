@@ -1,8 +1,8 @@
 # BMB Self-Hosting Gap Analysis
 
-**Version**: v0.30.128
+**Version**: v0.30.130
 **Date**: 2026-01-06
-**Status**: Ready for Self-Hosting Completion (pipeline + LLVM IR tests complete)
+**Status**: Ready for Self-Hosting Completion (MIR/Optimize tests enhanced)
 
 ## Executive Summary
 
@@ -71,10 +71,10 @@ This document provides a comprehensive analysis of the requirements for BMB v0.3
 | parser_test.bmb | 25KB | 641 | Complete | 15 categories |
 | types.bmb | 310KB | 8,210 | Complete | 733 tests (159 test functions) |
 | parser.bmb | 22KB | 605 | Complete | Syntax validation |
-| mir.bmb | 20KB | 552 | Complete | 46 tests |
+| mir.bmb | 20KB | 552 | Complete | 53 tests (v0.30.129: encoding edge cases) |
 | selfhost_test.bmb | 23KB | 536 | Complete | 8 tests |
 | utils.bmb | 21KB | 521 | Complete | 33 tests |
-| optimize.bmb | 19KB | 460 | Complete | 9 tests |
+| optimize.bmb | 19KB | 492 | Complete | 15 tests (v0.30.130: optimization edge cases) |
 | selfhost_equiv.bmb | 9KB | 251 | Complete | 19 tests |
 | lexer.bmb | 8KB | 224 | Complete | Tokenization |
 
@@ -342,11 +342,11 @@ $ diff stage2/bmb stage3/bmb
 
 v0.30 "Pure" represents the culmination of the BMB self-hosting journey. With Stage 1/2 verification complete and the bootstrap covering the full compilation pipeline, the remaining work is substantial but achievable within the 2026 Q4 timeline.
 
-**Key Metrics** (as of v0.30.128):
+**Key Metrics** (as of v0.30.130):
 - Rust code to remove: ~21,783 LOC
 - BMB bootstrap code: ~14,800 LOC (68% coverage)
 - Gap to close: ~8,000 LOC additional BMB
-- Bootstrap tests: 1,388 tests (733 types + 355 llvm_ir + 244 lowering + 56 pipeline + ...)
+- Bootstrap tests: 1,401 tests (733 types + 355 llvm_ir + 244 lowering + 56 pipeline + 53 mir + 15 optimize + ...)
 - Estimated effort: 6-9 months
 
 ---

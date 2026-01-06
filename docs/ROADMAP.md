@@ -164,15 +164,16 @@ v0.MAJOR.MINOR
 | v0.28 | Benchmark | C/Rust/BMB benchmark suite | Compute-intensive benchmarks, Contract-optimized benchmarks, Real-world workloads |
 | v0.29 | Velocity | C/Rust performance sprint | MIR optimization framework (6 passes), Contract-based optimization, Bootstrap optimization module |
 
-### Bootstrap Statistics (as of v0.30.122)
+### Bootstrap Statistics (as of v0.30.130)
 
 | Metric | Value |
 |--------|-------|
 | Rust Codebase | ~21,783 LOC |
-| BMB Bootstrap | ~14,200 LOC |
-| Coverage | 66% |
+| BMB Bootstrap | ~14,800 LOC |
+| Coverage | 68% |
 | Stage 1/2 Tests | 19 tests passing |
-| Bootstrap Tests | 1412 tests (733 types + 301 llvm_ir + 236 lowering + 46 mir + 104 parser_ast + ...) |
+| Bootstrap Tests | 1,401 tests (733 types + 355 llvm_ir + 244 lowering + 56 pipeline + 53 mir + 15 optimize + 104 parser_ast + ...) |
+| Stack-Limited Files | lowering.bmb, pipeline.bmb, llvm_ir.bmb, types.bmb |
 
 ---
 
@@ -334,6 +335,18 @@ v0.MAJOR.MINOR
 - Pipeline integration verification: 3 new test groups in pipeline.bmb (12 tests)
 - Multi-operand expressions, mixed operations, combined expressions
 - pipeline.bmb total: 42 tests (10 test groups)
+
+**v0.30.130 Completed (2026-01-06)**:
+- MIR optimization edge case tests in optimize.bmb (6 tests)
+- test_opt_edge_cases: subtraction/multiplication/division/modulo folding, statistics format, no-opt level 0
+- optimize.bmb: 15 tests (10 test groups)
+- Note: pipeline.bmb and llvm_ir.bmb at stack limit - cannot add more tests
+- Total bootstrap tests: 1,401
+
+**v0.30.129 Completed (2026-01-06)**:
+- MIR encoding edge case tests in mir.bmb (7 tests)
+- test_encoding_edge_cases: unary NOT, comparison operators, large temps, empty call, terminator detection
+- mir.bmb: 53 tests (11 test groups)
 
 **v0.30.128 Completed (2026-01-06)**:
 - Function boundary IR tests in llvm_ir.bmb (6 tests)
@@ -1545,14 +1558,14 @@ $ bmb doc --check
 
 For detailed analysis of the remaining work, see [GAP_ANALYSIS.md](./GAP_ANALYSIS.md).
 
-**Key Metrics (as of v0.30.128)**:
+**Key Metrics (as of v0.30.130)**:
 - Rust code to remove: ~21,783 LOC
 - BMB bootstrap code: ~14,800 LOC (68% coverage)
 - Gap to close: ~8,000 LOC additional BMB
-- Bootstrap tests: 1,388 tests passing
+- Bootstrap tests: 1,401 tests passing
 - Note: lowering.bmb at stack limit (244 tests max)
 
 ---
 
 **Last Updated**: 2026-01-06
-**Version**: v0.30.128 → v1.0.0-rc Planning Document
+**Version**: v0.30.130 → v1.0.0-rc Planning Document
