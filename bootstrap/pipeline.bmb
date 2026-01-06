@@ -804,8 +804,25 @@ fn main() -> i64 =
     let t10 = cb1 + cb2 + cb3 + cb4;
     let u10a = println(t10);
 
+    -- v0.30.118: Test 11: Bootstrap-style function parsing (4 tests)
+    let bs1 = test_parse("fn len(s: String) -> i64 = 0;", "(fn <len>");
+    let bs2 = test_parse("fn len(s: String) -> i64 = 0;", "(param <s> String)");
+    let bs3 = test_parse("fn helper() -> String = x;", "(fn <helper>");
+    let bs4 = test_parse("fn add(a: i64, b: i64) -> i64 = a + b;", "(param <a>");
+    let t11 = bs1 + bs2 + bs3 + bs4;
+    let u11 = println(t11);
+
+    -- v0.30.118: Test 12: Bootstrap-style complex expressions (4 tests)
+    let lt1 = test_pipeline("a + b + c + d + e", "+ %_t2, %e");
+    let lt2 = test_pipeline("x * y - z", "- %_t0, %z");
+    let lt3 = test_pipeline("not not not a", "not %_t1");
+    -- Simple and test: a and b and c -> (a and b) and c
+    let lt4 = test_pipeline("a and b and c", "and %_t0, %c");
+    let t12 = lt1 + lt2 + lt3 + lt4;
+    let u12 = println(t12);
+
     let u8 = println(888);
-    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10;
+    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12;
     let u9 = println(total);
     let u10 = println(999);
 

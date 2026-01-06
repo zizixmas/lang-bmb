@@ -2921,6 +2921,32 @@ fn test_full_mir_pipeline() -> i64 =
 
     t1 + t2 + t3 + t4 + t5 + t6;
 
+-- v0.30.117: Test method call chaining IR generation
+fn test_method_chaining() -> i64 =
+    -- Test 1: First method in chain (slice)
+    let m1 = gen_instr_method_call("  %_t0 = MethodCall %s.slice(%a, %b)");
+    let t1 = if has_pattern(m1, "@bmb_string_slice", 0) then 1 else 0;
+
+    -- Test 2: Chained method uses previous result (len on slice result)
+    let m2 = gen_instr_method_call("  %_t1 = MethodCall %_t0.len()");
+    let t2 = if has_pattern(m2, "@bmb_string_len", 0) then 1 else 0;
+
+    -- Test 3: Result register flows correctly
+    let t3 = if has_pattern(m2, "%_t1 = call", 0) then 1 else 0;
+
+    -- Test 4: Chained concat preserves receiver
+    let m3 = gen_instr_method_call("  %_t2 = MethodCall %_t1.concat(%_t0)");
+    let t4 = if has_pattern(m3, "@bmb_string_concat", 0) then 1 else 0;
+
+    -- Test 5: Triple chain simulation (char_at on slice result)
+    let m4 = gen_instr_method_call("  %_t3 = MethodCall %_t2.char_at(%idx)");
+    let t5 = if has_pattern(m4, "getelementptr", 0) then 1 else 0;
+
+    -- Test 6: Method dispatch maintains type consistency
+    let t6 = if has_pattern(m1, "i8*", 0) and has_pattern(m2, "i64", 0) then 1 else 0;
+
+    t1 + t2 + t3 + t4 + t5 + t6;
+
 fn main() -> i64 =
     let u0 = println(777);
     let r1 = test_type_mapping();
@@ -3071,8 +3097,11 @@ fn main() -> i64 =
     -- v0.30.114 full MIR pipeline integration tests
     let r60 = test_full_mir_pipeline();
     let u60 = println(r60);
+    -- v0.30.117 method call chaining tests
+    let r61 = test_method_chaining();
+    let u61 = println(r61);
     let u_end = println(888);
-    let total = r1 + r2 + r3 + r4 + r5 + r6 + r7 + r8 + r9 + r10 + r11 + r12 + r13 + r14 + r15 + r16 + r17 + r18 + r19 + r20 + r21 + r22 + r23 + r24 + r25 + r26 + r27 + r28 + r29 + r30 + r31 + r32 + r33 + r34 + r35 + r36 + r37 + r38 + r39 + r40 + r41 + r42 + r43 + r44 + r45 + r46 + r47 + r48 + r49 + r50 + r51 + r52 + r53 + r54 + r55 + r56 + r57 + r58 + r59 + r60;
+    let total = r1 + r2 + r3 + r4 + r5 + r6 + r7 + r8 + r9 + r10 + r11 + r12 + r13 + r14 + r15 + r16 + r17 + r18 + r19 + r20 + r21 + r22 + r23 + r24 + r25 + r26 + r27 + r28 + r29 + r30 + r31 + r32 + r33 + r34 + r35 + r36 + r37 + r38 + r39 + r40 + r41 + r42 + r43 + r44 + r45 + r46 + r47 + r48 + r49 + r50 + r51 + r52 + r53 + r54 + r55 + r56 + r57 + r58 + r59 + r60 + r61;
     let u_tot = println(total);
     let u_fin = println(999);
     total;

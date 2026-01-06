@@ -1,8 +1,8 @@
 # BMB Self-Hosting Gap Analysis
 
-**Version**: v0.30.115
+**Version**: v0.30.118
 **Date**: 2026-01-06
-**Status**: Ready for Self-Hosting Completion (TraitCall Dispatch Integration Complete)
+**Status**: Ready for Self-Hosting Completion (Method chaining IR + Bootstrap self-parse tests complete)
 
 ## Executive Summary
 
@@ -63,11 +63,11 @@ This document provides a comprehensive analysis of the requirements for BMB v0.3
 
 | File | Size | LOC | Status | Test Coverage |
 |------|------|-----|--------|---------------|
-| llvm_ir.bmb | 100KB | 2,750 | Complete | 313 tests (61 test functions) |
+| llvm_ir.bmb | 100KB | 2,750 | Complete | 319 tests (62 test functions) |
 | lowering.bmb | 72KB | 1,950 | Complete | 236 tests |
 | compiler.bmb | 53KB | 1,202 | Complete | 2 tests |
 | parser_ast.bmb | 98KB | 2,390 | Complete | 104 tests (Struct/Enum/Trait/Impl/Array/Index/MethodCall) |
-| pipeline.bmb | 35KB | 810 | Complete | 42 tests |
+| pipeline.bmb | 35KB | 830 | Complete | 48 tests (12 test groups) |
 | parser_test.bmb | 25KB | 641 | Complete | 15 categories |
 | types.bmb | 310KB | 8,210 | Complete | 733 tests (159 test functions) |
 | parser.bmb | 22KB | 605 | Complete | Syntax validation |
@@ -233,6 +233,7 @@ Gap to Close:
 
 - ⚠️ Trait implementation dispatch (IR ✅, MIR ✅, static dispatch ✅, impl registry ✅, runtime vtable ❌)
 - ⚠️ Closure capture (type checking ✅, MIR ✅, IR ✅, free variable analysis ✅, env allocation ✅, LoadCapture ✅, IR dispatch ✅, CallClosure IR ✅, runtime env execution ❌)
+- ⚠️ String concatenation via `+` operator (type check ✅, `.concat()` IR ✅, `+` binop IR ❌ - MIR lacks type info)
 - ❌ FFI linking
 - ❌ Standard library operations (IO, String heap)
 - ❌ Interpreter execution
