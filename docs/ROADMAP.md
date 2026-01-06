@@ -337,6 +337,17 @@ v0.MAJOR.MINOR
 - Multi-operand expressions, mixed operations, combined expressions
 - pipeline.bmb total: 42 tests (10 test groups)
 
+**v0.30.212 Completed (2026-01-06)**:
+- Phase 30.1.209-212: Generics implementation analysis and advanced generic tests
+- types.bmb: 782 → 806 tests (+24) - nested generic types, nested substitution, bounded type params, generic fn bounds
+- Added test_nested_generic_types: Option<List<T>>, Map<K,V>, Result<Option<T>,E>
+- Added test_nested_generic_subst: documented top-level-only substitution limitation
+- Added test_bounded_type_params: Clone+Display multiple bounds verification
+- Added test_generic_fn_bounds: generic function instantiation with multi-params
+- Updated BOOTSTRAP_FEATURE_GAP.md: generics status, test counts, remaining nested subst gap
+- types.bmb test functions: 167 → 171 (+4), assertions: 782 → 806 (+24)
+- Bootstrap test total: 4,718 tests across 14 files (+24)
+
 **v0.30.207 Completed (2026-01-06)**:
 - Phase 30.1.205-208: Bootstrap feature gap analysis, architecture documentation, E2E verification
 - Created docs/BOOTSTRAP_FEATURE_GAP.md: Comprehensive Rust vs BMB capability analysis

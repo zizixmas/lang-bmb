@@ -1,12 +1,12 @@
 # Bootstrap Feature Gap Analysis
 
-> Version: v0.30.205
+> Version: v0.30.212
 > Date: 2025-01-06
 > Purpose: Document gaps between Rust compiler and BMB bootstrap implementation
 
 ## Executive Summary
 
-The BMB bootstrap currently implements **core compilation pipeline** (lexer → parser → type checker → MIR → LLVM IR) with **902 test functions** across 14 files. Key gaps exist in **trait dispatch** and **advanced verification** components.
+The BMB bootstrap currently implements **core compilation pipeline** (lexer → parser → type checker → MIR → LLVM IR) with **906 test functions** across 14 files. Key gaps exist in **nested generic substitution** and **advanced verification** components.
 
 ## Module Comparison Matrix
 
@@ -15,7 +15,7 @@ The BMB bootstrap currently implements **core compilation pipeline** (lexer → 
 | Lexer | `lexer/mod.rs`, `lexer/token.rs` | `lexer.bmb` | ✅ Complete | 40 |
 | Parser | `parser/mod.rs` | `parser.bmb`, `parser_ast.bmb`, `parser_test.bmb` | ✅ Complete | 216 |
 | AST Types | `ast/*.rs` | `parser_ast.bmb` | ✅ Partial | (included above) |
-| Type Checker | `types/mod.rs` | `types.bmb` | ⚠️ Basic Generics | 167 |
+| Type Checker | `types/mod.rs` | `types.bmb` | ✅ Generics (v0.30.211) | 171 |
 | MIR | `mir/mod.rs` | `mir.bmb` | ✅ Complete | 59 |
 | Lowering | `mir/lower.rs` | `lowering.bmb` | ✅ Complete | 4 (stack limited) |
 | Optimizer | `mir/optimize.rs` | `optimize.bmb` | ✅ Complete | 56 |
@@ -34,7 +34,7 @@ The BMB bootstrap currently implements **core compilation pipeline** (lexer → 
 | Utils | - | `utils.bmb` | ✅ Complete | 74 |
 | Self-host Tests | - | `selfhost_test.bmb`, `selfhost_equiv.bmb` | ✅ Complete | 95 |
 
-**Total Bootstrap Tests: 902**
+**Total Bootstrap Tests: 906**
 
 ## Priority Feature Gaps
 
@@ -74,7 +74,7 @@ impls: Vec<ImplInfo>,
 4. Add impl block registration and lookup
 
 #### 2. Complete Generics Type Checker
-**Status**: Partially Complete (ROADMAP 30.1.1)
+**Status**: Mostly Complete (ROADMAP 30.1.1, v0.30.211)
 
 **Rust Implementation** (`types/mod.rs`):
 ```rust
@@ -86,16 +86,20 @@ fn infer_type_args(...) -> Result<Vec<Type>, TypeError>
 fn substitute_type(...) -> Type
 ```
 
-**Bootstrap Gap** (`types.bmb`):
+**Bootstrap Implementation** (`types.bmb` - 171 tests, 806 assertions):
 - Type parameter tracking ✅ (v0.30.3-v0.30.12)
-- Generic type application encoding ✅
-- Type argument inference ⚠️ (basic only)
-- Full substitution ⚠️ (partial)
+- Generic type application encoding ✅ (Vec<T>, Option<T>, Map<K,V>)
+- Type substitution ✅ (single/multi params)
+- Type argument inference ✅ (basic patterns)
+- Generic struct/enum/fn instantiation ✅
+- Trait bounds checking ✅ (type_satisfies_bounds)
+- Nested generic types ✅ (packing/unpacking)
+- Nested generic substitution ⚠️ (top-level only)
 
-**Required Work**:
-1. Complete type inference for complex generic patterns
-2. Full constraint solving for bounded type parameters
-3. Monomorphization tracking
+**Remaining Gaps** (v0.30.211):
+1. Nested substitution: `Option<List<T>> → Option<List<i64>>` requires recursive `subst_apply_gen`
+2. Complex return types: Tuples `(A,B)` not substituted in function instantiation
+3. Monomorphization tracking for code generation
 
 ### P1 (Important for Complete Toolchain)
 
@@ -173,7 +177,7 @@ Expr::Closure { params, ret_ty, body }
 ### High Coverage (>50 tests)
 | File | Tests | Key Functions |
 |------|-------|---------------|
-| types.bmb | 167 | Type checking, generics |
+| types.bmb | 171 | Type checking, generics, nested types (v0.30.211) |
 | parser_ast.bmb | 119 | S-expression AST |
 | llvm_ir.bmb | 80 | LLVM IR generation |
 | utils.bmb | 74 | String utilities |

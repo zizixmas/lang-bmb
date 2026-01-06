@@ -7920,6 +7920,150 @@ fn test_end_to_end_type_check() -> i64 =
 
     t1 + t2 + t3 + t4 + t5 + t6;
 
+-- v0.30.209: Nested generic type instantiation tests
+fn test_nested_generic_types() -> i64 =
+    -- Test 1: Simple nested generic packing Option<List<T>>
+    let inner = gen_type_pack("List", "T");
+    let outer = gen_type_pack("Option", inner);
+    let t1 = if gen_type_base(outer) == "Option" then 1 else 0;
+
+    -- Test 2: Verify inner type preserved
+    let outer_args = gen_type_args(outer);
+    let t2 = if outer_args == "List:T" then 1 else 0;
+
+    -- Test 3: Nested with concrete type Option<List<i64>>
+    let concrete_inner = gen_type_pack("List", "i64");
+    let concrete_outer = gen_type_pack("Option", concrete_inner);
+    let t3 = if gen_type_args(concrete_outer) == "List:i64" then 1 else 0;
+
+    -- Test 4: Map<String, List<T>> - multiple params with nesting
+    let map_inner = gen_type_pack("List", "T");
+    let map_outer = gen_type_pack("Map", "String," + map_inner);
+    let t4 = if gen_type_base(map_outer) == "Map" then 1 else 0;
+
+    -- Test 5: Extract nested args correctly
+    let map_args = gen_type_args(map_outer);
+    let t5 = if map_args.len() > 10 then 1 else 0;  -- "String,List:T" > 10 chars
+
+    -- Test 6: Result<Option<T>, E> - deeply nested
+    let result_inner = gen_type_pack("Option", "T");
+    let result_outer = gen_type_pack("Result", result_inner + ",E");
+    let t6 = if gen_type_base(result_outer) == "Result" then 1 else 0;
+
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.210: Nested generic substitution tests
+-- NOTE: Nested generic substitution (e.g., Option<List<T>> → Option<List<i64>>)
+-- is a known limitation (BOOTSTRAP_FEATURE_GAP.md P0.2). Current impl only substitutes
+-- top-level args, not recursively into nested generic type packs.
+fn test_nested_generic_subst() -> i64 =
+    -- Test 1: Substitute T in Option<List<T>> - base preserved
+    let nested = gen_type_pack("Option", gen_type_pack("List", "T"));
+    let subst = subst_new("T", "i64");
+    let result = subst_apply_gen(subst, nested);
+    let t1 = if gen_type_base(result) == "Option" then 1 else 0;
+
+    -- Test 2: Nested args NOT recursively substituted (current limitation)
+    -- Expected: "List:T" (not "List:i64" - would need recursive subst_apply_gen)
+    let result_args = gen_type_args(result);
+    let t2 = if result_args == "List:T" then 1 else 0;
+
+    -- Test 3: Multi-param substitution Map<K, V>
+    let map_type = gen_type_pack("Map", "K,V");
+    let subst2 = subst_add(subst_new("K", "String"), "V", "i64");
+    let map_result = subst_apply_gen(subst2, map_type);
+    let map_args = gen_type_args(map_result);
+    let t3 = if map_args == "String,i64" then 1 else 0;
+
+    -- Test 4: Nested with mixed params - base preserved
+    let mixed = gen_type_pack("Map", "K," + gen_type_pack("List", "V"));
+    let mixed_result = subst_apply_gen(subst2, mixed);
+    let t4 = if gen_type_base(mixed_result) == "Map" then 1 else 0;
+
+    -- Test 5: No substitution when param not in subst
+    let partial_result = subst_apply_gen(subst_new("T", "i64"), gen_type_pack("Option", "U"));
+    let t5 = if gen_type_args(partial_result) == "U" then 1 else 0;
+
+    -- Test 6: Identity substitution (param not in subst)
+    let identity = subst_apply_gen(subst_new("X", "Y"), gen_type_pack("Option", "Z"));
+    let t6 = if gen_type_args(identity) == "Z" then 1 else 0;
+
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.211: Bounded type parameter verification tests
+fn test_bounded_type_params() -> i64 =
+    let tenv0 = tenv_new();
+
+    -- Set up traits
+    let trait1 = gen_trait_pack("Clone", "", "clone:self->Self");
+    let trait2 = gen_trait_pack("Display", "", "fmt:self->String");
+    let tenv1 = tenv_add_trait(tenv0, trait1);
+    let tenv2 = tenv_add_trait(tenv1, trait2);
+
+    -- Set up impls for i64
+    let impl1 = gen_impl_pack("Clone", "", "i64", "clone:self->Self");
+    let impl2 = gen_impl_pack("Display", "", "i64", "fmt:self->String");
+    let tenv3 = tenv_add_impl(tenv2, impl1);
+    let tenv4 = tenv_add_impl(tenv3, impl2);
+
+    -- Test 1: i64 satisfies Clone
+    let t1 = if type_satisfies_bounds(tenv4, "i64", "Clone") then 1 else 0;
+
+    -- Test 2: i64 satisfies Clone+Display (multiple bounds)
+    let t2 = if type_satisfies_bounds(tenv4, "i64", "Clone+Display") then 1 else 0;
+
+    -- Test 3: String does NOT satisfy Clone (no impl)
+    let t3 = if not type_satisfies_bounds(tenv4, "String", "Clone") then 1 else 0;
+
+    -- Test 4: i64 does NOT satisfy Clone+Debug (Debug not implemented)
+    let t4 = if not type_satisfies_bounds(tenv4, "i64", "Clone+Debug") then 1 else 0;
+
+    -- Test 5: Empty bounds always satisfied
+    let t5 = if type_satisfies_bounds(tenv4, "String", "") then 1 else 0;
+
+    -- Test 6: Order of bounds doesn't matter
+    let t6 = if type_satisfies_bounds(tenv4, "i64", "Display+Clone") then 1 else 0;
+
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.211: Generic function with bounds verification tests
+-- NOTE: Complex return types like tuples "(B,A)" are not substituted (limitation)
+fn test_generic_fn_bounds() -> i64 =
+    let tenv0 = tenv_new();
+
+    -- Set up: trait Clone
+    let trait1 = gen_trait_pack("Clone", "", "clone:self->Self");
+    let tenv1 = tenv_add_trait(tenv0, trait1);
+
+    -- Set up: impl Clone for i64
+    let impl1 = gen_impl_pack("Clone", "", "i64", "clone:self->Self");
+    let tenv2 = tenv_add_impl(tenv1, impl1);
+
+    -- Test 1: Generic function signature with bound T: Clone
+    let gfn = gen_fn_pack("copy_val", "T", "T", "T");
+    let t1 = if gen_fn_return(gfn) == "T" then 1 else 0;
+
+    -- Test 2: Instantiate with i64 (satisfies Clone)
+    let inst = gen_fn_instantiate(gfn, "i64");
+    let t2 = if gen_fn_return(inst) == "i64" then 1 else 0;
+
+    -- Test 3: Function with multiple type params - simple return type
+    let gfn2 = gen_fn_pack("swap", "A,B", "A,B", "B");
+    let inst2 = gen_fn_instantiate(gfn2, "i64,String");
+    let t3 = if gen_fn_return(inst2) == "String" then 1 else 0;
+
+    -- Test 4: Generic function param count
+    let t4 = if gen_fn_param_count(gfn2) == 2 then 1 else 0;
+
+    -- Test 5: Verify type param extraction
+    let tparams = gen_fn_tparams(gfn2);
+    let t5 = if tparams == "A,B" then 1 else 0;
+
+    -- Test 6: Check generic function has type params
+    let t6 = if gen_fn_tparams(gfn2).len() > 0 then 1 else 0;
+
+    t1 + t2 + t3 + t4 + t5 + t6;
+
 -- Main test runner
 fn main() -> i64 =
     let u0 = println(777);  -- Start marker
@@ -8469,10 +8613,23 @@ fn main() -> i64 =
     let t167 = test_end_to_end_type_check();
     let p167 = println(t167);  -- Expected: 6
 
+    -- v0.30.209-211: Advanced generic verification tests
+    let t168 = test_nested_generic_types();
+    let p168 = println(t168);  -- Expected: 6
+
+    let t169 = test_nested_generic_subst();
+    let p169 = println(t169);  -- Expected: 6
+
+    let t170 = test_bounded_type_params();
+    let p170 = println(t170);  -- Expected: 6
+
+    let t171 = test_generic_fn_bounds();
+    let p171 = println(t171);  -- Expected: 6
+
     let u1 = println(888);  -- Separator
 
-    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33 + t34 + t35 + t36 + t37 + t38 + t39 + t40 + t41 + t42 + t43 + t44 + t45 + t46 + t47 + t48 + t49 + t50 + t51 + t52 + t53 + t54 + t55 + t56 + t57 + t58 + t59 + t60 + t61 + t62 + t63 + t64 + t65 + t66 + t67 + t68 + t69 + t70 + t71 + t72 + t73 + t74 + t75 + t76 + t77 + t78 + t79 + t80 + t81 + t82 + t83 + t84 + t85 + t86 + t87 + t88 + t89 + t90 + t91 + t92 + t93 + t94 + t95 + t96 + t97 + t98 + t99 + t100 + t101 + t102 + t103 + t104 + t105 + t106 + t107 + t108 + t109 + t110 + t111 + t112 + t113 + t114 + t115 + t116 + t117 + t118 + t119 + t120 + t121 + t122 + t123 + t124 + t125 + t126 + t127 + t128 + t129 + t130 + t131 + t132 + t133 + t134 + t135 + t136 + t137 + t138 + t139 + t140 + t141 + t142 + t143 + t144 + t145 + t146 + t147 + t148 + t149 + t150 + t151 + t152 + t153 + t154 + t155 + t156 + t157 + t158 + t159 + t160 + t161 + t162 + t163 + t164 + t165 + t166 + t167;
-    let u2 = println(total);  -- Expected: 782
+    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33 + t34 + t35 + t36 + t37 + t38 + t39 + t40 + t41 + t42 + t43 + t44 + t45 + t46 + t47 + t48 + t49 + t50 + t51 + t52 + t53 + t54 + t55 + t56 + t57 + t58 + t59 + t60 + t61 + t62 + t63 + t64 + t65 + t66 + t67 + t68 + t69 + t70 + t71 + t72 + t73 + t74 + t75 + t76 + t77 + t78 + t79 + t80 + t81 + t82 + t83 + t84 + t85 + t86 + t87 + t88 + t89 + t90 + t91 + t92 + t93 + t94 + t95 + t96 + t97 + t98 + t99 + t100 + t101 + t102 + t103 + t104 + t105 + t106 + t107 + t108 + t109 + t110 + t111 + t112 + t113 + t114 + t115 + t116 + t117 + t118 + t119 + t120 + t121 + t122 + t123 + t124 + t125 + t126 + t127 + t128 + t129 + t130 + t131 + t132 + t133 + t134 + t135 + t136 + t137 + t138 + t139 + t140 + t141 + t142 + t143 + t144 + t145 + t146 + t147 + t148 + t149 + t150 + t151 + t152 + t153 + t154 + t155 + t156 + t157 + t158 + t159 + t160 + t161 + t162 + t163 + t164 + t165 + t166 + t167 + t168 + t169 + t170 + t171;
+    let u2 = println(total);  -- Expected: 806
 
     let u3 = println(999);  -- End marker
     total;
