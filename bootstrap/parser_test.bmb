@@ -1,4 +1,4 @@
--- BMB Parser Comprehensive Test (Phase 14)
+-- BMB Parser Comprehensive Test (v0.30.157: Enhanced test suite)
 -- Tests parser_ast.bmb with complex real-world patterns
 --
 -- Test Categories:
@@ -470,7 +470,146 @@ fn find_substring(s: String, needle: String, pos: i64) -> i64 =
     else find_substring(s, needle, pos + 1);
 
 -- ============================================================
--- Test Cases
+-- SECTION: Unit Tests (v0.30.157)
+-- ============================================================
+
+-- Test token constants
+fn test_token_constants() -> i64 =
+    let t1 = if TK_FN() == 100 then 1 else 0;
+    let t2 = if TK_LET() == 101 then 1 else 0;
+    let t3 = if TK_IF() == 102 then 1 else 0;
+    let t4 = if TK_THEN() == 103 then 1 else 0;
+    let t5 = if TK_ELSE() == 104 then 1 else 0;
+    let t6 = if TK_I64() == 151 then 1 else 0;
+    let t7 = if TK_BOOL() == 153 then 1 else 0;
+    let t8 = if TK_EOF() == 900 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+
+-- Test character classification
+fn test_char_class() -> i64 =
+    let t1 = if is_whitespace(32) then 1 else 0;   -- space
+    let t2 = if is_whitespace(10) then 1 else 0;   -- newline
+    let t3 = if is_digit(48) then 1 else 0;        -- '0'
+    let t4 = if is_digit(57) then 1 else 0;        -- '9'
+    let t5 = if is_alpha(65) then 1 else 0;        -- 'A'
+    let t6 = if is_alpha(122) then 1 else 0;       -- 'z'
+    let t7 = if is_ident_start(95) then 1 else 0;  -- '_'
+    let t8 = if not is_digit(47) then 1 else 0;    -- '/'
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+
+-- Test skip functions
+fn test_skip_funcs() -> i64 =
+    let t1 = if skip_ws("  abc", 0) == 2 then 1 else 0;
+    let t2 = if skip_ws("abc", 0) == 0 then 1 else 0;
+    let t3 = if find_ident_end("abc123", 0) == 6 then 1 else 0;
+    let t4 = if find_number_end("123abc", 0) == 3 then 1 else 0;
+    let t5 = if skip_to_eol("abc", 0) == 3 then 1 else 0;
+    let t6 = if skip_all("  abc", 0) == 2 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- Test lookup_keyword
+fn test_lookup_kw() -> i64 =
+    let t1 = if lookup_keyword("fn") == 100 then 1 else 0;
+    let t2 = if lookup_keyword("let") == 101 then 1 else 0;
+    let t3 = if lookup_keyword("if") == 102 then 1 else 0;
+    let t4 = if lookup_keyword("then") == 103 then 1 else 0;
+    let t5 = if lookup_keyword("else") == 104 then 1 else 0;
+    let t6 = if lookup_keyword("true") == 105 then 1 else 0;
+    let t7 = if lookup_keyword("false") == 106 then 1 else 0;
+    let t8 = if lookup_keyword("and") == 107 then 1 else 0;
+    let t9 = if lookup_keyword("or") == 108 then 1 else 0;
+    let t10 = if lookup_keyword("not") == 109 then 1 else 0;
+    let t11 = if lookup_keyword("i64") == 151 then 1 else 0;
+    let t12 = if lookup_keyword("xyz") == 201 then 1 else 0;  -- ident
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12;
+
+-- Test symbol_code
+fn test_symbol_codes() -> i64 =
+    let t1 = if symbol_code(58) == 300 then 1 else 0;   -- ':'
+    let t2 = if symbol_code(61) == 302 then 1 else 0;   -- '='
+    let t3 = if symbol_code(59) == 303 then 1 else 0;   -- ';'
+    let t4 = if symbol_code(44) == 304 then 1 else 0;   -- ','
+    let t5 = if symbol_code(40) == 305 then 1 else 0;   -- '('
+    let t6 = if symbol_code(41) == 306 then 1 else 0;   -- ')'
+    let t7 = if symbol_code(43) == 400 then 1 else 0;   -- '+'
+    let t8 = if symbol_code(45) == 401 then 1 else 0;   -- '-'
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+
+-- Test check_two_char
+fn test_two_char() -> i64 =
+    let t1 = if check_two_char("->", 0) == 3212 then 1 else 0;
+    let t2 = if check_two_char("==", 0) == 4102 then 1 else 0;
+    let t3 = if check_two_char("!=", 0) == 4112 then 1 else 0;
+    let t4 = if check_two_char("<=", 0) == 4122 then 1 else 0;
+    let t5 = if check_two_char(">=", 0) == 4132 then 1 else 0;
+    let t6 = if check_two_char("..", 0) == 3232 then 1 else 0;
+    let t7 = if check_two_char("ab", 0) == 0 then 1 else 0;
+    let t8 = if check_two_char("+", 0) == 0 then 1 else 0;  -- too short
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+
+-- Test result packing
+fn test_result_pack() -> i64 =
+    let r = pack_result(42, "(ast)");
+    let t1 = if unpack_pos(r) == 42 then 1 else 0;
+    let t2 = if unpack_ast(r) == "(ast)" then 1 else 0;
+    let t3 = if is_error("ERR:test") then 1 else 0;
+    let t4 = if not is_error("(ast)") then 1 else 0;
+    let t5 = if make_error("msg") == "ERR:msg" then 1 else 0;
+    let t6 = if int_to_string(123) == "123" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- Test op_str function
+fn test_op_str() -> i64 =
+    let t1 = if op_str(TK_PLUS()) == "+" then 1 else 0;
+    let t2 = if op_str(TK_MINUS()) == "-" then 1 else 0;
+    let t3 = if op_str(TK_STAR()) == "*" then 1 else 0;
+    let t4 = if op_str(TK_SLASH()) == "/" then 1 else 0;
+    let t5 = if op_str(TK_EQEQ()) == "==" then 1 else 0;
+    let t6 = if op_str(TK_AND()) == "and" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- Test type_str function
+fn test_type_str() -> i64 =
+    let t1 = if type_str(TK_I32()) == "i32" then 1 else 0;
+    let t2 = if type_str(TK_I64()) == "i64" then 1 else 0;
+    let t3 = if type_str(TK_F64()) == "f64" then 1 else 0;
+    let t4 = if type_str(TK_BOOL()) == "bool" then 1 else 0;
+    let t5 = if type_str(TK_STRING_TYPE()) == "String" then 1 else 0;
+    let t6 = if type_str(999) == "?" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- Test is_binop function
+fn test_is_binop() -> i64 =
+    let t1 = if is_binop(TK_PLUS()) then 1 else 0;
+    let t2 = if is_binop(TK_STAR()) then 1 else 0;
+    let t3 = if is_binop(TK_EQEQ()) then 1 else 0;
+    let t4 = if is_binop(TK_AND()) then 1 else 0;
+    let t5 = if is_binop(TK_DOTDOT()) then 1 else 0;
+    let t6 = if not is_binop(TK_FN()) then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- Test tok_kind and tok_end
+fn test_tok_encoding() -> i64 =
+    let tok = 151 * 1000000 + 42;
+    let t1 = if tok_kind(tok) == 151 then 1 else 0;
+    let t2 = if tok_end(tok) == 42 then 1 else 0;
+    let tok2 = 900 * 1000000 + 0;
+    let t3 = if tok_kind(tok2) == 900 then 1 else 0;
+    let t4 = if tok_end(tok2) == 0 then 1 else 0;
+    t1 + t2 + t3 + t4;
+
+-- Test helpers
+fn test_helpers() -> i64 =
+    let t1 = if ast_has_prefix("(program)", "(prog") then 1 else 0;
+    let t2 = if not ast_has_prefix("(fn)", "(prog") then 1 else 0;
+    let t3 = if ast_contains("hello world", "wor") then 1 else 0;
+    let t4 = if not ast_contains("hello", "xyz") then 1 else 0;
+    let t5 = if find_substring("abc", "b", 0) == 1 then 1 else 0;
+    let t6 = if find_substring("abc", "z", 0) < 0 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- ============================================================
+-- Integration Test Cases
 -- ============================================================
 
 -- Test 1: Multiple functions
@@ -615,6 +754,37 @@ fn test_nested_call() -> i64 =
 fn main() -> i64 =
     let u0 = println(777);  -- Start marker
 
+    -- Unit tests (v0.30.157)
+    let ut1 = test_token_constants();
+    let v1 = println(ut1);   -- Should be 8
+    let ut2 = test_char_class();
+    let v2 = println(ut2);   -- Should be 8
+    let ut3 = test_skip_funcs();
+    let v3 = println(ut3);   -- Should be 6
+    let ut4 = test_lookup_kw();
+    let v4 = println(ut4);   -- Should be 12
+    let ut5 = test_symbol_codes();
+    let v5 = println(ut5);   -- Should be 8
+    let ut6 = test_two_char();
+    let v6 = println(ut6);   -- Should be 8
+    let ut7 = test_result_pack();
+    let v7 = println(ut7);   -- Should be 6
+    let ut8 = test_op_str();
+    let v8 = println(ut8);   -- Should be 6
+    let ut9 = test_type_str();
+    let v9 = println(ut9);   -- Should be 6
+    let ut10 = test_is_binop();
+    let v10 = println(ut10); -- Should be 6
+    let ut11 = test_tok_encoding();
+    let v11 = println(ut11); -- Should be 4
+    let ut12 = test_helpers();
+    let v12 = println(ut12); -- Should be 6
+
+    let unit_total = ut1 + ut2 + ut3 + ut4 + ut5 + ut6 + ut7 + ut8 + ut9 + ut10 + ut11 + ut12;
+    let v13 = println(unit_total);  -- Should be 84
+
+    let u1 = println(555);  -- Integration tests marker
+
     let t1 = test_multi_fn();
     let t2 = test_nested_if();
     let t3 = test_complex_ops();
@@ -631,11 +801,14 @@ fn main() -> i64 =
     let t14 = test_deep_nesting();
     let t15 = test_nested_call();
 
-    let u1 = println(888);  -- Middle marker
+    let integration = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15;
+    let v14 = println(integration);  -- Should be 15
 
-    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15;
-    let u2 = println(passed);  -- Should be 15
+    let u2 = println(888);  -- End marker
 
-    let u3 = println(999);  -- End marker
+    let total = unit_total + integration;
+    let v15 = println(total);  -- Should be 99
 
-    passed;  -- Return total passed
+    let u3 = println(999);  -- Final marker
+
+    total;  -- Return total passed

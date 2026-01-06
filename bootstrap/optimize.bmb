@@ -1,4 +1,4 @@
--- BMB Bootstrap MIR Optimizer (v0.30.148: Enhanced test suite)
+-- BMB Bootstrap MIR Optimizer (v0.30.159: Enhanced test suite)
 -- Port of bmb/src/mir/optimize.rs to BMB
 --
 -- Optimization passes for MIR text format:
@@ -437,6 +437,189 @@ fn test_div_zero() -> i64 =
     let t3 = if r3 == 0 then 1 else 0;  -- 0 / 5 = 0
     t1 + t2 + t3;
 
+-- v0.30.159: More int_to_string tests
+fn test_int_to_string_ext() -> i64 =
+    let t1 = if int_to_string(100) == "100" then 1 else 0;
+    let t2 = if int_to_string(999) == "999" then 1 else 0;
+    let t3 = if int_to_string(1234) == "1234" then 1 else 0;
+    let t4 = if int_to_string(-100) == "-100" then 1 else 0;
+    t1 + t2 + t3 + t4;
+
+-- v0.30.159: More starts_with tests
+fn test_starts_with_ext() -> i64 =
+    let t1 = if starts_with("const I:42", "const", 0) then 1 else 0;
+    let t2 = if starts_with("%_t0 = +", "%_t0", 0) then 1 else 0;
+    let t3 = if not starts_with("hello", "world", 0) then 1 else 0;
+    let t4 = if starts_with("abcdef", "def", 3) then 1 else 0;
+    let t5 = if not starts_with("abc", "abcd", 0) then 1 else 0;  -- pattern too long
+    let t6 = if starts_with("", "", 0) then 1 else 0;  -- both empty
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.159: More find_char tests
+fn test_find_char_ext() -> i64 =
+    let t1 = if find_char("hello", 101, 0) == 1 then 1 else 0;  -- 'e' at 1
+    let t2 = if find_char("abcde", 100, 0) == 3 then 1 else 0;  -- 'd' at 3
+    let t3 = if find_char("test", 120, 0) == 0 - 1 then 1 else 0;  -- 'x' not found
+    let t4 = if find_char("a,b,c", 44, 2) == 3 then 1 else 0;  -- ',' at 3 from pos 2
+    t1 + t2 + t3 + t4;
+
+-- v0.30.159: More find_pattern tests
+fn test_find_pattern_ext() -> i64 =
+    let t1 = if find_pattern("const I:42", "I:", 0) == 6 then 1 else 0;
+    let t2 = if find_pattern("branch %c, t, e", "branch", 0) == 0 then 1 else 0;
+    let t3 = if find_pattern("abc def ghi", "xyz", 0) == 0 - 1 then 1 else 0;
+    let t4 = if find_pattern("return %_t0", "return", 0) == 0 then 1 else 0;
+    t1 + t2 + t3 + t4;
+
+-- v0.30.159: More parse_int_at tests
+fn test_parse_int_at_ext() -> i64 =
+    let t1 = if parse_int_at("0", 0, 0) == 0 then 1 else 0;
+    let t2 = if parse_int_at("99", 0, 0) == 99 then 1 else 0;
+    let t3 = if parse_int_at("abc123", 3, 0) == 123 then 1 else 0;
+    let t4 = if parse_int_at("x", 0, 0) == 0 then 1 else 0;  -- no digits
+    t1 + t2 + t3 + t4;
+
+-- v0.30.159: More extract_dest tests
+fn test_extract_dest_ext() -> i64 =
+    let t1 = if extract_dest("  %a = const I:1") == "%a" then 1 else 0;
+    let t2 = if extract_dest("  %xyz = + %a, %b") == "%xyz" then 1 else 0;
+    let t3 = if extract_dest("entry:") == "" then 1 else 0;  -- no dest
+    let t4 = if extract_dest("  return %x") == "" then 1 else 0;  -- no '='
+    t1 + t2 + t3 + t4;
+
+-- v0.30.159: More extract_const_value tests
+fn test_extract_const_ext() -> i64 =
+    let t1 = if extract_const_value("  %x = const I:0") == 0 then 1 else 0;
+    let t2 = if extract_const_value("  %x = const I:999") == 999 then 1 else 0;
+    let t3 = if extract_const_value("not a const") == 0 then 1 else 0;
+    let t4 = if extract_const_value("  %a = const I:1") == 1 then 1 else 0;
+    t1 + t2 + t3 + t4;
+
+-- v0.30.159: More extract_binop tests
+fn test_extract_binop_ext() -> i64 =
+    let t1 = if extract_binop("  %x = - %a, %b") == "-" then 1 else 0;
+    let t2 = if extract_binop("  %x = / %a, %b") == "/" then 1 else 0;
+    let t3 = if extract_binop("  %x = % %a, %b") == "%" then 1 else 0;
+    let t4 = if extract_binop("  %x = const I:1") == "" then 1 else 0;  -- not binop
+    t1 + t2 + t3 + t4;
+
+-- v0.30.159: More extract_binop_left/right tests
+fn test_extract_operands() -> i64 =
+    let t1 = if extract_binop_left("  %x = + %left, %right") == "%left" then 1 else 0;
+    let t2 = if extract_binop_right("  %x = + %left, %right") == "%right" then 1 else 0;
+    let t3 = if extract_binop_left("  %r = * %a, %b") == "%a" then 1 else 0;
+    let t4 = if extract_binop_right("  %r = * %a, %b") == "%b" then 1 else 0;
+    t1 + t2 + t3 + t4;
+
+-- v0.30.159: More eval_binop tests
+fn test_eval_binop_ext() -> i64 =
+    let t1 = if eval_binop("+", 0, 0) == 0 then 1 else 0;
+    let t2 = if eval_binop("-", 0, 5) == -5 then 1 else 0;
+    let t3 = if eval_binop("*", 0, 100) == 0 then 1 else 0;
+    let t4 = if eval_binop("/", 20, 4) == 5 then 1 else 0;
+    let t5 = if eval_binop("%", 10, 3) == 1 then 1 else 0;
+    let t6 = if eval_binop("?", 1, 2) == 0 then 1 else 0;  -- unknown op
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.159: More is_*_inst tests
+fn test_more_inst_checks() -> i64 =
+    let t1 = if is_binop_inst("  %x = - %a, %b") then 1 else 0;
+    let t2 = if is_binop_inst("  %x = / %a, %b") then 1 else 0;
+    let t3 = if is_binop_inst("  %x = % %a, %b") then 1 else 0;
+    let t4 = if not is_binop_inst("  %x = const I:1") then 1 else 0;
+    let t5 = if is_return_inst("  return %result") then 1 else 0;
+    let t6 = if not is_return_inst("  %x = const I:1") then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.159: More const_table tests
+fn test_const_table_ext() -> i64 =
+    let t1 = const_table_empty();
+    let r1 = if t1 == "" then 1 else 0;
+    let t2 = const_table_set(t1, "%a", 5);
+    let r2 = if const_table_get(t2, "%a") == 5 then 1 else 0;
+    let t3 = const_table_set(t2, "%b", 10);
+    let r3 = if const_table_get(t3, "%b") == 10 then 1 else 0;
+    let r4 = if const_table_has(t3, "%a") then 1 else 0;
+    let r5 = if not const_table_has(t3, "%c") then 1 else 0;
+    let r6 = if const_table_get(t3, "%a") == 5 then 1 else 0;  -- still has %a
+    r1 + r2 + r3 + r4 + r5 + r6;
+
+-- v0.30.159: More copy_table tests
+fn test_copy_table_ext() -> i64 =
+    let t1 = copy_table_empty();
+    let r1 = if t1 == "" then 1 else 0;
+    let t2 = copy_table_set(t1, "%a", "%b");
+    let r2 = if copy_table_get(t2, "%a") == "%b" then 1 else 0;
+    let t3 = copy_table_set(t2, "%x", "%y");
+    let r3 = if copy_table_get(t3, "%x") == "%y" then 1 else 0;
+    let r4 = if copy_table_get(t3, "%z") == "" then 1 else 0;  -- not found
+    r1 + r2 + r3 + r4;
+
+-- v0.30.159: More is_label tests
+fn test_is_label_ext() -> i64 =
+    let t1 = if is_label("entry:") then 1 else 0;
+    let t2 = if is_label("then_0:") then 1 else 0;
+    let t3 = if is_label("else_0:") then 1 else 0;
+    let t4 = if not is_label("  %x = const I:1") then 1 else 0;
+    let t5 = if not is_label("branch %c, t, e") then 1 else 0;
+    let t6 = if is_label("merge:") then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.159: Test get_branch_const_cond
+fn test_branch_cond() -> i64 =
+    let table = const_table_set(const_table_empty(), "%c", 1);
+    let r1 = if get_branch_const_cond("  branch %c, t, e", table) == 1 then 1 else 0;
+    let table2 = const_table_set(const_table_empty(), "%c", 0);
+    let r2 = if get_branch_const_cond("  branch %c, t, e", table2) == 0 then 1 else 0;
+    let r3 = if get_branch_const_cond("  branch %x, t, e", table) == 0 - 1 then 1 else 0;  -- %x not in table
+    let r4 = if get_branch_const_cond("  %x = const I:1", table) == 0 - 1 then 1 else 0;  -- not branch
+    r1 + r2 + r3 + r4;
+
+-- v0.30.159: Test fold_const_inst
+fn test_fold_const_inst() -> i64 =
+    let table = const_table_empty();
+    let r1 = fold_const_inst("  %x = const I:42", table);
+    let t1 = if find_pattern(r1, "%x:42", 0) >= 0 then 1 else 0;
+    let table2 = const_table_set(const_table_set(table, "%a", 10), "%b", 20);
+    let r2 = fold_const_inst("  %x = + %a, %b", table2);
+    let t2 = if find_pattern(r2, "const I:30", 0) >= 0 then 1 else 0;
+    let r3 = fold_const_inst("  return %x", table);
+    let t3 = if find_pattern(r3, "return %x", 0) >= 0 then 1 else 0;  -- unchanged
+    t1 + t2 + t3;
+
+-- v0.30.159: Test make_stats
+fn test_make_stats() -> i64 =
+    let s1 = make_stats(1, 2, 3, 4);
+    let t1 = if find_pattern(s1, "const_fold:1", 0) >= 0 then 1 else 0;
+    let t2 = if find_pattern(s1, "dead_code:2", 0) >= 0 then 1 else 0;
+    let t3 = if find_pattern(s1, "branches:3", 0) >= 0 then 1 else 0;
+    let t4 = if find_pattern(s1, "copies:4", 0) >= 0 then 1 else 0;
+    let s2 = make_stats(0, 0, 0, 0);
+    let t5 = if find_pattern(s2, "const_fold:0", 0) >= 0 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5;
+
+-- v0.30.159: Test digit_char
+fn test_digit_char() -> i64 =
+    let t1 = if digit_char(0) == "0" then 1 else 0;
+    let t2 = if digit_char(1) == "1" then 1 else 0;
+    let t3 = if digit_char(2) == "2" then 1 else 0;
+    let t4 = if digit_char(3) == "3" then 1 else 0;
+    let t5 = if digit_char(4) == "4" then 1 else 0;
+    let t6 = if digit_char(5) == "5" then 1 else 0;
+    let t7 = if digit_char(6) == "6" then 1 else 0;
+    let t8 = if digit_char(7) == "7" then 1 else 0;
+    let t9 = if digit_char(8) == "8" then 1 else 0;
+    let t10 = if digit_char(9) == "9" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10;
+
+-- v0.30.159: Test skip_ws extended
+fn test_skip_ws_ext() -> i64 =
+    let t1 = if skip_ws("", 0) == 0 then 1 else 0;
+    let t2 = if skip_ws("abc", 0) == 0 then 1 else 0;
+    let t3 = if skip_ws("  x", 0) == 2 then 1 else 0;
+    let t4 = if skip_ws("   ", 0) == 3 then 1 else 0;
+    t1 + t2 + t3 + t4;
+
 -- ============================================================================
 -- SECTION 11: Integration Tests
 -- ============================================================================
@@ -597,7 +780,7 @@ fn test_opt_levels() -> i64 =
 fn main() -> i64 =
     let u1 = println(777);
 
-    -- Unit tests (v0.30.148)
+    -- Unit tests (v0.30.159)
     let ut1 = test_string_utils();
     let v1 = println(ut1);    -- Should be 6
     let ut2 = test_char_class();
@@ -610,8 +793,51 @@ fn main() -> i64 =
     let v5 = println(ut5);    -- Should be 3
     let ut6 = test_div_zero();
     let v6 = println(ut6);    -- Should be 3
-    let unit_total = ut1 + ut2 + ut3 + ut4 + ut5 + ut6;
-    let v7 = println(unit_total);  -- Should be 34
+
+    -- v0.30.159: New unit tests
+    let ut7 = test_int_to_string_ext();
+    let v7 = println(ut7);    -- Should be 4
+    let ut8 = test_starts_with_ext();
+    let v8 = println(ut8);    -- Should be 6
+    let ut9 = test_find_char_ext();
+    let v9 = println(ut9);    -- Should be 4
+    let ut10 = test_find_pattern_ext();
+    let v10 = println(ut10);  -- Should be 4
+    let ut11 = test_parse_int_at_ext();
+    let v11 = println(ut11);  -- Should be 4
+    let ut12 = test_extract_dest_ext();
+    let v12 = println(ut12);  -- Should be 4
+    let ut13 = test_extract_const_ext();
+    let v13 = println(ut13);  -- Should be 4
+    let ut14 = test_extract_binop_ext();
+    let v14 = println(ut14);  -- Should be 4
+    let ut15 = test_extract_operands();
+    let v15 = println(ut15);  -- Should be 4
+    let ut16 = test_eval_binop_ext();
+    let v16 = println(ut16);  -- Should be 6
+    let ut17 = test_more_inst_checks();
+    let v17 = println(ut17);  -- Should be 6
+    let ut18 = test_const_table_ext();
+    let v18 = println(ut18);  -- Should be 6
+    let ut19 = test_copy_table_ext();
+    let v19 = println(ut19);  -- Should be 4
+    let ut20 = test_is_label_ext();
+    let v20 = println(ut20);  -- Should be 6
+    let ut21 = test_branch_cond();
+    let v21 = println(ut21);  -- Should be 4
+    let ut22 = test_fold_const_inst();
+    let v22 = println(ut22);  -- Should be 3
+    let ut23 = test_make_stats();
+    let v23 = println(ut23);  -- Should be 5
+    let ut24 = test_digit_char();
+    let v24 = println(ut24);  -- Should be 10
+    let ut25 = test_skip_ws_ext();
+    let v25 = println(ut25);  -- Should be 4
+
+    let unit_total = ut1 + ut2 + ut3 + ut4 + ut5 + ut6 + ut7 + ut8 + ut9 + ut10 +
+                     ut11 + ut12 + ut13 + ut14 + ut15 + ut16 + ut17 + ut18 + ut19 + ut20 +
+                     ut21 + ut22 + ut23 + ut24 + ut25;
+    let v26 = println(unit_total);  -- Should be 126
 
     let u2 = println(555);  -- Integration tests marker
 
@@ -638,6 +864,6 @@ fn main() -> i64 =
 
     let total = unit_total + integration;
     let u4 = println(888);
-    let u5 = println(total);  -- Should be 63
+    let u5 = println(total);  -- Should be 155
     let u6 = println(999);
     0;

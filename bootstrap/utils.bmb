@@ -1,4 +1,4 @@
--- BMB Bootstrap Utilities (v0.30.139)
+-- BMB Bootstrap Utilities (v0.30.156: Enhanced test suite)
 -- Shared utility functions for all bootstrap modules
 -- Consolidates common string operations to reduce code duplication
 --
@@ -472,6 +472,66 @@ fn test_tok_is_eof() -> bool =
     and tok_is_eof(100)
     and not tok_is_eof(1000000);
 
+-- v0.30.156: Test char_upper function
+fn test_char_upper() -> bool =
+    char_upper(65) == "A" and char_upper(90) == "Z" and
+    char_upper(77) == "M";
+
+-- v0.30.156: Test char_lower function
+fn test_char_lower() -> bool =
+    char_lower(97) == "a" and char_lower(122) == "z" and
+    char_lower(109) == "m";
+
+-- v0.30.156: Test char_to_string comprehensive
+fn test_char_to_string() -> bool =
+    char_to_string(32) == " " and    -- space
+    char_to_string(43) == "+" and    -- +
+    char_to_string(45) == "-" and    -- -
+    char_to_string(58) == ":" and    -- :
+    char_to_string(61) == "=" and    -- =
+    char_to_string(65) == "A" and    -- uppercase
+    char_to_string(97) == "a";       -- lowercase
+
+-- v0.30.156: Test specialized find functions
+fn test_find_specialized() -> bool =
+    find_pipe("a|b|c", 0) == 1 and
+    find_colon("a:b", 0) == 1 and
+    find_semicolon("a;b", 0) == 1 and
+    find_comma("a,b", 0) == 1 and
+    find_space("a b", 0) == 1 and
+    find_newline("a", 0) == 1;  -- no newline = returns len
+
+-- v0.30.156: Test strip_trailing_colon
+fn test_strip_colon() -> bool =
+    strip_trailing_colon("label:") == "label" and
+    strip_trailing_colon("nocolon") == "nocolon" and
+    strip_trailing_colon("") == "" and
+    strip_trailing_colon(":") == "";
+
+-- v0.30.156: Test read_until_ws
+fn test_read_until_ws() -> bool =
+    read_until_ws("hello world", 0) == "hello" and
+    read_until_ws("abc,def", 0) == "abc" and
+    read_until_ws("test(arg)", 0) == "test" and
+    read_until_ws("value|rest", 0) == "value";
+
+-- v0.30.156: Test is_alnum function
+fn test_is_alnum() -> bool =
+    is_alnum(65) and is_alnum(122) and is_alnum(48) and
+    not is_alnum(32) and not is_alnum(45);
+
+-- v0.30.156: Test skip_spaces (only spaces)
+fn test_skip_spaces() -> bool =
+    skip_spaces("   abc", 0) == 3 and
+    skip_spaces("abc", 0) == 0;
+
+-- v0.30.156: Test pack_values functions
+fn test_pack_values_ext() -> bool =
+    pack_values("x", "y") == "x|y" and
+    pack_values3("a", "b", "c") == "a|b|c" and
+    unpack_first("a|b|c") == "a" and
+    unpack_rest("a|b|c") == "b|c";
+
 -- v0.30.139: Edge case tests for character classification boundaries
 fn test_char_boundary_cases() -> bool =
     -- Test exact boundaries for digits
@@ -589,22 +649,32 @@ fn run_utils_tests() -> i64 =
     let t31 = if test_tok_end() then 1 else 0;
     let t32 = if test_tok_is_kind() then 1 else 0;
     let t33 = if test_tok_is_eof() then 1 else 0;
+    -- v0.30.156: New function tests
+    let t34 = if test_char_upper() then 1 else 0;
+    let t35 = if test_char_lower() then 1 else 0;
+    let t36 = if test_char_to_string() then 1 else 0;
+    let t37 = if test_find_specialized() then 1 else 0;
+    let t38 = if test_strip_colon() then 1 else 0;
+    let t39 = if test_read_until_ws() then 1 else 0;
+    let t40 = if test_is_alnum() then 1 else 0;
+    let t41 = if test_skip_spaces() then 1 else 0;
+    let t42 = if test_pack_values_ext() then 1 else 0;
     -- v0.30.139: Edge case tests
-    let t34 = if test_char_boundary_cases() then 1 else 0;
-    let t35 = if test_int_to_string_edge() then 1 else 0;
-    let t36 = if test_string_match_edge() then 1 else 0;
-    let t37 = if test_result_edge_cases() then 1 else 0;
-    let t38 = if test_skip_edge_cases() then 1 else 0;
+    let t43 = if test_char_boundary_cases() then 1 else 0;
+    let t44 = if test_int_to_string_edge() then 1 else 0;
+    let t45 = if test_string_match_edge() then 1 else 0;
+    let t46 = if test_result_edge_cases() then 1 else 0;
+    let t47 = if test_skip_edge_cases() then 1 else 0;
     t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18
     + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33
-    + t34 + t35 + t36 + t37 + t38;
+    + t34 + t35 + t36 + t37 + t38 + t39 + t40 + t41 + t42 + t43 + t44 + t45 + t46 + t47;
 
 -- Main test entry
 fn main() -> i64 =
     let u1 = println(111);  -- Start marker
     let passed = run_utils_tests();
-    let u2 = println(passed);  -- Should be 38
+    let u2 = println(passed);  -- Should be 47
     let u3 = println(888);  -- End marker
-    let total = 38;  -- v0.30.139: 33 + 5 edge case tests
-    -- Returns number of passed tests (38 = all pass)
+    let total = 47;  -- v0.30.156: 38 + 9 new function tests
+    -- Returns number of passed tests (47 = all pass)
     passed;

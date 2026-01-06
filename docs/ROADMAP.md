@@ -164,7 +164,7 @@ v0.MAJOR.MINOR
 | v0.28 | Benchmark | C/Rust/BMB benchmark suite | Compute-intensive benchmarks, Contract-optimized benchmarks, Real-world workloads |
 | v0.29 | Velocity | C/Rust performance sprint | MIR optimization framework (6 passes), Contract-based optimization, Bootstrap optimization module |
 
-### Bootstrap Statistics (as of v0.30.149)
+### Bootstrap Statistics (as of v0.30.160)
 
 | Metric | Value |
 |--------|-------|
@@ -172,7 +172,7 @@ v0.MAJOR.MINOR
 | BMB Bootstrap | ~15,000 LOC |
 | Coverage | 69% |
 | Stage 1/2 Tests | 48 tests passing |
-| Bootstrap Tests | 2,284 tests (746 types + 361 llvm_ir + 244 lowering + 138 pipeline + 127 lexer + 119 compiler + 117 parser + 113 parser_ast + 99 mir + 63 optimize + 56 selfhost_test + 48 selfhost_equiv + 38 utils + 15 parser_test) |
+| Bootstrap Tests | 2,565 tests (746 types + 361 llvm_ir + 244 lowering + 155 optimize + 152 selfhost_test + 138 pipeline + 127 lexer + 119 compiler + 117 parser + 113 parser_ast + 99 mir + 99 parser_test + 48 selfhost_equiv + 47 utils) |
 | Build Mode | Use `--release` for bootstrap tests (debug build stack overflow on large files) |
 | Stack-Limited Files | lowering.bmb (structural depth issue) |
 
@@ -336,6 +336,59 @@ v0.MAJOR.MINOR
 - Pipeline integration verification: 3 new test groups in pipeline.bmb (12 tests)
 - Multi-operand expressions, mixed operations, combined expressions
 - pipeline.bmb total: 42 tests (10 test groups)
+
+**v0.30.160 Completed (2026-01-06)**:
+- Documentation update: GAP_ANALYSIS.md, ROADMAP.md
+- Bootstrap test total: 2,565 tests across 14 files
+- Phase 30.1.156-160 comprehensive test enhancement complete
+
+**v0.30.159 Completed (2026-01-06)**:
+- optimize.bmb test enhancement: 63 → 155 tests (+92)
+- 19 new unit test functions covering:
+  * test_int_to_string_ext, test_starts_with_ext, test_find_char_ext
+  * test_find_pattern_ext, test_parse_int_at_ext, test_extract_dest_ext
+  * test_extract_const_ext, test_extract_binop_ext, test_extract_operands
+  * test_eval_binop_ext, test_more_inst_checks, test_const_table_ext
+  * test_copy_table_ext, test_is_label_ext, test_branch_cond
+  * test_fold_const_inst, test_make_stats, test_digit_char, test_skip_ws_ext
+- Comprehensive MIR optimization utility coverage
+
+**v0.30.158 Completed (2026-01-06)**:
+- selfhost_test.bmb test enhancement: 56 → 152 tests (+96)
+- 23 new unit test functions covering:
+  * Lexer helpers: skip_ws, skip_to_eol, skip_comment, skip_all
+  * Scanner functions: scan_ident, scan_int
+  * Token generation: next_token_raw
+  * Parser utilities: find_colon, parse_int_prefix, parse_type
+  * Expression parsing: parse_primary, parse_mul, parse_add, parse_cmp_ops
+  * Logical parsing: parse_and, parse_or, parse_negation
+  * Token constants, keywords, op_symbol, is_binop
+- Full self-hosting lexer/parser verification
+
+**v0.30.157 Completed (2026-01-06)**:
+- parser_test.bmb test enhancement: 15 → 99 tests (+84)
+- 12 new unit test functions covering:
+  * test_token_constants: TK_FN, TK_LET, TK_IF, etc. (8 tests)
+  * test_char_class: is_digit, is_alpha, is_ident_char (8 tests)
+  * test_skip_funcs: skip_ws, skip_to_eol, skip_comment (6 tests)
+  * test_lookup_kw: keyword lookup with fallback (12 tests)
+  * test_symbol_codes: +, -, *, /, etc. symbol encoding (8 tests)
+  * test_two_char: ==, !=, <=, >=, ->, etc. (8 tests)
+  * test_result_pack: position:ast format (6 tests)
+  * test_op_str: operator string mapping (6 tests)
+  * test_type_str: type name mapping (6 tests)
+  * test_is_binop: binary operator detection (6 tests)
+  * test_tok_encoding: kind * 1000000 + pos encoding (4 tests)
+  * test_helpers: string utilities (6 tests)
+- Comprehensive parser utility coverage
+
+**v0.30.156 Completed (2026-01-06)**:
+- utils.bmb test enhancement: 38 → 47 tests (+9)
+- Extended unit test functions covering:
+  * Edge case testing for string utilities
+  * Boundary condition validation
+  * Additional helper function coverage
+- utils.bmb: 47 tests
 
 **v0.30.140 Completed (2026-01-06)**:
 - Bootstrap coverage analysis: 1,732 tests across 14 files

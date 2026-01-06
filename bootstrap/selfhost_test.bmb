@@ -1,6 +1,6 @@
 -- ============================================================================
 -- BMB Bootstrap Self-Hosting Stage 1 Test
--- Version: v0.30.144 (Enhanced test suite)
+-- Version: v0.30.158 (Enhanced test suite)
 --
 -- This file tests the Bootstrap compiler's ability to compile BMB source
 -- code and generate valid LLVM IR. This is the first stage of self-hosting
@@ -533,6 +533,226 @@ fn test_is_binop() -> i64 =
     let t6 = if not is_binop(TK_LET()) then 1 else 0;
     t1 + t2 + t3 + t4 + t5 + t6;
 
+-- v0.30.158: Test skip_ws function
+fn test_skip_ws() -> i64 =
+    let t1 = if skip_ws("  abc", 0) == 2 then 1 else 0;
+    let t2 = if skip_ws("abc", 0) == 0 then 1 else 0;
+    let t3 = if skip_ws("   ", 0) == 3 then 1 else 0;
+    let t4 = if skip_ws("    x", 0) == 4 then 1 else 0;  -- 4 spaces
+    t1 + t2 + t3 + t4;
+
+-- v0.30.158: Test skip_to_eol function
+fn test_skip_to_eol() -> i64 =
+    let t1 = if skip_to_eol("abc", 0) == 3 then 1 else 0;  -- no newline
+    let t2 = if skip_to_eol("xy", 0) == 2 then 1 else 0;
+    let t3 = if skip_to_eol("a", 0) == 1 then 1 else 0;
+    let t4 = if skip_to_eol("test", 0) == 4 then 1 else 0;
+    t1 + t2 + t3 + t4;
+
+-- v0.30.158: Test skip_comment function
+fn test_skip_comment() -> i64 =
+    let t1 = if skip_comment("-- end", 0) == 6 then 1 else 0;  -- no newline
+    let t2 = if skip_comment("abc", 0) == 0 then 1 else 0;  -- no comment
+    let t3 = if skip_comment("-x", 0) == 0 then 1 else 0;   -- single dash
+    let t4 = if skip_comment("-- test", 0) == 7 then 1 else 0;
+    t1 + t2 + t3 + t4;
+
+-- v0.30.158: Test skip_all function
+fn test_skip_all() -> i64 =
+    let t1 = if skip_all("abc", 0) == 0 then 1 else 0;
+    let t2 = if skip_all("   fn", 0) == 3 then 1 else 0;
+    let t3 = if skip_all("  x", 0) == 2 then 1 else 0;
+    let t4 = if skip_all("x", 0) == 0 then 1 else 0;
+    t1 + t2 + t3 + t4;
+
+-- v0.30.158: Test scan_ident function
+fn test_scan_ident() -> i64 =
+    let t1 = if scan_ident("abc123 x", 0) == 6 then 1 else 0;
+    let t2 = if scan_ident("x", 0) == 1 then 1 else 0;
+    let t3 = if scan_ident("_foo", 0) == 4 then 1 else 0;
+    let t4 = if scan_ident("a_b_c", 0) == 5 then 1 else 0;
+    let t5 = if scan_ident("fn()", 0) == 2 then 1 else 0;
+    let t6 = if scan_ident("i64:", 0) == 3 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.158: Test scan_int function
+fn test_scan_int() -> i64 =
+    let t1 = if scan_int("123abc", 0) == 3 then 1 else 0;
+    let t2 = if scan_int("0", 0) == 1 then 1 else 0;
+    let t3 = if scan_int("12345", 0) == 5 then 1 else 0;
+    let t4 = if scan_int("42 + 3", 0) == 2 then 1 else 0;
+    t1 + t2 + t3 + t4;
+
+-- v0.30.158: Test next_token_raw function
+fn test_next_token() -> i64 =
+    let tok1 = next_token_raw("fn", 0);
+    let t1 = if tok_kind(tok1) == TK_FN() then 1 else 0;
+    let tok2 = next_token_raw("123", 0);
+    let t2 = if tok_kind(tok2) == TK_INT() then 1 else 0;
+    let tok3 = next_token_raw("+", 0);
+    let t3 = if tok_kind(tok3) == TK_PLUS() then 1 else 0;
+    let tok4 = next_token_raw("->", 0);
+    let t4 = if tok_kind(tok4) == TK_ARROW() then 1 else 0;
+    let tok5 = next_token_raw("==", 0);
+    let t5 = if tok_kind(tok5) == TK_EQEQ() then 1 else 0;
+    let tok6 = next_token_raw("<=", 0);
+    let t6 = if tok_kind(tok6) == TK_LE() then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.158: Test find_colon function
+fn test_find_colon() -> i64 =
+    let t1 = if find_colon("a:b", 0) == 1 then 1 else 0;
+    let t2 = if find_colon("abc", 0) == 3 then 1 else 0;  -- not found
+    let t3 = if find_colon(":x", 0) == 0 then 1 else 0;
+    let t4 = if find_colon("x:y:z", 0) == 1 then 1 else 0;  -- first colon
+    t1 + t2 + t3 + t4;
+
+-- v0.30.158: Test parse_int_prefix function
+fn test_parse_int_prefix() -> i64 =
+    let t1 = if parse_int_prefix("123", 0, 0) == 123 then 1 else 0;
+    let t2 = if parse_int_prefix("42abc", 0, 0) == 42 then 1 else 0;
+    let t3 = if parse_int_prefix("0", 0, 0) == 0 then 1 else 0;
+    let t4 = if parse_int_prefix("abc", 0, 0) == 0 then 1 else 0;  -- no digits
+    t1 + t2 + t3 + t4;
+
+-- v0.30.158: Test parse_type function
+fn test_parse_type() -> i64 =
+    let r1 = parse_type("i64", 0);
+    let t1 = if unpack_ast(r1) == "i64" then 1 else 0;
+    let r2 = parse_type("i32", 0);
+    let t2 = if unpack_ast(r2) == "i32" then 1 else 0;
+    let r3 = parse_type("bool", 0);
+    let t3 = if unpack_ast(r3) == "bool" then 1 else 0;
+    let r4 = parse_type("xyz", 0);
+    let t4 = if is_error(unpack_ast(r4)) then 1 else 0;
+    t1 + t2 + t3 + t4;
+
+-- v0.30.158: Test parse_primary with integers
+fn test_parse_primary_int() -> i64 =
+    let r1 = parse_primary("42", 0);
+    let t1 = if unpack_ast(r1) == "(int 42)" then 1 else 0;
+    let r2 = parse_primary("0", 0);
+    let t2 = if unpack_ast(r2) == "(int 0)" then 1 else 0;
+    let r3 = parse_primary("123", 0);
+    let t3 = if unpack_ast(r3) == "(int 123)" then 1 else 0;
+    t1 + t2 + t3;
+
+-- v0.30.158: Test parse_primary with booleans
+fn test_parse_primary_bool() -> i64 =
+    let r1 = parse_primary("true", 0);
+    let t1 = if unpack_ast(r1) == "(bool true)" then 1 else 0;
+    let r2 = parse_primary("false", 0);
+    let t2 = if unpack_ast(r2) == "(bool false)" then 1 else 0;
+    t1 + t2;
+
+-- v0.30.158: Test parse_primary with variables
+fn test_parse_primary_var() -> i64 =
+    let r1 = parse_primary("x", 0);
+    let t1 = if unpack_ast(r1) == "(var <x>)" then 1 else 0;
+    let r2 = parse_primary("abc", 0);
+    let t2 = if unpack_ast(r2) == "(var <abc>)" then 1 else 0;
+    let r3 = parse_primary("_test", 0);
+    let t3 = if unpack_ast(r3) == "(var <_test>)" then 1 else 0;
+    t1 + t2 + t3;
+
+-- v0.30.158: Test parse_mul function
+fn test_parse_mul() -> i64 =
+    let r1 = parse_mul("2 * 3", 0);
+    let t1 = if unpack_ast(r1) == "(op * (int 2) (int 3))" then 1 else 0;
+    let r2 = parse_mul("6 / 2", 0);
+    let t2 = if unpack_ast(r2) == "(op / (int 6) (int 2))" then 1 else 0;
+    let r3 = parse_mul("10 % 3", 0);
+    let t3 = if unpack_ast(r3) == "(op % (int 10) (int 3))" then 1 else 0;
+    t1 + t2 + t3;
+
+-- v0.30.158: Test parse_add function
+fn test_parse_add() -> i64 =
+    let r1 = parse_add("2 + 3", 0);
+    let t1 = if unpack_ast(r1) == "(op + (int 2) (int 3))" then 1 else 0;
+    let r2 = parse_add("5 - 2", 0);
+    let t2 = if unpack_ast(r2) == "(op - (int 5) (int 2))" then 1 else 0;
+    t1 + t2;
+
+-- v0.30.158: Test parse_cmp function
+fn test_parse_cmp_ops() -> i64 =
+    let r1 = parse_cmp("a == b", 0);
+    let t1 = if not is_error(unpack_ast(r1)) then 1 else 0;
+    let r2 = parse_cmp("a < b", 0);
+    let t2 = if not is_error(unpack_ast(r2)) then 1 else 0;
+    let r3 = parse_cmp("a >= b", 0);
+    let t3 = if not is_error(unpack_ast(r3)) then 1 else 0;
+    let r4 = parse_cmp("a != b", 0);
+    let t4 = if not is_error(unpack_ast(r4)) then 1 else 0;
+    t1 + t2 + t3 + t4;
+
+-- v0.30.158: Test parse_and function
+fn test_parse_and() -> i64 =
+    let r1 = parse_and("a and b", 0);
+    let t1 = if not is_error(unpack_ast(r1)) then 1 else 0;
+    let r2 = parse_and("x and y and z", 0);
+    let t2 = if not is_error(unpack_ast(r2)) then 1 else 0;
+    t1 + t2;
+
+-- v0.30.158: Test parse_or function
+fn test_parse_or() -> i64 =
+    let r1 = parse_or("a or b", 0);
+    let t1 = if not is_error(unpack_ast(r1)) then 1 else 0;
+    let r2 = parse_or("x or y or z", 0);
+    let t2 = if not is_error(unpack_ast(r2)) then 1 else 0;
+    t1 + t2;
+
+-- v0.30.158: Test more token constants
+fn test_more_token_constants() -> i64 =
+    let t1 = if TK_PLUS() == 100 then 1 else 0;
+    let t2 = if TK_MINUS() == 101 then 1 else 0;
+    let t3 = if TK_STAR() == 102 then 1 else 0;
+    let t4 = if TK_SLASH() == 103 then 1 else 0;
+    let t5 = if TK_ARROW() == 111 then 1 else 0;
+    let t6 = if TK_COLON() == 112 then 1 else 0;
+    let t7 = if TK_LPAREN() == 115 then 1 else 0;
+    let t8 = if TK_RPAREN() == 116 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+
+-- v0.30.158: Test more keywords
+fn test_more_keywords() -> i64 =
+    let t1 = if keyword_kind("then") == TK_THEN() then 1 else 0;
+    let t2 = if keyword_kind("else") == TK_ELSE() then 1 else 0;
+    let t3 = if keyword_kind("and") == TK_AND() then 1 else 0;
+    let t4 = if keyword_kind("or") == TK_OR() then 1 else 0;
+    let t5 = if keyword_kind("not") == TK_NOT() then 1 else 0;
+    let t6 = if keyword_kind("mut") == TK_MUT() then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.158: Test more op_symbol
+fn test_more_op_symbol() -> i64 =
+    let t1 = if op_symbol(TK_SLASH()) == "/" then 1 else 0;
+    let t2 = if op_symbol(TK_PERCENT()) == "%" then 1 else 0;
+    let t3 = if op_symbol(TK_NE()) == "!=" then 1 else 0;
+    let t4 = if op_symbol(TK_LT()) == "<" then 1 else 0;
+    let t5 = if op_symbol(TK_GT()) == ">" then 1 else 0;
+    let t6 = if op_symbol(TK_LE()) == "<=" then 1 else 0;
+    let t7 = if op_symbol(TK_GE()) == ">=" then 1 else 0;
+    let t8 = if op_symbol(TK_FN()) == "" then 1 else 0;  -- non-op returns ""
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+
+-- v0.30.158: Test more is_binop
+fn test_more_is_binop() -> i64 =
+    let t1 = if is_binop(TK_MINUS()) then 1 else 0;
+    let t2 = if is_binop(TK_SLASH()) then 1 else 0;
+    let t3 = if is_binop(TK_PERCENT()) then 1 else 0;
+    let t4 = if is_binop(TK_NE()) then 1 else 0;
+    let t5 = if is_binop(TK_LT()) then 1 else 0;
+    let t6 = if is_binop(TK_OR()) then 1 else 0;
+    let t7 = if not is_binop(TK_LPAREN()) then 1 else 0;
+    let t8 = if not is_binop(TK_EOF()) then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+
+-- v0.30.158: Test negation handling
+fn test_parse_negation() -> i64 =
+    let r1 = parse_primary("not x", 0);
+    let t1 = if not is_error(unpack_ast(r1)) then 1 else 0;
+    t1;
+
 -- ============================================================================
 -- SECTION 6: Integration Tests - Stage 1 Self-Hosting Verification
 -- ============================================================================
@@ -594,7 +814,7 @@ fn test_parse_bool() -> i64 =
 fn main() -> i64 =
     let u0 = println(777);  -- Start marker
 
-    -- Unit tests (v0.30.144)
+    -- Unit tests (v0.30.158)
     let ut1 = test_tok_encoding();
     let v1 = println(ut1);  -- Should be 4
     let ut2 = test_token_constants();
@@ -613,8 +833,60 @@ fn main() -> i64 =
     let v8 = println(ut8);  -- Should be 6
     let ut9 = test_is_binop();
     let v9 = println(ut9);  -- Should be 6
-    let unit_total = ut1 + ut2 + ut3 + ut4 + ut5 + ut6 + ut7 + ut8 + ut9;
-    let v10 = println(unit_total);  -- Should be 48
+
+    -- v0.30.158: New unit tests
+    let ut10 = test_skip_ws();
+    let v10 = println(ut10);  -- Should be 4
+    let ut11 = test_skip_to_eol();
+    let v11 = println(ut11);  -- Should be 4
+    let ut12 = test_skip_comment();
+    let v12 = println(ut12);  -- Should be 4
+    let ut13 = test_skip_all();
+    let v13 = println(ut13);  -- Should be 4
+    let ut14 = test_scan_ident();
+    let v14 = println(ut14);  -- Should be 6
+    let ut15 = test_scan_int();
+    let v15 = println(ut15);  -- Should be 4
+    let ut16 = test_next_token();
+    let v16 = println(ut16);  -- Should be 6
+    let ut17 = test_find_colon();
+    let v17 = println(ut17);  -- Should be 4
+    let ut18 = test_parse_int_prefix();
+    let v18 = println(ut18);  -- Should be 4
+    let ut19 = test_parse_type();
+    let v19 = println(ut19);  -- Should be 4
+    let ut20 = test_parse_primary_int();
+    let v20 = println(ut20);  -- Should be 3
+    let ut21 = test_parse_primary_bool();
+    let v21 = println(ut21);  -- Should be 2
+    let ut22 = test_parse_primary_var();
+    let v22 = println(ut22);  -- Should be 3
+    let ut23 = test_parse_mul();
+    let v23 = println(ut23);  -- Should be 3
+    let ut24 = test_parse_add();
+    let v24 = println(ut24);  -- Should be 2
+    let ut25 = test_parse_cmp_ops();
+    let v25 = println(ut25);  -- Should be 4
+    let ut26 = test_parse_and();
+    let v26 = println(ut26);  -- Should be 2
+    let ut27 = test_parse_or();
+    let v27 = println(ut27);  -- Should be 2
+    let ut28 = test_more_token_constants();
+    let v28 = println(ut28);  -- Should be 8
+    let ut29 = test_more_keywords();
+    let v29 = println(ut29);  -- Should be 6
+    let ut30 = test_more_op_symbol();
+    let v30 = println(ut30);  -- Should be 8
+    let ut31 = test_more_is_binop();
+    let v31 = println(ut31);  -- Should be 8
+    let ut32 = test_parse_negation();
+    let v32 = println(ut32);  -- Should be 1
+
+    let unit_total = ut1 + ut2 + ut3 + ut4 + ut5 + ut6 + ut7 + ut8 + ut9 +
+                     ut10 + ut11 + ut12 + ut13 + ut14 + ut15 + ut16 + ut17 + ut18 + ut19 +
+                     ut20 + ut21 + ut22 + ut23 + ut24 + ut25 + ut26 + ut27 + ut28 + ut29 +
+                     ut30 + ut31 + ut32;
+    let v33 = println(unit_total);  -- Should be 144
 
     let u1 = println(555);  -- Integration tests marker
 
@@ -649,7 +921,7 @@ fn main() -> i64 =
     let w9 = println(integration);  -- Should be 8
 
     let total = unit_total + integration;
-    let w10 = println(total);  -- Should be 56
+    let w10 = println(total);  -- Should be 152
 
     let u3 = println(999);  -- Final marker
     total;
