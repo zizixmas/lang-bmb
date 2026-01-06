@@ -2194,6 +2194,69 @@ fn test_method_on_literal() -> i64 =
     else if ast_contains(ast, "(method_call (int 42) <to_string>)") then 1
     else 0;
 
+-- v0.30.138: Operator precedence tests
+fn test_operator_precedence() -> i64 =
+    -- Test 1: Multiplication before addition (a + b * c -> a + (b * c))
+    let src1 = "fn test() -> i64 = 1 + 2 * 3;";
+    let r1 = parse_program(src1, 0, "");
+    let ast1 = unpack_ast(r1);
+    let t1 = if ast_contains(ast1, "(op + (int 1) (op * (int 2) (int 3)))") then 1 else 0;
+
+    -- Test 2: Parentheses override precedence ((a + b) * c)
+    let src2 = "fn test() -> i64 = (1 + 2) * 3;";
+    let r2 = parse_program(src2, 0, "");
+    let ast2 = unpack_ast(r2);
+    let t2 = if ast_contains(ast2, "(op * (op + (int 1) (int 2)) (int 3))") then 1 else 0;
+
+    -- Test 3: Comparison after arithmetic
+    let src3 = "fn test() -> bool = 1 + 2 > 0;";
+    let r3 = parse_program(src3, 0, "");
+    let ast3 = unpack_ast(r3);
+    let t3 = if not is_error(ast3) then 1 else 0;
+
+    -- Test 4: Logical operators
+    let src4 = "fn test() -> bool = true and false or true;";
+    let r4 = parse_program(src4, 0, "");
+    let ast4 = unpack_ast(r4);
+    let t4 = if not is_error(ast4) then 1 else 0;
+
+    -- Test 5: Division and modulo
+    let src5 = "fn test() -> i64 = 10 / 3 - 10 % 3;";
+    let r5 = parse_program(src5, 0, "");
+    let ast5 = unpack_ast(r5);
+    let t5 = if not is_error(ast5) then 1 else 0;
+
+    t1 + t2 + t3 + t4 + t5;
+
+-- v0.30.138: Complex expression parsing tests
+fn test_complex_expressions() -> i64 =
+    -- Test 1: Nested if-then-else
+    let src1 = "fn test(x: i64) -> i64 = if x > 0 then if x > 10 then 2 else 1 else 0;";
+    let r1 = parse_program(src1, 0, "");
+    let t1 = if not is_error(unpack_ast(r1)) then 1 else 0;
+
+    -- Test 2: Nested let bindings
+    let src2 = "fn test() -> i64 = let a = 1; let b = 2; let c = a + b; c;";
+    let r2 = parse_program(src2, 0, "");
+    let t2 = if not is_error(unpack_ast(r2)) then 1 else 0;
+
+    -- Test 3: Function call with expression arguments
+    let src3 = "fn test(x: i64) -> i64 = foo(x + 1, x * 2);";
+    let r3 = parse_program(src3, 0, "");
+    let t3 = if not is_error(unpack_ast(r3)) then 1 else 0;
+
+    -- Test 4: Method chain with expressions
+    let src4 = "fn test(s: String) -> i64 = s.len().to_string().len();";
+    let r4 = parse_program(src4, 0, "");
+    let t4 = if not is_error(unpack_ast(r4)) then 1 else 0;
+
+    -- Test 5: Array with expressions
+    let src5 = "fn test(x: i64) -> [i64] = [x, x + 1, x * 2];";
+    let r5 = parse_program(src5, 0, "");
+    let t5 = if not is_error(unpack_ast(r5)) then 1 else 0;
+
+    t1 + t2 + t3 + t4 + t5;
+
 fn main() -> i64 =
     let u0 = println(777);  -- Start marker
 
@@ -2382,6 +2445,12 @@ fn main() -> i64 =
     let method_passed = mc1 + mc2 + mc3 + mc4 + mc5;
     let u20 = println(method_passed);  -- Should be 5
 
+    -- v0.30.138: Edge case tests
+    let prec_passed = test_operator_precedence();
+    let u21 = println(prec_passed);  -- Should be 5
+    let complex_passed = test_complex_expressions();
+    let u22 = println(complex_passed);  -- Should be 5
+
     let u4 = println(999);  -- End marker
 
-    parse_passed + ast_passed + struct_passed + enum_passed + integration_passed + generic_passed + typeparam_passed + string_passed + lambda_passed + while_passed + for_passed + range_passed + break_passed + trait_passed + array_passed + index_passed + array_type_passed + method_passed;  -- Should be 104
+    parse_passed + ast_passed + struct_passed + enum_passed + integration_passed + generic_passed + typeparam_passed + string_passed + lambda_passed + while_passed + for_passed + range_passed + break_passed + trait_passed + array_passed + index_passed + array_type_passed + method_passed + prec_passed + complex_passed;  -- Should be 114

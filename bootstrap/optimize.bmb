@@ -469,6 +469,63 @@ fn test_opt_edge_cases() -> i64 =
 
     p1 + p2 + p3 + p4 + p5 + p6;
 
+-- v0.30.137: Variable usage detection tests
+fn test_var_usage() -> i64 =
+    -- Test 1: Variable used in line
+    let t1 = if is_var_used_in_line("  %_t1 = + %_t0, %b", "%_t0") then 1 else 0;
+
+    -- Test 2: Variable not used
+    let t2 = if not is_var_used_in_line("  %_t1 = + %a, %b", "%_t0") then 1 else 0;
+
+    -- Test 3: Variable used as destination (shouldn't count)
+    let t3 = if not is_var_used_in_line("  %_t0 = const I:42", "%_t0") then 1 else 0;
+
+    -- Test 4: Line without variables
+    let t4 = if not is_var_used_in_line("entry:", "%_t0") then 1 else 0;
+
+    -- Test 5: Variable used in return
+    let t5 = if is_var_used_in_line("  return %_t0", "%_t0") then 1 else 0;
+
+    t1 + t2 + t3 + t4 + t5;
+
+-- v0.30.137: Side effects detection tests
+fn test_side_effects() -> i64 =
+    -- Test 1: Call has side effects
+    let t1 = if has_side_effects("  call print(%x)") then 1 else 0;
+
+    -- Test 2: Return has side effects
+    let t2 = if has_side_effects("  return %_t0") then 1 else 0;
+
+    -- Test 3: Const has no side effects
+    let t3 = if not has_side_effects("  %_t0 = const I:42") then 1 else 0;
+
+    -- Test 4: Binop has no side effects
+    let t4 = if not has_side_effects("  %_t1 = + %a, %b") then 1 else 0;
+
+    -- Test 5: Store has side effects
+    let t5 = if has_side_effects("  store %ptr, %val") then 1 else 0;
+
+    t1 + t2 + t3 + t4 + t5;
+
+-- v0.30.137: Optimization level tests
+fn test_opt_levels() -> i64 =
+    -- Test 1: Debug level is 0
+    let t1 = if opt_level_debug() == 0 then 1 else 0;
+
+    -- Test 2: Release level is 1
+    let t2 = if opt_level_release() == 1 then 1 else 0;
+
+    -- Test 3: Aggressive level is 2
+    let t3 = if opt_level_aggressive() == 2 then 1 else 0;
+
+    -- Test 4: Level ordering
+    let t4 = if opt_level_debug() < opt_level_release() then 1 else 0;
+
+    -- Test 5: Aggressive > Release
+    let t5 = if opt_level_aggressive() > opt_level_release() then 1 else 0;
+
+    t1 + t2 + t3 + t4 + t5;
+
 fn main() -> i64 =
     let u1 = println(777);
     let t1 = println(test_const_table());
@@ -481,11 +538,16 @@ fn main() -> i64 =
     let t8 = println(test_optimize_mir());
     let t9 = println(test_copy_table());
     let t10 = println(test_opt_edge_cases());
+    -- v0.30.137: Additional tests
+    let t11 = println(test_var_usage());
+    let t12 = println(test_side_effects());
+    let t13 = println(test_opt_levels());
     let u2 = println(888);
     let total = test_const_table() + test_extract_dest() + test_extract_const() +
                 test_extract_binop() + test_eval_binop() + test_const_folding() +
                 test_is_checks() + test_optimize_mir() + test_copy_table() +
-                test_opt_edge_cases();
+                test_opt_edge_cases() + test_var_usage() + test_side_effects() +
+                test_opt_levels();
     let u3 = println(total);
     let u4 = println(999);
     0;

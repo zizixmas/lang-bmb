@@ -1,4 +1,4 @@
--- BMB Bootstrap Utilities (v0.29.6)
+-- BMB Bootstrap Utilities (v0.30.139)
 -- Shared utility functions for all bootstrap modules
 -- Consolidates common string operations to reduce code duplication
 --
@@ -472,6 +472,85 @@ fn test_tok_is_eof() -> bool =
     and tok_is_eof(100)
     and not tok_is_eof(1000000);
 
+-- v0.30.139: Edge case tests for character classification boundaries
+fn test_char_boundary_cases() -> bool =
+    -- Test exact boundaries for digits
+    let d1 = is_digit(47) == false;  -- '/' is just before '0'
+    let d2 = is_digit(48) == true;   -- '0'
+    let d3 = is_digit(57) == true;   -- '9'
+    let d4 = is_digit(58) == false;  -- ':' is just after '9'
+    -- Test exact boundaries for alpha
+    let a1 = is_alpha(64) == false;  -- '@' is just before 'A'
+    let a2 = is_alpha(65) == true;   -- 'A'
+    let a3 = is_alpha(90) == true;   -- 'Z'
+    let a4 = is_alpha(91) == false;  -- '[' is just after 'Z'
+    let a5 = is_alpha(96) == false;  -- '`' is just before 'a'
+    let a6 = is_alpha(97) == true;   -- 'a'
+    let a7 = is_alpha(122) == true;  -- 'z'
+    let a8 = is_alpha(123) == false; -- '{' is just after 'z'
+    d1 and d2 and d3 and d4 and a1 and a2 and a3 and a4 and a5 and a6 and a7 and a8;
+
+-- v0.30.139: Edge case tests for int_to_string with large numbers
+fn test_int_to_string_edge() -> bool =
+    -- Single digits
+    let t1 = int_to_string(0) == "0";
+    let t2 = int_to_string(9) == "9";
+    -- Two digits
+    let t3 = int_to_string(10) == "10";
+    let t4 = int_to_string(99) == "99";
+    -- Larger numbers
+    let t5 = int_to_string(1000) == "1000";
+    let t6 = int_to_string(999999) == "999999";
+    -- Negative numbers
+    let t7 = int_to_string(-1) == "-1";
+    let t8 = int_to_string(-999) == "-999";
+    t1 and t2 and t3 and t4 and t5 and t6 and t7 and t8;
+
+-- v0.30.139: Edge case tests for string matching with empty/edge cases
+fn test_string_match_edge() -> bool =
+    -- Empty string/prefix matching
+    let e1 = starts_with("hello", "", 0) == true;     -- Empty prefix always matches
+    let e2 = starts_with("", "a", 0) == false;        -- Non-empty prefix can't match empty string
+    let e3 = starts_with("", "", 0) == true;          -- Empty matches empty
+    -- Position at end
+    let e4 = starts_with("hello", "o", 4) == true;    -- Match at last char
+    let e5 = starts_with("hello", "o", 5) == false;   -- Position at length
+    -- Pattern longer than remaining
+    let e6 = starts_with("hi", "hello", 0) == false;  -- Pattern longer than string
+    e1 and e2 and e3 and e4 and e5 and e6;
+
+-- v0.30.139: Edge case tests for result unpacking with special values
+fn test_result_edge_cases() -> bool =
+    -- Colon in value (should work correctly)
+    let c1 = unpack_ast("10:a:b:c") == "a:b:c";
+    -- Large position values
+    let p1 = pack_result(999999, "x") == "999999:x";
+    let p2 = unpack_pos("999999:x") == 999999;
+    -- Empty value
+    let v1 = pack_result(0, "") == "0:";
+    let v2 = unpack_ast("0:") == "";
+    -- Pipe edge cases
+    let pi1 = unpack_first("") == "";
+    let pi2 = unpack_rest("a") == "";
+    let pi3 = unpack_first("|b") == "";
+    let pi4 = unpack_rest("|b") == "b";
+    c1 and p1 and p2 and v1 and v2 and pi1 and pi2 and pi3 and pi4;
+
+-- v0.30.139: Edge case tests for skip functions
+fn test_skip_edge_cases() -> bool =
+    -- Skip at end of string
+    let s1 = skip_ws("", 0) == 0;
+    let s2 = skip_spaces("", 0) == 0;
+    -- Skip when no whitespace
+    let s3 = skip_ws("abc", 0) == 0;
+    -- Skip all whitespace types
+    let s4 = skip_ws("   abc", 0) == 3;    -- Spaces
+    -- Skip comment edge cases
+    let c1 = skip_comment("", 0) == 0;
+    let c2 = skip_comment("-", 0) == 0;    -- Single dash
+    let c3 = skip_comment("--", 0) == 2;   -- Comment at end (no newline)
+    s1 and s2 and s3 and s4 and c1 and c2 and c3;
+
 -- Run all tests
 fn run_utils_tests() -> i64 =
     let t1 = if test_is_digit() then 1 else 0;
@@ -510,12 +589,22 @@ fn run_utils_tests() -> i64 =
     let t31 = if test_tok_end() then 1 else 0;
     let t32 = if test_tok_is_kind() then 1 else 0;
     let t33 = if test_tok_is_eof() then 1 else 0;
+    -- v0.30.139: Edge case tests
+    let t34 = if test_char_boundary_cases() then 1 else 0;
+    let t35 = if test_int_to_string_edge() then 1 else 0;
+    let t36 = if test_string_match_edge() then 1 else 0;
+    let t37 = if test_result_edge_cases() then 1 else 0;
+    let t38 = if test_skip_edge_cases() then 1 else 0;
     t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18
-    + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33;
+    + t19 + t20 + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30 + t31 + t32 + t33
+    + t34 + t35 + t36 + t37 + t38;
 
 -- Main test entry
 fn main() -> i64 =
+    let u1 = println(111);  -- Start marker
     let passed = run_utils_tests();
-    let total = 33;
-    -- Returns number of passed tests (33 = all pass)
+    let u2 = println(passed);  -- Should be 38
+    let u3 = println(888);  -- End marker
+    let total = 38;  -- v0.30.139: 33 + 5 edge case tests
+    -- Returns number of passed tests (38 = all pass)
     passed;

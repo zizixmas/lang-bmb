@@ -1,8 +1,8 @@
 # BMB Self-Hosting Gap Analysis
 
-**Version**: v0.30.135
+**Version**: v0.30.140
 **Date**: 2026-01-06
-**Status**: Ready for Self-Hosting Completion (Bootstrap tests: types, mir enhanced; --release required)
+**Status**: Bootstrap Testing Enhanced (1,732 tests across 14 files; --release required)
 
 ## Executive Summary
 
@@ -59,24 +59,26 @@ This document provides a comprehensive analysis of the requirements for BMB v0.3
 | config.rs | 4,245 | Complete | Configuration |
 | error.rs | 694 | Complete | Error handling |
 
-### Bootstrap Components (~10,600 LOC in BMB)
+### Bootstrap Components (~16K LOC in BMB)
 
 | File | Size | LOC | Status | Test Coverage |
 |------|------|-----|--------|---------------|
-| llvm_ir.bmb | 106KB | 2,930 | Complete | 361 tests (68 test functions, v0.30.132) |
-| lowering.bmb | 74KB | 2,000 | Complete | 244 tests (stack limit reached) |
-| compiler.bmb | 53KB | 1,202 | Complete | 2 tests |
-| parser_ast.bmb | 98KB | 2,390 | Complete | 104 tests (Struct/Enum/Trait/Impl/Array/Index/MethodCall) |
-| pipeline.bmb | 37KB | 865 | Complete | 64 tests (16 test groups, v0.30.131) |
-| parser_test.bmb | 25KB | 641 | Complete | 15 categories |
-| types.bmb | 310KB | 8,280 | Complete | 746 tests (161 test functions, v0.30.134) |
-| parser.bmb | 22KB | 605 | Complete | Syntax validation |
-| mir.bmb | 22KB | 635 | Complete | 62 tests (13 test functions, v0.30.135) |
-| selfhost_test.bmb | 23KB | 536 | Complete | 8 tests |
-| utils.bmb | 21KB | 521 | Complete | 33 tests |
-| optimize.bmb | 19KB | 492 | Complete | 15 tests (v0.30.130: optimization edge cases) |
-| selfhost_equiv.bmb | 9KB | 251 | Complete | 19 tests |
-| lexer.bmb | 8KB | 224 | Complete | Tokenization |
+| types.bmb | 310KB | ~3,000 | Complete | 746 tests (v0.30.134) |
+| llvm_ir.bmb | 106KB | ~2,200 | Complete | 361 tests (v0.30.132) |
+| lowering.bmb | 74KB | ~2,800 | Complete | 244 tests (stack limit) |
+| parser_ast.bmb | 98KB | ~2,450 | Complete | 113 tests (v0.30.138: operator precedence, complex expressions) |
+| mir.bmb | 22KB | ~1,400 | Complete | 62 tests (v0.30.135) |
+| pipeline.bmb | 37KB | ~1,100 | Complete | 64 tests (v0.30.131) |
+| utils.bmb | 21KB | ~610 | Complete | 38 tests (v0.30.139: edge cases) |
+| parser.bmb | 22KB | ~600 | Complete | 10 tests |
+| optimize.bmb | 19KB | ~550 | Complete | 29 tests (v0.30.137: var usage, side effects, opt levels) |
+| selfhost_equiv.bmb | 9KB | ~400 | Complete | 19 tests |
+| compiler.bmb | 53KB | ~300 | Complete | 8 tests |
+| parser_test.bmb | 25KB | ~200 | Complete | 15 tests |
+| selfhost_test.bmb | 23KB | ~200 | Complete | 8 tests |
+| lexer.bmb | 8KB | ~500 | Complete | 15 tests |
+
+**Bootstrap Test Total**: 1,732 tests across 14 files (v0.30.140)
 
 ## v0.30 Pure Requirements
 

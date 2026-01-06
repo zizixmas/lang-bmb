@@ -164,7 +164,7 @@ v0.MAJOR.MINOR
 | v0.28 | Benchmark | C/Rust/BMB benchmark suite | Compute-intensive benchmarks, Contract-optimized benchmarks, Real-world workloads |
 | v0.29 | Velocity | C/Rust performance sprint | MIR optimization framework (6 passes), Contract-based optimization, Bootstrap optimization module |
 
-### Bootstrap Statistics (as of v0.30.135)
+### Bootstrap Statistics (as of v0.30.140)
 
 | Metric | Value |
 |--------|-------|
@@ -172,7 +172,7 @@ v0.MAJOR.MINOR
 | BMB Bootstrap | ~15,000 LOC |
 | Coverage | 69% |
 | Stage 1/2 Tests | 19 tests passing |
-| Bootstrap Tests | 1,437 tests (746 types + 361 llvm_ir + 244 lowering + 64 pipeline + 62 mir + 15 optimize + 104 parser_ast + ...) |
+| Bootstrap Tests | 1,732 tests (746 types + 361 llvm_ir + 244 lowering + 113 parser_ast + 64 pipeline + 62 mir + 38 utils + 29 optimize + 19 selfhost_equiv + 15 lexer + 15 parser_test + 10 parser + 8 selfhost_test + 8 compiler) |
 | Build Mode | Use `--release` for bootstrap tests (debug build stack overflow on large files) |
 | Stack-Limited Files | lowering.bmb (structural depth issue) |
 
@@ -336,6 +336,32 @@ v0.MAJOR.MINOR
 - Pipeline integration verification: 3 new test groups in pipeline.bmb (12 tests)
 - Multi-operand expressions, mixed operations, combined expressions
 - pipeline.bmb total: 42 tests (10 test groups)
+
+**v0.30.140 Completed (2026-01-06)**:
+- Bootstrap coverage analysis: 1,732 tests across 14 files
+- Test coverage summary documented
+
+**v0.30.139 Completed (2026-01-06)**:
+- utils.bmb edge case tests (+5 tests)
+- test_char_boundary_cases: digit/alpha boundary values
+- test_int_to_string_edge: large numbers, negatives
+- test_string_match_edge: empty strings, position edge cases
+- test_result_edge_cases: special characters, pipe handling
+- test_skip_edge_cases: skip functions boundary conditions
+- utils.bmb: 38 tests
+
+**v0.30.138 Completed (2026-01-06)**:
+- parser_ast.bmb operator precedence and complex expression tests (+9 tests)
+- test_operator_precedence: multiplication before addition, parentheses override
+- test_complex_expressions: nested if-then-else, nested let, method chains
+- parser_ast.bmb: 113 tests
+
+**v0.30.137 Completed (2026-01-06)**:
+- optimize.bmb additional tests (+14 tests)
+- test_var_usage: variable usage detection (5 tests)
+- test_side_effects: side effects detection (5 tests)
+- test_opt_levels: optimization level validation (5 tests)
+- optimize.bmb: 29 tests
 
 **v0.30.135 Completed (2026-01-06)**:
 - MIR generation tests in mir.bmb (+9 tests)
@@ -1588,15 +1614,15 @@ $ bmb doc --check
 
 For detailed analysis of the remaining work, see [GAP_ANALYSIS.md](./GAP_ANALYSIS.md).
 
-**Key Metrics (as of v0.30.135)**:
+**Key Metrics (as of v0.30.140)**:
 - Rust code to remove: ~21,783 LOC
-- BMB bootstrap code: ~15,000 LOC (69% coverage)
-- Gap to close: ~7,900 LOC additional BMB
-- Bootstrap tests: 1,437 tests passing
+- BMB bootstrap code: ~16,000 LOC
+- Bootstrap tests: 1,732 tests across 14 files
+- Gap to close: ~5,800 LOC additional BMB (reduced from ~7,900)
 - Build mode: Use `--release` for bootstrap tests
 - Note: lowering.bmb at stack limit (244 tests max)
 
 ---
 
 **Last Updated**: 2026-01-06
-**Version**: v0.30.135 → v1.0.0-rc Planning Document
+**Version**: v0.30.140 → v1.0.0-rc Planning Document
