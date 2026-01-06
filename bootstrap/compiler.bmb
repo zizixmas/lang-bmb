@@ -1,4 +1,4 @@
--- BMB Unified Compiler (v0.30.175: Extended test suite)
+-- BMB Unified Compiler (v0.30.190: Extended test suite)
 -- Complete compilation pipeline: Source -> AST -> MIR -> LLVM IR
 --
 -- ARCHITECTURE:
@@ -1774,8 +1774,80 @@ fn test_read_sexp_variations() -> i64 =
     let t6 = if read_sexp_at("((nested))", 0) == "((nested))" then 1 else 0;
     t1 + t2 + t3 + t4 + t5 + t6;
 
+-- v0.30.190: Test has_pattern extended
+fn test_has_pattern_ext() -> i64 =
+    let t1 = if has_pattern("hello world", "world", 0) then 1 else 0;
+    let t2 = if has_pattern("abcabc", "abc", 0) then 1 else 0;
+    let t3 = if not has_pattern("hello", "xyz", 0) then 1 else 0;
+    let t4 = if has_pattern("test", "test", 0) then 1 else 0;
+    let t5 = if has_pattern("abc", "c", 0) then 1 else 0;
+    let t6 = if not has_pattern("ab", "abc", 0) then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.190: Test make_tok variations
+fn test_make_tok_variations() -> i64 =
+    let t1 = if make_tok(100, 5) == 100000005 then 1 else 0;
+    let t2 = if make_tok(200, 10) == 200000010 then 1 else 0;
+    let t3 = if make_tok(0, 0) == 0 then 1 else 0;
+    let t4 = if make_tok(999, 999) == 999000999 then 1 else 0;
+    let t5 = if tok_kind(make_tok(150, 20)) == 150 then 1 else 0;
+    let t6 = if tok_end(make_tok(151, 30)) == 30 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.190: Test skip_comment extended
+fn test_skip_comment_ext() -> i64 =
+    let t1 = if skip_to_eol("no newline", 0) == 10 then 1 else 0;
+    let t2 = if skip_to_eol("abc", 0) == 3 then 1 else 0;
+    let t3 = if skip_comment("no comment", 0) == 0 then 1 else 0;
+    let t4 = if skip_comment("-- x", 0) == 4 then 1 else 0;
+    let t5 = if skip_ws_comments("abc", 0) == 0 then 1 else 0;
+    let t6 = if skip_ws_comments("   abc", 0) == 3 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.190: Test keyword_or_ident extended
+fn test_keyword_or_ident_ext() -> i64 =
+    let r1 = keyword_or_ident("fn test", 0, 2);
+    let t1 = if tok_kind(r1) == TK_FN() then 1 else 0;
+    let r2 = keyword_or_ident("let x", 0, 3);
+    let t2 = if tok_kind(r2) == TK_LET() then 1 else 0;
+    let r3 = keyword_or_ident("i64 y", 0, 3);
+    let t3 = if tok_kind(r3) == TK_I64() then 1 else 0;
+    let r4 = keyword_or_ident("myvar", 0, 5);
+    let t4 = if tok_kind(r4) == TK_IDENT() then 1 else 0;
+    let r5 = keyword_or_ident("true x", 0, 4);
+    let t5 = if tok_kind(r5) == TK_TRUE() then 1 else 0;
+    let r6 = keyword_or_ident("false y", 0, 5);
+    let t6 = if tok_kind(r6) == TK_FALSE() then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.190: Test scan functions extended
+fn test_scan_funcs_ext() -> i64 =
+    let r1 = scan_int("12345", 0, 0);
+    let t1 = if tok_val(r1) == 12345 then 1 else 0;
+    let r2 = scan_int("999 abc", 0, 0);
+    let t2 = if tok_val(r2) == 999 then 1 else 0;
+    let t3 = if scan_ident_end("abc123 x", 0) == 6 then 1 else 0;
+    let t4 = if scan_ident_end("_var", 0) == 4 then 1 else 0;
+    let r5 = scan_int("0", 0, 0);
+    let t5 = if tok_val(r5) == 0 then 1 else 0;
+    let t6 = if scan_ident_end("x", 0) == 1 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.190: Test pack/unpack more
+fn test_pack_unpack_more() -> i64 =
+    let r1 = pack_result(42, "(int 1)");
+    let t1 = if unpack_pos(r1) == 42 then 1 else 0;
+    let t2 = if unpack_ast(r1) == "(int 1)" then 1 else 0;
+    let r3 = pack_result(0, "");
+    let t3 = if unpack_pos(r3) == 0 then 1 else 0;
+    let t4 = if find_colon("abc:def", 0) == 3 then 1 else 0;
+    let t5 = if find_colon("no colon", 0) == 8 then 1 else 0;
+    let r6 = pack_result(100, "(var x)");
+    let t6 = if unpack_ast(r6) == "(var x)" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
 -- ============================================================================
--- SECTION 16: Main Test Suite (v0.30.175)
+-- SECTION 16: Main Test Suite (v0.30.190)
 -- ============================================================================
 
 fn main() -> i64 =
@@ -1888,10 +1960,24 @@ fn main() -> i64 =
     let ut51 = test_read_sexp_variations();
     let v51 = println(ut51);  -- Should be 6
 
+    -- v0.30.190: Extended unit tests (36 new assertions)
+    let ut52 = test_has_pattern_ext();
+    let v52 = println(ut52);  -- Should be 6
+    let ut53 = test_make_tok_variations();
+    let v53 = println(ut53);  -- Should be 6
+    let ut54 = test_skip_comment_ext();
+    let v54 = println(ut54);  -- Should be 6
+    let ut55 = test_keyword_or_ident_ext();
+    let v55 = println(ut55);  -- Should be 6
+    let ut56 = test_scan_funcs_ext();
+    let v56 = println(ut56);  -- Should be 6
+    let ut57 = test_pack_unpack_more();
+    let v57 = println(ut57);  -- Should be 6
+
     let unit_base = ut1 + ut2 + ut3 + ut4 + ut5 + ut6 + ut7 + ut8 + ut9 + ut10 + ut11 + ut12 + ut13 + ut14 + ut15 + ut16 + ut17 + ut18 + ut19 + ut20 + ut21 + ut22 + ut23 + ut24 + ut25 + ut26 + ut27 + ut28 + ut29 + ut30 + ut31 + ut32 + ut33 + ut34 + ut35 + ut36 + ut37 + ut38 + ut39 + ut40 + ut41;
-    let unit_ext = ut42 + ut43 + ut44 + ut45 + ut46 + ut47 + ut48 + ut49 + ut50 + ut51;
+    let unit_ext = ut42 + ut43 + ut44 + ut45 + ut46 + ut47 + ut48 + ut49 + ut50 + ut51 + ut52 + ut53 + ut54 + ut55 + ut56 + ut57;
     let unit_total = unit_base + unit_ext;
-    let v42 = println(unit_total);  -- Should be 349 (283 base + 66 extended)
+    let v42 = println(unit_total);  -- Should be 385 (283 base + 102 extended)
 
     let u1 = println(555);  -- Integration tests marker
 
@@ -1943,7 +2029,7 @@ fn main() -> i64 =
     let w9 = println(integration);  -- Should be 8
 
     let total = unit_total + integration;
-    let w10 = println(total);  -- Should be 357 (349 unit + 8 integration)
+    let w10 = println(total);  -- Should be 393 (385 unit + 8 integration)
 
     let u3 = println(999);  -- Final marker
     total;

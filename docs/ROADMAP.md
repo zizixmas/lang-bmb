@@ -172,7 +172,7 @@ v0.MAJOR.MINOR
 | BMB Bootstrap | ~26,023 LOC |
 | Coverage | 119% |
 | Stage 1/2 Tests | 48 tests passing |
-| Bootstrap Tests | 4,120 tests (746 types + 361 llvm_ir + 357 compiler + 334 mir + 307 pipeline + 288 parser_ast + 267 parser + 244 lowering + 244 selfhost_test + 227 optimize + 227 lexer + 221 parser_test + 181 utils + 116 selfhost_equiv) |
+| Bootstrap Tests | 4,372 tests (746 types + 397 llvm_ir + 393 compiler + 334 mir + 343 pipeline + 324 parser_ast + 303 parser + 244 lowering + 280 selfhost_test + 263 optimize + 227 lexer + 221 parser_test + 181 utils + 116 selfhost_equiv) |
 | Build Mode | Use `--release` for bootstrap tests (debug build stack overflow on large files) |
 | Stack-Limited Files | lowering.bmb (structural depth issue) |
 
@@ -336,6 +336,14 @@ v0.MAJOR.MINOR
 - Pipeline integration verification: 3 new test groups in pipeline.bmb (12 tests)
 - Multi-operand expressions, mixed operations, combined expressions
 - pipeline.bmb total: 42 tests (10 test groups)
+
+**v0.30.193 Completed (2026-01-06)**:
+- Phase 30.1.190-193: Bootstrap test coverage enhancement
+- compiler.bmb: 357 → 393 tests (+36) - has_pattern, make_tok, skip_comment, keyword_or_ident tests
+- selfhost_test.bmb: 244 → 280 tests (+36) - keyword_kind, next_token_raw, parse_type, op_symbol tests
+- parser_ast.bmb: 288 → 324 tests (+36) - skip_all, symbol_code, lookup_keyword, is_predicates tests
+- llvm_ir.bmb: 361 → 397 tests (+36) - skip_ws, find_char, starts_with, char_conversion, const_parsing tests
+- Bootstrap test total: 4,372 tests across 14 files
 
 **v0.30.188 Completed (2026-01-06)**:
 - Phase 30.1.185-188: Bootstrap test coverage enhancement

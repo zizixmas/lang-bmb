@@ -1,4 +1,4 @@
--- BMB LLVM IR Generator written in BMB (v0.10.7: Bootstrap Phase 10)
+-- BMB LLVM IR Generator written in BMB (v0.30.193: Extended test suite)
 -- Generates LLVM IR text from MIR representation
 -- Uses functional/recursive style following bootstrap patterns
 --
@@ -3161,6 +3161,66 @@ fn test_advanced_ir_patterns() -> i64 =
 
     t1 + t2 + t3 + t4 + t5 + t6;
 
+-- v0.30.193: Extended skip_ws tests
+fn test_skip_ws_ir() -> i64 =
+    let t1 = if skip_ws("abc", 0) == 0 then 1 else 0;
+    let t2 = if skip_ws("   abc", 0) == 3 then 1 else 0;
+    let t3 = if skip_ws("", 0) == 0 then 1 else 0;
+    let t4 = if skip_ws("x", 0) == 0 then 1 else 0;
+    let t5 = if skip_ws("   ", 0) == 3 then 1 else 0;
+    let t6 = if skip_ws("a  b", 1) == 3 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.193: Extended find_char tests
+fn test_find_char_ir() -> i64 =
+    let t1 = if find_char("abc", 98, 0) == 1 then 1 else 0;
+    let t2 = if find_char("abc", 120, 0) == 3 then 1 else 0;
+    let t3 = if find_pipe("a|b", 0) == 1 then 1 else 0;
+    let t4 = if find_pipe("abc", 0) == 3 then 1 else 0;
+    let t5 = if find_char("hello", 108, 0) == 2 then 1 else 0;
+    let t6 = if find_char("", 97, 0) == 0 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.193: Extended starts_with tests
+fn test_starts_with_ir() -> i64 =
+    let t1 = if starts_with("hello", "hel", 0) then 1 else 0;
+    let t2 = if not starts_with("hello", "xyz", 0) then 1 else 0;
+    let t3 = if starts_with("hello", "", 0) then 1 else 0;
+    let t4 = if starts_with("abc", "abc", 0) then 1 else 0;
+    let t5 = if not starts_with("ab", "abc", 0) then 1 else 0;
+    let t6 = if starts_with("xxhello", "hel", 2) then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.193: Extended char conversion tests
+fn test_char_conversion_ir() -> i64 =
+    let t1 = if char_to_string(65) == "A" then 1 else 0;
+    let t2 = if char_to_string(97) == "a" then 1 else 0;
+    let t3 = if char_to_string(48) == "0" then 1 else 0;
+    let t4 = if char_to_string(32) == " " then 1 else 0;
+    let t5 = if char_upper(66) == "B" then 1 else 0;
+    let t6 = if char_lower(98) == "b" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.193: Extended constant parsing tests
+fn test_const_parsing_ext() -> i64 =
+    let t1 = if parse_const_type("I:42") == "int" then 1 else 0;
+    let t2 = if parse_const_type("B:1") == "bool" then 1 else 0;
+    let t3 = if parse_const_type("U:0") == "unit" then 1 else 0;
+    let t4 = if parse_const_value("I:123") == 123 then 1 else 0;
+    let t5 = if parse_const_value("I:0") == 0 then 1 else 0;
+    let t6 = if parse_const_string("S:hello") == "hello" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.193: Extended LLVM type mapping tests
+fn test_llvm_type_ext() -> i64 =
+    let t1 = if llvm_type("i64") == "i64" then 1 else 0;
+    let t2 = if llvm_type("i32") == "i32" then 1 else 0;
+    let t3 = if llvm_type("bool") == "i1" then 1 else 0;
+    let t4 = if llvm_type("unit") == "void" then 1 else 0;
+    let t5 = if llvm_type("String") == "i8*" then 1 else 0;
+    let t6 = if llvm_type("unknown") == "i64" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
 fn main() -> i64 =
     let u0 = println(777);
     let r1 = test_type_mapping();
@@ -3335,8 +3395,21 @@ fn main() -> i64 =
     -- v0.30.132 advanced IR pattern tests
     let r68 = test_advanced_ir_patterns();
     let u68 = println(r68);
+    -- v0.30.193 extended helper function tests
+    let r69 = test_skip_ws_ir();
+    let u69 = println(r69);
+    let r70 = test_find_char_ir();
+    let u70 = println(r70);
+    let r71 = test_starts_with_ir();
+    let u71 = println(r71);
+    let r72 = test_char_conversion_ir();
+    let u72 = println(r72);
+    let r73 = test_const_parsing_ext();
+    let u73 = println(r73);
+    let r74 = test_llvm_type_ext();
+    let u74 = println(r74);
     let u_end = println(888);
-    let total = r1 + r2 + r3 + r4 + r5 + r6 + r7 + r8 + r9 + r10 + r11 + r12 + r13 + r14 + r15 + r16 + r17 + r18 + r19 + r20 + r21 + r22 + r23 + r24 + r25 + r26 + r27 + r28 + r29 + r30 + r31 + r32 + r33 + r34 + r35 + r36 + r37 + r38 + r39 + r40 + r41 + r42 + r43 + r44 + r45 + r46 + r47 + r48 + r49 + r50 + r51 + r52 + r53 + r54 + r55 + r56 + r57 + r58 + r59 + r60 + r61 + r62 + r63 + r64 + r65 + r66 + r67 + r68;
+    let total = r1 + r2 + r3 + r4 + r5 + r6 + r7 + r8 + r9 + r10 + r11 + r12 + r13 + r14 + r15 + r16 + r17 + r18 + r19 + r20 + r21 + r22 + r23 + r24 + r25 + r26 + r27 + r28 + r29 + r30 + r31 + r32 + r33 + r34 + r35 + r36 + r37 + r38 + r39 + r40 + r41 + r42 + r43 + r44 + r45 + r46 + r47 + r48 + r49 + r50 + r51 + r52 + r53 + r54 + r55 + r56 + r57 + r58 + r59 + r60 + r61 + r62 + r63 + r64 + r65 + r66 + r67 + r68 + r69 + r70 + r71 + r72 + r73 + r74;
     let u_tot = println(total);
     let u_fin = println(999);
     total;

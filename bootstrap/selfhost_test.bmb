@@ -1,6 +1,6 @@
 -- ============================================================================
 -- BMB Bootstrap Self-Hosting Stage 1 Test
--- Version: v0.30.178 (Extended test suite)
+-- Version: v0.30.191 (Extended test suite)
 --
 -- This file tests the Bootstrap compiler's ability to compile BMB source
 -- code and generate valid LLVM IR. This is the first stage of self-hosting
@@ -973,8 +973,80 @@ fn test_parse_bool() -> i64 =
     let ast = parse_source(src);
     if is_error(ast) then 0 else 1;
 
+-- v0.30.191: Test keyword_kind extended
+fn test_keyword_kind_ext() -> i64 =
+    let t1 = if keyword_kind("fn") == TK_FN() then 1 else 0;
+    let t2 = if keyword_kind("let") == TK_LET() then 1 else 0;
+    let t3 = if keyword_kind("if") == TK_IF() then 1 else 0;
+    let t4 = if keyword_kind("then") == TK_THEN() then 1 else 0;
+    let t5 = if keyword_kind("else") == TK_ELSE() then 1 else 0;
+    let t6 = if keyword_kind("xyz") == TK_IDENT() then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.191: Test next_token_raw extended
+fn test_next_token_raw_ext() -> i64 =
+    let r1 = next_token_raw("fn", 0);
+    let t1 = if tok_kind(r1) == TK_FN() then 1 else 0;
+    let r2 = next_token_raw("123", 0);
+    let t2 = if tok_kind(r2) == TK_INT() then 1 else 0;
+    let r3 = next_token_raw("abc", 0);
+    let t3 = if tok_kind(r3) == TK_IDENT() then 1 else 0;
+    let r4 = next_token_raw("==", 0);
+    let t4 = if tok_kind(r4) == TK_EQEQ() then 1 else 0;
+    let r5 = next_token_raw("->", 0);
+    let t5 = if tok_kind(r5) == TK_ARROW() then 1 else 0;
+    let r6 = next_token_raw("", 0);
+    let t6 = if tok_kind(r6) == TK_EOF() then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.191: Test parse_type extended
+fn test_parse_type_ext() -> i64 =
+    let r1 = parse_type("i64 x", 0);
+    let t1 = if unpack_ast(r1) == "i64" then 1 else 0;
+    let r2 = parse_type("i32 y", 0);
+    let t2 = if unpack_ast(r2) == "i32" then 1 else 0;
+    let r3 = parse_type("bool z", 0);
+    let t3 = if unpack_ast(r3) == "bool" then 1 else 0;
+    let t4 = if unpack_pos(r1) == 3 then 1 else 0;
+    let t5 = if unpack_pos(r2) == 3 then 1 else 0;
+    let t6 = if unpack_pos(r3) == 4 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.191: Test op_symbol extended
+fn test_op_symbol_ext() -> i64 =
+    let t1 = if op_symbol(TK_PLUS()) == "+" then 1 else 0;
+    let t2 = if op_symbol(TK_MINUS()) == "-" then 1 else 0;
+    let t3 = if op_symbol(TK_STAR()) == "*" then 1 else 0;
+    let t4 = if op_symbol(TK_SLASH()) == "/" then 1 else 0;
+    let t5 = if op_symbol(TK_PERCENT()) == "%" then 1 else 0;
+    let t6 = if op_symbol(TK_LT()) == "<" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.191: Test tok operations
+fn test_tok_operations() -> i64 =
+    let tok1 = TK_FN() * 1000000 + 5;
+    let t1 = if tok_kind(tok1) == TK_FN() then 1 else 0;
+    let t2 = if tok_end(tok1) == 5 then 1 else 0;
+    let tok2 = TK_INT() * 1000000 + 10;
+    let t3 = if tok_kind(tok2) == TK_INT() then 1 else 0;
+    let t4 = if tok_end(tok2) == 10 then 1 else 0;
+    let tok3 = TK_EOF() * 1000000 + 0;
+    let t5 = if tok_kind(tok3) == TK_EOF() then 1 else 0;
+    let t6 = if tok_end(tok3) == 0 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.191: Test skip functions more
+fn test_skip_functions_more() -> i64 =
+    let t1 = if skip_ws("   abc", 0) == 3 then 1 else 0;
+    let t2 = if skip_ws("abc", 0) == 0 then 1 else 0;
+    let t3 = if scan_ident("abc123", 0) == 6 then 1 else 0;
+    let t4 = if scan_ident("abc", 0) == 3 then 1 else 0;
+    let t5 = if scan_int("123", 0) == 3 then 1 else 0;
+    let t6 = if scan_int("456abc", 0) == 3 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
 -- ============================================================================
--- SECTION 7: Main Test Runner
+-- SECTION 7: Main Test Runner (v0.30.191)
 -- ============================================================================
 
 fn main() -> i64 =
@@ -1084,14 +1156,28 @@ fn main() -> i64 =
     let ut48 = test_next_token_ops();
     let v48 = println(ut48);  -- Should be 6
 
+    -- v0.30.191: Additional unit tests (36 new assertions)
+    let ut49 = test_keyword_kind_ext();
+    let v49 = println(ut49);  -- Should be 6
+    let ut50 = test_next_token_raw_ext();
+    let v50 = println(ut50);  -- Should be 6
+    let ut51 = test_parse_type_ext();
+    let v51 = println(ut51);  -- Should be 6
+    let ut52 = test_op_symbol_ext();
+    let v52 = println(ut52);  -- Should be 6
+    let ut53 = test_tok_operations();
+    let v53 = println(ut53);  -- Should be 6
+    let ut54 = test_skip_functions_more();
+    let v54 = println(ut54);  -- Should be 6
+
     let unit_base = ut1 + ut2 + ut3 + ut4 + ut5 + ut6 + ut7 + ut8 + ut9 +
                     ut10 + ut11 + ut12 + ut13 + ut14 + ut15 + ut16 + ut17 + ut18 + ut19 +
                     ut20 + ut21 + ut22 + ut23 + ut24 + ut25 + ut26 + ut27 + ut28 + ut29 +
                     ut30 + ut31 + ut32;
     let unit_ext = ut33 + ut34 + ut35 + ut36 + ut37 + ut38 + ut39 + ut40 + ut41 + ut42;
-    let unit_new = ut43 + ut44 + ut45 + ut46 + ut47 + ut48;
+    let unit_new = ut43 + ut44 + ut45 + ut46 + ut47 + ut48 + ut49 + ut50 + ut51 + ut52 + ut53 + ut54;
     let unit_total = unit_base + unit_ext + unit_new;
-    let v33 = println(unit_total);  -- Should be 236 (144 base + 56 ext + 36 new)
+    let v33 = println(unit_total);  -- Should be 272 (144 base + 56 ext + 72 new)
 
     let u1 = println(555);  -- Integration tests marker
 
@@ -1126,7 +1212,7 @@ fn main() -> i64 =
     let w9 = println(integration);  -- Should be 8
 
     let total = unit_total + integration;
-    let w10 = println(total);  -- Should be 244 (236 unit + 8 integration)
+    let w10 = println(total);  -- Should be 280 (272 unit + 8 integration)
 
     let u3 = println(999);  -- Final marker
     total;
