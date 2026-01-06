@@ -164,7 +164,7 @@ v0.MAJOR.MINOR
 | v0.28 | Benchmark | C/Rust/BMB benchmark suite | Compute-intensive benchmarks, Contract-optimized benchmarks, Real-world workloads |
 | v0.29 | Velocity | C/Rust performance sprint | MIR optimization framework (6 passes), Contract-based optimization, Bootstrap optimization module |
 
-### Bootstrap Statistics (as of v0.30.103)
+### Bootstrap Statistics (as of v0.30.106)
 
 | Metric | Value |
 |--------|-------|
@@ -334,6 +334,26 @@ v0.MAJOR.MINOR
 - Pipeline integration verification: 3 new test groups in pipeline.bmb (12 tests)
 - Multi-operand expressions, mixed operations, combined expressions
 - pipeline.bmb total: 42 tests (10 test groups)
+
+**v0.30.106 Completed (2026-01-06)**:
+- Closure capture integration test in lowering.bmb (4 new tests)
+- Full pipeline verification: CLOSURE marker + Capture instruction + captured var name
+- Validates complete closure capture MIR generation with free variable analysis
+- lowering.bmb total: 210 tests
+
+**v0.30.105 Completed (2026-01-06)**:
+- Capture/LoadCapture LLVM IR dispatch in llvm_ir.bmb (6 new tests)
+- gen_instr_capture: Generate LLVM IR for Capture MIR instruction
+- gen_instr_load_capture: Generate LLVM IR for LoadCapture MIR instruction
+- Connected dispatch in gen_mir_line_typed for closure environment operations
+- llvm_ir.bmb total: 289 tests
+
+**v0.30.104 Completed (2026-01-06)**:
+- LoadCapture MIR generation in lowering.bmb (18 new tests)
+- gen_load_capture: Generate LoadCapture instruction for captured variable access
+- is_captured_var, find_capture_index: Captured variable detection and index lookup
+- gen_captured_var_access, lower_var_with_captures: Variable access with capture context
+- lowering.bmb total: 206 tests
 
 **v0.30.103 Completed (2026-01-06)**:
 - Closure environment allocation in lowering.bmb (12 new tests)
@@ -1393,13 +1413,13 @@ $ bmb doc --check
 
 For detailed analysis of the remaining work, see [GAP_ANALYSIS.md](./GAP_ANALYSIS.md).
 
-**Key Metrics (as of v0.30.103)**:
+**Key Metrics (as of v0.30.106)**:
 - Rust code to remove: ~21,783 LOC
 - BMB bootstrap code: ~13,900 LOC (64% coverage)
 - Gap to close: ~8,800 LOC additional BMB
-- Bootstrap tests passing: 1321 tests
+- Bootstrap tests passing: 1349 tests
 
 ---
 
 **Last Updated**: 2026-01-06
-**Version**: v0.30.103 → v1.0.0-rc Planning Document
+**Version**: v0.30.106 → v1.0.0-rc Planning Document

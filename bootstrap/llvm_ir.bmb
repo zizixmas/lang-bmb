@@ -758,6 +758,30 @@ fn gen_closure_with_captures(dest: String, fn_ptr: String, env: String) -> Strin
     alloc + "|" + fn_store + "|" + env_store;
 
 -- ============================================================================
+-- v0.30.105: Capture/LoadCapture Instruction Generation
+-- ============================================================================
+
+-- Generate LLVM IR for Capture instruction
+-- MIR format: Capture %closure, %var, idx
+-- LLVM: getelementptr + store into closure environment
+fn gen_instr_capture(line: String) -> String =
+    let closure = parse_capture_closure(line);
+    let cap_var = parse_capture_var(line);
+    let idx_str = parse_capture_idx(line);
+    let idx = parse_int_from(idx_str, 0, 0);
+    gen_capture_store(closure, cap_var, idx);
+
+-- Generate LLVM IR for LoadCapture instruction
+-- MIR format: %dest = LoadCapture %closure, idx
+-- LLVM: getelementptr + load from closure environment
+fn gen_instr_load_capture(line: String) -> String =
+    let dest = parse_load_capture_dest(line);
+    let closure = parse_load_capture_closure(line);
+    let idx_str = parse_load_capture_idx(line);
+    let idx = parse_int_from(idx_str, 0, 0);
+    gen_capture_load(dest, closure, idx);
+
+-- ============================================================================
 -- v0.30.71: Array Literal IR Generation
 -- ============================================================================
 
@@ -1192,6 +1216,9 @@ fn gen_mir_line_typed(line: String, ret_type: String) -> String =
         else if is_switch_line(line) then gen_instr_switch(line)
         -- v0.30.73: Method call support
         else if is_method_call_line(line) then gen_instr_method_call(line)
+        -- v0.30.105: Capture/LoadCapture support
+        else if is_capture_line(line) then gen_instr_capture(line)
+        else if is_load_capture_line(line) then gen_instr_load_capture(line)
         else gen_instruction(line);
 
 -- Check if line is a call instruction
@@ -2365,7 +2392,32 @@ fn test_closure_capture_ir() -> i64 =
     let cw1 = gen_closure_with_captures("%_closure", "%_fn", "%_env");
     let t12 = if has_pattern(cw1, "alloca { i64, i64* }", 0) then 1 else 0;
 
-    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12;
+    -- v0.30.105: Test gen_instr_capture
+    -- Test 13: gen_instr_capture generates IR for Capture instruction
+    let ic1 = gen_instr_capture("  Capture %_env, %x, 0");
+    let t13 = if has_pattern(ic1, "getelementptr", 0) and has_pattern(ic1, "store i64 %x", 0) then 1 else 0;
+
+    -- Test 14: gen_instr_capture handles index 1
+    let ic2 = gen_instr_capture("  Capture %_env, %y, 1");
+    let t14 = if has_pattern(ic2, "i64 1", 0) and has_pattern(ic2, "store i64 %y", 0) then 1 else 0;
+
+    -- Test 15: gen_instr_capture handles index 2
+    let ic3 = gen_instr_capture("  Capture %_env, %z, 2");
+    let t15 = if has_pattern(ic3, "i64 2", 0) and has_pattern(ic3, "store i64 %z", 0) then 1 else 0;
+
+    -- Test 16: gen_instr_load_capture generates IR for LoadCapture instruction
+    let lci1 = gen_instr_load_capture("  %_t0 = LoadCapture %_env, 0");
+    let t16 = if has_pattern(lci1, "getelementptr", 0) and has_pattern(lci1, "load i64", 0) then 1 else 0;
+
+    -- Test 17: gen_instr_load_capture extracts correct destination
+    let lci2 = gen_instr_load_capture("  %_t5 = LoadCapture %_closure, 1");
+    let t17 = if has_pattern(lci2, "%_t5 = load i64", 0) then 1 else 0;
+
+    -- Test 18: gen_instr_load_capture handles index 2
+    let lci3 = gen_instr_load_capture("  %_result = LoadCapture %_env, 2");
+    let t18 = if has_pattern(lci3, "i64 2", 0) and has_pattern(lci3, "%_result = load i64", 0) then 1 else 0;
+
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18;
 
 -- v0.30.48: Test UNIT, BREAK, CONTINUE instruction generation
 fn test_unit_break_continue() -> i64 =

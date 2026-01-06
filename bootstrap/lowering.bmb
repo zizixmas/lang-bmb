@@ -914,7 +914,52 @@ fn gen_env_stores(env_place: String, free_vars: String, count: i64, idx: i64) ->
 fn gen_closure_with_env(closure_place: String, env_place: String, fn_id: i64) -> String =
     "  " + closure_place + " = ClosureEnv " + env_place + ", @closure_" + int_to_string(fn_id);
 
--- Lower lambda/closure expression (updated v0.30.103)
+-- ============================================================================
+-- v0.30.104: LoadCapture MIR Generation
+-- ============================================================================
+-- Runtime access to captured variables within closure body
+
+-- Generate LoadCapture instruction
+-- LoadCapture %dest, %closure, idx - loads captured value at index from closure env
+fn gen_load_capture(dest: String, closure_place: String, idx: i64) -> String =
+    "  " + dest + " = LoadCapture " + closure_place + ", " + int_to_string(idx);
+
+-- Check if a variable name is in the captured variables list
+fn is_captured_var(var_name: String, captured_vars: String) -> bool =
+    is_in_names(var_name, captured_vars);
+
+-- Find the index of a captured variable (0-based)
+fn find_capture_index(var_name: String, captured_vars: String) -> i64 =
+    find_capture_index_at(var_name, captured_vars, 0);
+
+fn find_capture_index_at(var_name: String, captured_vars: String, idx: i64) -> i64 =
+    if captured_vars.len() == 0 then 0 - 1  -- not found
+    else
+        let name = name_at_index(captured_vars, idx);
+        if name == var_name then idx
+        else if name == "" then 0 - 1  -- not found
+        else find_capture_index_at(var_name, captured_vars, idx + 1);
+
+-- Generate LoadCapture for a captured variable access
+fn gen_captured_var_access(dest: String, var_name: String, closure_place: String, captured_vars: String) -> String =
+    let idx = find_capture_index(var_name, captured_vars);
+    if idx < 0 then "  ; error: captured var not found: " + var_name
+    else gen_load_capture(dest, closure_place, idx);
+
+-- Lower variable reference with capture context
+-- If var is captured, generates LoadCapture; otherwise normal var reference
+fn lower_var_with_captures(var_name: String, temp: i64, block: i64,
+                           closure_place: String, captured_vars: String) -> String =
+    let dest = place_temp(temp);
+    if is_captured_var(var_name, captured_vars) then
+        let load_text = gen_captured_var_access(dest, var_name, closure_place, captured_vars);
+        pack_lower_result(temp + 1, block, dest, load_text)
+    else
+        -- Normal variable reference (unchanged behavior)
+        let text = "  " + dest + " = copy %" + var_name;
+        pack_lower_result(temp + 1, block, dest, text);
+
+-- Lower lambda/closure expression (updated v0.30.104)
 -- Now with environment allocation for captured variables
 fn lower_lambda(ast: String, temp: i64, block: i64) -> String =
     let body = lambda_extract_body(ast);
@@ -2376,6 +2421,61 @@ fn main() -> i64 =
     let closure_env_tests = gcwe1 + gcwe2 + gcwe3;
     let u67 = println(closure_env_tests);  -- Should be 3
 
+    -- Test 65: v0.30.104 gen_load_capture (3 tests)
+    let glc1 = if gen_load_capture("%t0", "%closure", 0) == "  %t0 = LoadCapture %closure, 0" then 1 else 0;
+    let glc2 = if gen_load_capture("%t1", "%cl", 2) == "  %t1 = LoadCapture %cl, 2" then 1 else 0;
+    let glc3 = if str_contains(gen_load_capture("%x", "%c", 5), "LoadCapture %c, 5") then 1 else 0;
+    let load_capture_tests = glc1 + glc2 + glc3;
+    let u68 = println(load_capture_tests);  -- Should be 3
+
+    -- Test 66: v0.30.104 is_captured_var (4 tests)
+    let icv1 = if is_captured_var("x", "x,y,z") then 1 else 0;
+    let icv2 = if is_captured_var("y", "x,y,z") then 1 else 0;
+    let icv3 = if is_captured_var("w", "x,y,z") then 0 else 1;  -- NOT captured
+    let icv4 = if is_captured_var("x", "") then 0 else 1;  -- empty list
+    let is_captured_tests = icv1 + icv2 + icv3 + icv4;
+    let u69 = println(is_captured_tests);  -- Should be 4
+
+    -- Test 67: v0.30.104 find_capture_index (4 tests)
+    let fci1 = if find_capture_index("x", "x,y,z") == 0 then 1 else 0;
+    let fci2 = if find_capture_index("y", "x,y,z") == 1 then 1 else 0;
+    let fci3 = if find_capture_index("z", "x,y,z") == 2 then 1 else 0;
+    let fci4 = if find_capture_index("w", "x,y,z") < 0 then 1 else 0;  -- not found = -1
+    let find_capture_tests = fci1 + fci2 + fci3 + fci4;
+    let u70 = println(find_capture_tests);  -- Should be 4
+
+    -- Test 68: v0.30.104 gen_captured_var_access (3 tests)
+    let gcva1 = if str_contains(gen_captured_var_access("%t0", "x", "%cl", "x,y"), "LoadCapture %cl, 0") then 1 else 0;
+    let gcva2 = if str_contains(gen_captured_var_access("%t1", "y", "%cl", "x,y"), "LoadCapture %cl, 1") then 1 else 0;
+    let gcva3 = if str_contains(gen_captured_var_access("%t2", "z", "%cl", "x,y"), "error") then 1 else 0;
+    let captured_access_tests = gcva1 + gcva2 + gcva3;
+    let u71 = println(captured_access_tests);  -- Should be 3
+
+    -- Test 69: v0.30.104 lower_var_with_captures (4 tests)
+    let lvwc1_result = lower_var_with_captures("x", 0, 0, "%cl", "x,y");
+    let lvwc1_text = unpack_text(lvwc1_result);
+    let lvwc1 = if str_contains(lvwc1_text, "LoadCapture") then 1 else 0;  -- captured
+    let lvwc2_result = lower_var_with_captures("z", 0, 0, "%cl", "x,y");
+    let lvwc2_text = unpack_text(lvwc2_result);
+    let lvwc2 = if str_contains(lvwc2_text, "copy %z") then 1 else 0;  -- not captured
+    let lvwc3 = if str_contains(lvwc1_text, "LoadCapture %cl, 0") then 1 else 0;  -- x is at index 0
+    let lvwc4_result = lower_var_with_captures("y", 0, 0, "%cl", "x,y");
+    let lvwc4_text = unpack_text(lvwc4_result);
+    let lvwc4 = if str_contains(lvwc4_text, "LoadCapture %cl, 1") then 1 else 0;  -- y is at index 1
+    let var_with_captures_tests = lvwc1 + lvwc2 + lvwc3 + lvwc4;
+    let u72 = println(var_with_captures_tests);  -- Should be 4
+
+    -- Test 70: v0.30.106 Closure capture integration test (4 tests)
+    -- Full pipeline: lambda with capture generates CLOSURE + Capture + body lowering
+    let cit1_result = lower_expr("(fn |(x: i64)| (+ (var <x>) (var <base>)))", 0, 0);
+    let cit1_text = unpack_text(cit1_result);
+    let cit1 = if str_contains(cit1_text, "CLOSURE:") then 1 else 0;  -- Closure marker
+    let cit2 = if str_contains(cit1_text, "Capture") then 1 else 0;  -- Capture instruction
+    let cit3 = if str_contains(cit1_text, "%base") then 1 else 0;  -- Captured var name
+    let cit4 = if str_contains(cit1_text, ":1") then 1 else 0;  -- Capture count = 1
+    let capture_integration_tests = cit1 + cit2 + cit3 + cit4;
+    let u73 = println(capture_integration_tests);  -- Should be 4
+
     let u22 = println(888);  -- Separator
 
     let total = node_tests + extract_tests + child_tests + int_tests + bool_tests +
@@ -2395,8 +2495,10 @@ fn main() -> i64 =
                 count_names_tests + name_at_tests + filter_free_tests + lambda_capture_tests +
                 static_symbol_tests + concrete_type_tests + static_dispatch_tests + expanded_trait_tests +
                 static_lower_tests + smart_dispatch_tests +
-                env_alloc_tests + env_store_tests + env_stores_tests + closure_env_tests;
-    let u23 = println(total);  -- Should be 188 (176 + 12 new tests)
+                env_alloc_tests + env_store_tests + env_stores_tests + closure_env_tests +
+                load_capture_tests + is_captured_tests + find_capture_tests + captured_access_tests + var_with_captures_tests +
+                capture_integration_tests;
+    let u23 = println(total);  -- Should be 210 (206 + 4 new tests)
 
     let u24 = println(999);  -- End marker
 
