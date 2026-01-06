@@ -1,8 +1,8 @@
 # BMB Self-Hosting Gap Analysis
 
-**Version**: v0.30.160
+**Version**: v0.30.164
 **Date**: 2026-01-06
-**Status**: Bootstrap Testing Enhanced (2,565 tests across 14 files; --release required)
+**Status**: Bootstrap Testing Enhanced (3,231 tests across 14 files; --release required)
 
 ## Executive Summary
 
@@ -67,10 +67,10 @@ This document provides a comprehensive analysis of the requirements for BMB v0.3
 | llvm_ir.bmb | 106KB | ~3,342 | Complete | 361 tests (v0.30.132) |
 | lowering.bmb | 74KB | ~2,727 | Complete | 244 tests (stack limit) |
 | parser_ast.bmb | 98KB | ~2,456 | Complete | 113 tests (v0.30.138) |
-| compiler.bmb | 53KB | ~1,336 | Complete | 119 tests (v0.30.153) |
-| pipeline.bmb | 37KB | ~1,012 | Complete | 138 tests (v0.30.146) |
-| mir.bmb | 22KB | ~723 | Complete | 99 tests (v0.30.147) |
-| parser.bmb | 22KB | ~722 | Complete | 117 tests (v0.30.152) |
+| compiler.bmb | 65KB | ~1,804 | Complete | 291 tests (v0.30.163) |
+| pipeline.bmb | 52KB | ~1,424 | Complete | 307 tests (v0.30.162) |
+| mir.bmb | 35KB | ~1,180 | Complete | 274 tests (v0.30.161) |
+| parser.bmb | 38KB | ~1,123 | Complete | 267 tests (v0.30.164) |
 | selfhost_test.bmb | 23KB | ~655 | Complete | 152 tests (v0.30.158) |
 | optimize.bmb | 19KB | ~643 | Complete | 155 tests (v0.30.159) |
 | parser_test.bmb | 25KB | ~641 | Complete | 99 tests (v0.30.157) |
@@ -78,7 +78,7 @@ This document provides a comprehensive analysis of the requirements for BMB v0.3
 | lexer.bmb | 8KB | ~385 | Complete | 127 tests (v0.30.154) |
 | selfhost_equiv.bmb | 9KB | ~300 | Complete | 48 tests (v0.30.149) |
 
-**Bootstrap Test Total**: 2,565 tests across 14 files (v0.30.160)
+**Bootstrap Test Total**: 3,231 tests across 14 files (v0.30.164)
 
 ## v0.30 Pure Requirements
 
@@ -344,11 +344,11 @@ $ diff stage2/bmb stage3/bmb
 
 v0.30 "Pure" represents the culmination of the BMB self-hosting journey. With Stage 1/2 verification complete and the bootstrap covering the full compilation pipeline, the remaining work is substantial but achievable within the 2026 Q4 timeline.
 
-**Key Metrics** (as of v0.30.132):
+**Key Metrics** (as of v0.30.164):
 - Rust code to remove: ~21,783 LOC
-- BMB bootstrap code: ~14,900 LOC (68% coverage)
-- Gap to close: ~8,000 LOC additional BMB
-- Bootstrap tests: 1,415 tests (733 types + 361 llvm_ir + 244 lowering + 64 pipeline + 53 mir + 15 optimize + ...)
+- BMB bootstrap code: ~23,829 LOC (109% coverage)
+- Gap to close: ~4,000 LOC (gotgan only)
+- Bootstrap tests: 3,231 tests (746 types + 361 llvm_ir + 307 pipeline + 291 compiler + 274 mir + 267 parser + ...)
 - Note: Use `--release` build for bootstrap tests (debug build has stack overflow on large files)
 - Estimated effort: 6-9 months
 

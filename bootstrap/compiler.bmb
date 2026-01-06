@@ -1,4 +1,4 @@
--- BMB Unified Compiler (v0.30.153: Enhanced test suite)
+-- BMB Unified Compiler (v0.30.163: Comprehensive test enhancement)
 -- Complete compilation pipeline: Source -> AST -> MIR -> LLVM IR
 --
 -- ARCHITECTURE:
@@ -1357,36 +1357,329 @@ fn test_extract_functions() -> i64 =
     let t8 = if low_find_close_paren("(ab(cd)ef)", 0, 0) == 9 then 1 else 0;
     t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
 
+-- v0.30.163: Extended token constants (keywords and control)
+fn test_token_constants_ext() -> i64 =
+    let t1 = if TK_THEN() == 103 then 1 else 0;
+    let t2 = if TK_ELSE() == 104 then 1 else 0;
+    let t3 = if TK_TRUE() == 105 then 1 else 0;
+    let t4 = if TK_FALSE() == 106 then 1 else 0;
+    let t5 = if TK_AND() == 107 then 1 else 0;
+    let t6 = if TK_OR() == 108 then 1 else 0;
+    let t7 = if TK_NOT() == 109 then 1 else 0;
+    let t8 = if TK_PRE() == 110 then 1 else 0;
+    let t9 = if TK_POST() == 111 then 1 else 0;
+    let t10 = if TK_MUT() == 117 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10;
+
+-- v0.30.163: Extended token constants (types and operators)
+fn test_token_types_ops() -> i64 =
+    let t1 = if TK_I32() == 150 then 1 else 0;
+    let t2 = if TK_F64() == 152 then 1 else 0;
+    let t3 = if TK_STRING_TYPE() == 154 then 1 else 0;
+    let t4 = if TK_INT() == 200 then 1 else 0;
+    let t5 = if TK_IDENT() == 201 then 1 else 0;
+    let t6 = if TK_COLON() == 300 then 1 else 0;
+    let t7 = if TK_EQ() == 302 then 1 else 0;
+    let t8 = if TK_SEMI() == 303 then 1 else 0;
+    let t9 = if TK_COMMA() == 304 then 1 else 0;
+    let t10 = if TK_LPAREN() == 305 then 1 else 0;
+    let t11 = if TK_RPAREN() == 306 then 1 else 0;
+    let t12 = if TK_ARROW() == 321 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12;
+
+-- v0.30.163: Extended token constants (arithmetic and comparison)
+fn test_token_arith_cmp() -> i64 =
+    let t1 = if TK_PLUS() == 400 then 1 else 0;
+    let t2 = if TK_MINUS() == 401 then 1 else 0;
+    let t3 = if TK_STAR() == 402 then 1 else 0;
+    let t4 = if TK_SLASH() == 403 then 1 else 0;
+    let t5 = if TK_PERCENT() == 404 then 1 else 0;
+    let t6 = if TK_LT() == 405 then 1 else 0;
+    let t7 = if TK_GT() == 406 then 1 else 0;
+    let t8 = if TK_EQEQ() == 410 then 1 else 0;
+    let t9 = if TK_NEQ() == 411 then 1 else 0;
+    let t10 = if TK_LTEQ() == 412 then 1 else 0;
+    let t11 = if TK_GTEQ() == 413 then 1 else 0;
+    let t12 = if TK_DOTDOT() == 323 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12;
+
+-- v0.30.163: Extended digit_char (all 10 digits)
+fn test_digit_char_ext() -> i64 =
+    let t1 = if digit_char(0) == "0" then 1 else 0;
+    let t2 = if digit_char(1) == "1" then 1 else 0;
+    let t3 = if digit_char(2) == "2" then 1 else 0;
+    let t4 = if digit_char(3) == "3" then 1 else 0;
+    let t5 = if digit_char(4) == "4" then 1 else 0;
+    let t6 = if digit_char(5) == "5" then 1 else 0;
+    let t7 = if digit_char(6) == "6" then 1 else 0;
+    let t8 = if digit_char(7) == "7" then 1 else 0;
+    let t9 = if digit_char(8) == "8" then 1 else 0;
+    let t10 = if digit_char(9) == "9" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10;
+
+-- v0.30.163: Extended int_to_string tests
+fn test_int_to_string_ext() -> i64 =
+    let t1 = if int_to_string(1) == "1" then 1 else 0;
+    let t2 = if int_to_string(10) == "10" then 1 else 0;
+    let t3 = if int_to_string(99) == "99" then 1 else 0;
+    let t4 = if int_to_string(123) == "123" then 1 else 0;
+    let t5 = if int_to_string(1000) == "1000" then 1 else 0;
+    let t6 = if int_to_string(999999) == "999999" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.163: Extended character classification
+fn test_char_class_ext() -> i64 =
+    let t1 = if is_whitespace(9) then 1 else 0;   -- tab
+    let t2 = if is_whitespace(13) then 1 else 0;  -- carriage return
+    let t3 = if not is_whitespace(65) then 1 else 0;  -- 'A'
+    let t4 = if is_digit(49) then 1 else 0;   -- '1'
+    let t5 = if not is_digit(65) then 1 else 0;   -- 'A'
+    let t6 = if is_alpha(90) then 1 else 0;   -- 'Z'
+    let t7 = if is_alpha(97) then 1 else 0;   -- 'a'
+    let t8 = if not is_alpha(48) then 1 else 0;   -- '0'
+    let t9 = if is_alnum_or_underscore(48) then 1 else 0;   -- '0'
+    let t10 = if not is_alnum_or_underscore(32) then 1 else 0;  -- space
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10;
+
+-- v0.30.163: Extended keyword tests
+fn test_keyword_ext() -> i64 =
+    let r1 = keyword_or_ident("then x", 0, 4);
+    let t1 = if tok_kind(r1) == TK_THEN() then 1 else 0;
+    let r2 = keyword_or_ident("else x", 0, 4);
+    let t2 = if tok_kind(r2) == TK_ELSE() then 1 else 0;
+    let r3 = keyword_or_ident("true x", 0, 4);
+    let t3 = if tok_kind(r3) == TK_TRUE() then 1 else 0;
+    let r4 = keyword_or_ident("false x", 0, 5);
+    let t4 = if tok_kind(r4) == TK_FALSE() then 1 else 0;
+    let r5 = keyword_or_ident("and x", 0, 3);
+    let t5 = if tok_kind(r5) == TK_AND() then 1 else 0;
+    let r6 = keyword_or_ident("or x", 0, 2);
+    let t6 = if tok_kind(r6) == TK_OR() then 1 else 0;
+    let r7 = keyword_or_ident("not x", 0, 3);
+    let t7 = if tok_kind(r7) == TK_NOT() then 1 else 0;
+    let r8 = keyword_or_ident("i32 x", 0, 3);
+    let t8 = if tok_kind(r8) == TK_I32() then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+
+-- v0.30.163: More keyword tests
+fn test_keyword_more() -> i64 =
+    let r1 = keyword_or_ident("f64 x", 0, 3);
+    let t1 = if tok_kind(r1) == TK_F64() then 1 else 0;
+    let r2 = keyword_or_ident("String x", 0, 6);
+    let t2 = if tok_kind(r2) == TK_STRING_TYPE() then 1 else 0;
+    let r3 = keyword_or_ident("pre x", 0, 3);
+    let t3 = if tok_kind(r3) == TK_PRE() then 1 else 0;
+    let r4 = keyword_or_ident("post x", 0, 4);
+    let t4 = if tok_kind(r4) == TK_POST() then 1 else 0;
+    let r5 = keyword_or_ident("mut x", 0, 3);
+    let t5 = if tok_kind(r5) == TK_MUT() then 1 else 0;
+    let r6 = keyword_or_ident("myvar x", 0, 5);
+    let t6 = if tok_kind(r6) == TK_IDENT() then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.163: More next_token tests
+fn test_next_token_ext() -> i64 =
+    let r1 = next_token_raw("* x", 0);
+    let t1 = if tok_kind(r1) == TK_STAR() then 1 else 0;
+    let r2 = next_token_raw("/ x", 0);
+    let t2 = if tok_kind(r2) == TK_SLASH() then 1 else 0;
+    let r3 = next_token_raw("% x", 0);
+    let t3 = if tok_kind(r3) == TK_PERCENT() then 1 else 0;
+    let r4 = next_token_raw("< x", 0);
+    let t4 = if tok_kind(r4) == TK_LT() then 1 else 0;
+    let r5 = next_token_raw("> x", 0);
+    let t5 = if tok_kind(r5) == TK_GT() then 1 else 0;
+    let r6 = next_token_raw(">= x", 0);
+    let t6 = if tok_kind(r6) == TK_GTEQ() then 1 else 0;
+    let r7 = next_token_raw("!= x", 0);
+    let t7 = if tok_kind(r7) == TK_NEQ() then 1 else 0;
+    let r8 = next_token_raw("; x", 0);
+    let t8 = if tok_kind(r8) == TK_SEMI() then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+
+-- v0.30.163: Punctuation tokens
+fn test_punctuation_tokens() -> i64 =
+    let r1 = next_token_raw(", x", 0);
+    let t1 = if tok_kind(r1) == TK_COMMA() then 1 else 0;
+    let r2 = next_token_raw("( x", 0);
+    let t2 = if tok_kind(r2) == TK_LPAREN() then 1 else 0;
+    let r3 = next_token_raw(") x", 0);
+    let t3 = if tok_kind(r3) == TK_RPAREN() then 1 else 0;
+    let r4 = next_token_raw("= x", 0);
+    let t4 = if tok_kind(r4) == TK_EQ() then 1 else 0;
+    let r5 = next_token_raw(".. x", 0);
+    let t5 = if tok_kind(r5) == TK_DOTDOT() then 1 else 0;
+    let r6 = next_token_raw("fn x", 0);
+    let t6 = if tok_kind(r6) == TK_FN() then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.163: Extended S-expression utilities
+fn test_sexp_utils_ext() -> i64 =
+    let t1 = if get_node_type("(binop + a b)") == "binop" then 1 else 0;
+    let t2 = if get_node_type("(if c t e)") == "if" then 1 else 0;
+    let t3 = if get_node_type("(let x v b)") == "let" then 1 else 0;
+    let t4 = if get_node_type("(call f a)") == "call" then 1 else 0;
+    let t5 = if get_node_type("(unary - x)") == "unary" then 1 else 0;
+    let t6 = if get_node_type("(param x i64)") == "param" then 1 else 0;
+    let t7 = if get_node_type("(program)") == "program" then 1 else 0;
+    let t8 = if get_node_type("(bool true)") == "bool" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+
+-- v0.30.163: Low-level character tests
+fn test_low_char_funcs() -> i64 =
+    let t1 = if low_is_ident_char(48) then 1 else 0;   -- '0'
+    let t2 = if low_is_ident_char(45) then 1 else 0;   -- '-' (hyphen in names)
+    let t3 = if not low_is_ident_char(32) then 1 else 0;  -- space
+    let t4 = if low_is_op_char(45) then 1 else 0;    -- '-'
+    let t5 = if low_is_op_char(42) then 1 else 0;    -- '*'
+    let t6 = if low_is_op_char(47) then 1 else 0;    -- '/'
+    let t7 = if not low_is_op_char(65) then 1 else 0;  -- 'A'
+    let t8 = if low_is_op_char(37) then 1 else 0;    -- '%'
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+
+-- v0.30.163: Find functions extended
+fn test_find_funcs_ext() -> i64 =
+    let t1 = if find_angle_end("<name>", 0) == 6 then 1 else 0;
+    let t2 = if find_angle_end("<x>", 0) == 3 then 1 else 0;
+    let t3 = if find_number_end("123abc", 0) == 3 then 1 else 0;
+    let t4 = if find_number_end("42", 0) == 2 then 1 else 0;
+    let t5 = if find_digits_end("999x", 0) == 3 then 1 else 0;
+    let t6 = if find_comma_or_end("abc", 0) == 3 then 1 else 0;
+    let t7 = if find_comma_or_end("a,b", 0) == 1 then 1 else 0;
+    let t8 = if low_find_ident_end("foo-bar ", 0) == 7 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+
+-- v0.30.163: Read S-expression at position
+fn test_read_sexp_at() -> i64 =
+    let t1 = if read_sexp_at("(fn x)", 0) == "(fn x)" then 1 else 0;
+    let t2 = if read_sexp_at("<name>", 0) == "<name>" then 1 else 0;
+    let t3 = if read_sexp_at("42 x", 0) == "42" then 1 else 0;
+    let t4 = if read_sexp_at("abc x", 0) == "abc" then 1 else 0;
+    let t5 = if read_sexp_at("+ x", 0) == "+" then 1 else 0;
+    let t6 = if read_sexp_at("== x", 0) == "==" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.163: Extract name variations
+fn test_extract_name_ext() -> i64 =
+    let t1 = if extract_name("(fn <add>)") == "add" then 1 else 0;
+    let t2 = if extract_name("(fn <main>)") == "main" then 1 else 0;
+    let t3 = if extract_name("(call <foo>)") == "foo" then 1 else 0;
+    let t4 = if extract_name("(var <x>)") == "x" then 1 else 0;
+    let t5 = if extract_name("(let <val>)") == "val" then 1 else 0;
+    let t6 = if extract_name("(param <n>)") == "n" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.163: Extract int value variations
+fn test_extract_int_ext() -> i64 =
+    let t1 = if extract_int_value("(int 0)") == 0 then 1 else 0;
+    let t2 = if extract_int_value("(int 1)") == 1 then 1 else 0;
+    let t3 = if extract_int_value("(int 100)") == 100 then 1 else 0;
+    let t4 = if extract_int_value("(int 999)") == 999 then 1 else 0;
+    let t5 = if extract_int_value("(int 12345)") == 12345 then 1 else 0;
+    let t6 = if parse_int_from("42abc", 0, 0) == 42 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.163: Get child tests
+fn test_get_child() -> i64 =
+    let t1 = if get_child("(binop + a b)", 0) == "+" then 1 else 0;
+    let t2 = if get_child("(binop + a b)", 1) == "a" then 1 else 0;
+    let t3 = if get_child("(binop + a b)", 2) == "b" then 1 else 0;
+    let t4 = if get_child("(if c t e)", 0) == "c" then 1 else 0;
+    let t5 = if get_child("(if c t e)", 1) == "t" then 1 else 0;
+    let t6 = if get_child("(if c t e)", 2) == "e" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.163: Compiler entry point tests
+fn test_compile_entry() -> i64 =
+    let t1 = if is_compile_error("ERR:PARSE:test") then 1 else 0;
+    let t2 = if not is_compile_error("define i64") then 1 else 0;
+    let t3 = if get_error_type("ERR:PARSE:msg") == "PARSE" then 1 else 0;
+    let t4 = if get_error_type("ERR:LOWERING:x") == "LOWERING" then 1 else 0;
+    let t5 = if get_error_type("OK result") == "" then 1 else 0;
+    let t6 = if is_compile_error("ERR:") then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.163: Skip whitespace and comments tests
+fn test_skip_combined() -> i64 =
+    let t1 = if skip_ws_comments("  abc", 0) == 2 then 1 else 0;
+    let t2 = if skip_ws_comments("-- x", 0) > 0 then 1 else 0;
+    let t3 = if skip_ws_comments("abc", 0) == 0 then 1 else 0;
+    let t4 = if skip_ws_comments("", 0) == 0 then 1 else 0;
+    let t5 = if skip_ws_comments("  -- comment", 0) > 2 then 1 else 0;
+    let t6 = if skip_to_eol("test", 0) == 4 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.163: Pack and unpack extended tests
+fn test_pack_unpack_ext() -> i64 =
+    let r1 = pack_result(999, "(test)");
+    let t1 = if unpack_pos(r1) == 999 then 1 else 0;
+    let t2 = if unpack_ast(r1) == "(test)" then 1 else 0;
+    let r2 = pack_lower_result("mir code", 42);
+    let t3 = if unpack_temp_id(r2) == 42 then 1 else 0;
+    let t4 = if unpack_text(r2) == "mir code" then 1 else 0;
+    let t5 = if unpack_pos_acc("123:ast", 0, 0) == 123 then 1 else 0;
+    let t6 = if find_colon("test:value", 0) == 4 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.163: LLVM generation tests
+fn test_llvm_gen_basic() -> i64 =
+    let t1 = if has_pattern(gen_extern_println(), "println", 0) then 1 else 0;
+    let t2 = if has_pattern(gen_extern_abs(), "abs", 0) then 1 else 0;
+    let t3 = if has_pattern(gen_extern_min(), "min", 0) then 1 else 0;
+    let t4 = if has_pattern(gen_extern_max(), "max", 0) then 1 else 0;
+    let decls = gen_runtime_decls();
+    let t5 = if has_pattern(decls, "declare", 0) then 1 else 0;
+    let t6 = if has_pattern(decls, "i64", 0) then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.163: Trim and end tests
+fn test_trim_ends() -> i64 =
+    let t1 = if trim_end("abc   ") == "abc" then 1 else 0;
+    let t2 = if trim_end("x") == "x" then 1 else 0;
+    let t3 = if trim_end("  y  ") == "  y" then 1 else 0;
+    let t4 = if ends_with_colon("block:") then 1 else 0;
+    let t5 = if not ends_with_colon("block") then 1 else 0;
+    let t6 = if ends_with_colon("then_0:") then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.163: Low skip and find tests
+fn test_low_skip_find() -> i64 =
+    let t1 = if low_skip_ws("   abc", 0) == 3 then 1 else 0;
+    let t2 = if low_skip_ws("abc", 0) == 0 then 1 else 0;
+    let t3 = if low_find_close_paren("(a)", 0, 0) == 2 then 1 else 0;
+    let t4 = if low_find_close_paren("((a))", 0, 0) == 4 then 1 else 0;
+    let t5 = if low_find_ident_end("test123", 0) == 7 then 1 else 0;
+    let t6 = if low_find_op_end("<= x", 0) == 2 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
 -- ============================================================================
--- SECTION 16: Main Test Suite (v0.30.153)
+-- SECTION 16: Main Test Suite (v0.30.163)
 -- ============================================================================
 
 fn main() -> i64 =
     let u0 = println(777);  -- Start marker
 
-    -- Unit tests (v0.30.153)
+    -- Unit tests (v0.30.163)
     let ut1 = test_digit_char();
-    let v1 = println(ut1);  -- Should be 4
+    let v1 = println(ut1);    -- Should be 4
     let ut2 = test_int_to_string();
-    let v2 = println(ut2);  -- Should be 4
+    let v2 = println(ut2);    -- Should be 4
     let ut3 = test_char_class();
-    let v3 = println(ut3);  -- Should be 8
+    let v3 = println(ut3);    -- Should be 8
     let ut4 = test_error_utils();
-    let v4 = println(ut4);  -- Should be 6
+    let v4 = println(ut4);    -- Should be 6
     let ut5 = test_token_constants();
-    let v5 = println(ut5);  -- Should be 6
+    let v5 = println(ut5);    -- Should be 6
     let ut6 = test_tok_helpers();
-    let v6 = println(ut6);  -- Should be 5
+    let v6 = println(ut6);    -- Should be 5
     let ut7 = test_pack_result();
-    let v7 = println(ut7);  -- Should be 4
+    let v7 = println(ut7);    -- Should be 4
     let ut8 = test_mir_packing();
-    let v8 = println(ut8);  -- Should be 4
+    let v8 = println(ut8);    -- Should be 4
     let ut9 = test_sexp_utils();
-    let v9 = println(ut9);  -- Should be 6
+    let v9 = println(ut9);    -- Should be 6
     let ut10 = test_module_gen();
     let v10 = println(ut10);  -- Should be 4
-
-    -- New unit tests (v0.30.153)
     let ut11 = test_skip_functions();
     let v11 = println(ut11);  -- Should be 8
     let ut12 = test_scan_functions();
@@ -1403,9 +1696,56 @@ fn main() -> i64 =
     let v17 = println(ut17);  -- Should be 8
     let ut18 = test_extract_functions();
     let v18 = println(ut18);  -- Should be 8
+    -- v0.30.163: Extended unit tests
+    let ut19 = test_token_constants_ext();
+    let v19 = println(ut19);  -- Should be 10
+    let ut20 = test_token_types_ops();
+    let v20 = println(ut20);  -- Should be 12
+    let ut21 = test_token_arith_cmp();
+    let v21 = println(ut21);  -- Should be 12
+    let ut22 = test_digit_char_ext();
+    let v22 = println(ut22);  -- Should be 10
+    let ut23 = test_int_to_string_ext();
+    let v23 = println(ut23);  -- Should be 6
+    let ut24 = test_char_class_ext();
+    let v24 = println(ut24);  -- Should be 10
+    let ut25 = test_keyword_ext();
+    let v25 = println(ut25);  -- Should be 8
+    let ut26 = test_keyword_more();
+    let v26 = println(ut26);  -- Should be 6
+    let ut27 = test_next_token_ext();
+    let v27 = println(ut27);  -- Should be 8
+    let ut28 = test_punctuation_tokens();
+    let v28 = println(ut28);  -- Should be 6
+    let ut29 = test_sexp_utils_ext();
+    let v29 = println(ut29);  -- Should be 8
+    let ut30 = test_low_char_funcs();
+    let v30 = println(ut30);  -- Should be 8
+    let ut31 = test_find_funcs_ext();
+    let v31 = println(ut31);  -- Should be 8
+    let ut32 = test_read_sexp_at();
+    let v32 = println(ut32);  -- Should be 6
+    let ut33 = test_extract_name_ext();
+    let v33 = println(ut33);  -- Should be 6
+    let ut34 = test_extract_int_ext();
+    let v34 = println(ut34);  -- Should be 6
+    let ut35 = test_get_child();
+    let v35 = println(ut35);  -- Should be 6
+    let ut36 = test_compile_entry();
+    let v36 = println(ut36);  -- Should be 6
+    let ut37 = test_skip_combined();
+    let v37 = println(ut37);  -- Should be 6
+    let ut38 = test_pack_unpack_ext();
+    let v38 = println(ut38);  -- Should be 6
+    let ut39 = test_llvm_gen_basic();
+    let v39 = println(ut39);  -- Should be 6
+    let ut40 = test_trim_ends();
+    let v40 = println(ut40);  -- Should be 6
+    let ut41 = test_low_skip_find();
+    let v41 = println(ut41);  -- Should be 6
 
-    let unit_total = ut1 + ut2 + ut3 + ut4 + ut5 + ut6 + ut7 + ut8 + ut9 + ut10 + ut11 + ut12 + ut13 + ut14 + ut15 + ut16 + ut17 + ut18;
-    let v19 = println(unit_total);  -- Should be 111
+    let unit_total = ut1 + ut2 + ut3 + ut4 + ut5 + ut6 + ut7 + ut8 + ut9 + ut10 + ut11 + ut12 + ut13 + ut14 + ut15 + ut16 + ut17 + ut18 + ut19 + ut20 + ut21 + ut22 + ut23 + ut24 + ut25 + ut26 + ut27 + ut28 + ut29 + ut30 + ut31 + ut32 + ut33 + ut34 + ut35 + ut36 + ut37 + ut38 + ut39 + ut40 + ut41;
+    let v42 = println(unit_total);  -- Should be 283
 
     let u1 = println(555);  -- Integration tests marker
 
@@ -1457,7 +1797,7 @@ fn main() -> i64 =
     let w9 = println(integration);  -- Should be 8
 
     let total = unit_total + integration;
-    let w10 = println(total);  -- Should be 119
+    let w10 = println(total);  -- Should be 291 (283 unit + 8 integration)
 
     let u3 = println(999);  -- Final marker
     total;

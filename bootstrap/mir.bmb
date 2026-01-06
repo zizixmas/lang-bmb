@@ -1,4 +1,4 @@
--- BMB Middle IR (MIR) written in BMB (v0.30.147: Enhanced test suite)
+-- BMB Middle IR (MIR) written in BMB (v0.30.161: Comprehensive unit test suite)
 -- A simple MIR representation for the BMB language
 -- Uses functional/recursive style following types.bmb patterns
 --
@@ -471,6 +471,282 @@ fn test_lower_examples() -> i64 =
     let t4 = if unpack_mir_text(r1).len() > 10 then 1 else 0;
     t1 + t2 + t3 + t4;
 
+-- v0.30.161: Extended binop constants (all 13)
+fn test_binop_constants_ext() -> i64 =
+    let b1 = if binop_add() == 1 then 1 else 0;
+    let b2 = if binop_sub() == 2 then 1 else 0;
+    let b3 = if binop_mul() == 3 then 1 else 0;
+    let b4 = if binop_div() == 4 then 1 else 0;
+    let b5 = if binop_mod() == 5 then 1 else 0;
+    let b6 = if binop_eq() == 6 then 1 else 0;
+    let b7 = if binop_ne() == 7 then 1 else 0;
+    let b8 = if binop_lt() == 8 then 1 else 0;
+    let b9 = if binop_gt() == 9 then 1 else 0;
+    let b10 = if binop_le() == 10 then 1 else 0;
+    let b11 = if binop_ge() == 11 then 1 else 0;
+    let b12 = if binop_and() == 12 then 1 else 0;
+    let b13 = if binop_or() == 13 then 1 else 0;
+    b1 + b2 + b3 + b4 + b5 + b6 + b7 + b8 + b9 + b10 + b11 + b12 + b13;
+
+-- v0.30.161: All binop symbols
+fn test_binop_symbols_ext() -> i64 =
+    let s1 = if binop_symbol(1) == "+" then 1 else 0;
+    let s2 = if binop_symbol(2) == "-" then 1 else 0;
+    let s3 = if binop_symbol(3) == "*" then 1 else 0;
+    let s4 = if binop_symbol(4) == "/" then 1 else 0;
+    let s5 = if binop_symbol(5) == "%" then 1 else 0;
+    let s6 = if binop_symbol(6) == "==" then 1 else 0;
+    let s7 = if binop_symbol(7) == "!=" then 1 else 0;
+    let s8 = if binop_symbol(8) == "<" then 1 else 0;
+    let s9 = if binop_symbol(9) == ">" then 1 else 0;
+    let s10 = if binop_symbol(10) == "<=" then 1 else 0;
+    let s11 = if binop_symbol(11) == ">=" then 1 else 0;
+    let s12 = if binop_symbol(12) == "and" then 1 else 0;
+    let s13 = if binop_symbol(13) == "or" then 1 else 0;
+    let s14 = if binop_symbol(99) == "?" then 1 else 0;  -- unknown
+    s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8 + s9 + s10 + s11 + s12 + s13 + s14;
+
+-- v0.30.161: All type names
+fn test_type_names_ext() -> i64 =
+    let t1 = if mir_type_name(1) == "i32" then 1 else 0;
+    let t2 = if mir_type_name(2) == "i64" then 1 else 0;
+    let t3 = if mir_type_name(3) == "f64" then 1 else 0;
+    let t4 = if mir_type_name(4) == "bool" then 1 else 0;
+    let t5 = if mir_type_name(5) == "String" then 1 else 0;
+    let t6 = if mir_type_name(6) == "()" then 1 else 0;
+    let t7 = if mir_type_name(99) == "?" then 1 else 0;  -- unknown
+    t1 + t2 + t3 + t4 + t5 + t6 + t7;
+
+-- v0.30.161: All digit_char values
+fn test_digit_char_all() -> i64 =
+    let d0 = if digit_char(0) == "0" then 1 else 0;
+    let d1 = if digit_char(1) == "1" then 1 else 0;
+    let d2 = if digit_char(2) == "2" then 1 else 0;
+    let d3 = if digit_char(3) == "3" then 1 else 0;
+    let d4 = if digit_char(4) == "4" then 1 else 0;
+    let d5 = if digit_char(5) == "5" then 1 else 0;
+    let d6 = if digit_char(6) == "6" then 1 else 0;
+    let d7 = if digit_char(7) == "7" then 1 else 0;
+    let d8 = if digit_char(8) == "8" then 1 else 0;
+    let d9 = if digit_char(9) == "9" then 1 else 0;
+    d0 + d1 + d2 + d3 + d4 + d5 + d6 + d7 + d8 + d9;
+
+-- v0.30.161: Extended int_to_string tests
+fn test_int_to_string_ext() -> i64 =
+    let t1 = if int_to_string(0) == "0" then 1 else 0;
+    let t2 = if int_to_string(1) == "1" then 1 else 0;
+    let t3 = if int_to_string(9) == "9" then 1 else 0;
+    let t4 = if int_to_string(10) == "10" then 1 else 0;
+    let t5 = if int_to_string(42) == "42" then 1 else 0;
+    let t6 = if int_to_string(100) == "100" then 1 else 0;
+    let t7 = if int_to_string(999) == "999" then 1 else 0;
+    let t8 = if int_to_string(1234) == "1234" then 1 else 0;
+    let t9 = if int_to_string(-1) == "-1" then 1 else 0;
+    let t10 = if int_to_string(-42) == "-42" then 1 else 0;
+    let t11 = if int_to_string(-100) == "-100" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11;
+
+-- v0.30.161: Extended is_digit tests
+fn test_is_digit_ext() -> i64 =
+    let t1 = if is_digit(48) then 1 else 0;   -- '0'
+    let t2 = if is_digit(49) then 1 else 0;   -- '1'
+    let t3 = if is_digit(57) then 1 else 0;   -- '9'
+    let t4 = if not is_digit(47) then 1 else 0;  -- '/' before '0'
+    let t5 = if not is_digit(58) then 1 else 0;  -- ':' after '9'
+    let t6 = if not is_digit(65) then 1 else 0;  -- 'A'
+    let t7 = if not is_digit(97) then 1 else 0;  -- 'a'
+    let t8 = if is_digit(50) then 1 else 0;   -- '2'
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+
+-- v0.30.161: parse_int_prefix tests
+fn test_parse_int_prefix() -> i64 =
+    let t1 = if parse_int_prefix("42", 0, 0) == 42 then 1 else 0;
+    let t2 = if parse_int_prefix("123abc", 0, 0) == 123 then 1 else 0;
+    let t3 = if parse_int_prefix("0", 0, 0) == 0 then 1 else 0;
+    let t4 = if parse_int_prefix("999", 0, 0) == 999 then 1 else 0;
+    let t5 = if parse_int_prefix("abc", 0, 0) == 0 then 1 else 0;  -- no digits
+    let t6 = if parse_int_prefix("5:text", 0, 0) == 5 then 1 else 0;
+    let t7 = if parse_int_prefix("12:34", 0, 0) == 12 then 1 else 0;
+    let t8 = if parse_int_prefix("7890", 0, 0) == 7890 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+
+-- v0.30.161: find_first_colon tests
+fn test_find_first_colon() -> i64 =
+    let t1 = if find_first_colon("abc:def", 0) == 3 then 1 else 0;
+    let t2 = if find_first_colon(":start", 0) == 0 then 1 else 0;
+    let t3 = if find_first_colon("nocolon", 0) == 7 then 1 else 0;  -- returns len
+    let t4 = if find_first_colon("a:b:c", 0) == 1 then 1 else 0;  -- first colon
+    let t5 = if find_first_colon("a:b:c", 2) == 3 then 1 else 0;  -- start at 2
+    let t6 = if find_first_colon("", 0) == 0 then 1 else 0;  -- empty
+    let t7 = if find_first_colon("12:text", 0) == 2 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6 + t7;
+
+-- v0.30.161: mir_inst_kind and mir_inst_name tests
+fn test_mir_inst_kind_name() -> i64 =
+    let t1 = if mir_inst_kind(1000) == 1 then 1 else 0;  -- CONST
+    let t2 = if mir_inst_kind(2000) == 2 then 1 else 0;  -- COPY
+    let t3 = if mir_inst_kind(3000) == 3 then 1 else 0;  -- BINOP
+    let t4 = if mir_inst_kind(4000) == 4 then 1 else 0;  -- UNARY
+    let t5 = if mir_inst_kind(5000) == 5 then 1 else 0;  -- CALL
+    let t6 = if mir_inst_name(1) == 1 then 1 else 0;
+    let t7 = if mir_inst_name(2) == 2 then 1 else 0;
+    let t8 = if mir_inst_name(3) == 3 then 1 else 0;
+    let t9 = if mir_inst_name(4) == 4 then 1 else 0;
+    let t10 = if mir_inst_name(5) == 5 then 1 else 0;
+    let t11 = if mir_inst_name(99) == 0 then 1 else 0;  -- unknown
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11;
+
+-- v0.30.161: Extended constant encoding tests
+fn test_const_encoding_ext() -> i64 =
+    let t1 = if const_int(0) == "I:0" then 1 else 0;
+    let t2 = if const_int(1) == "I:1" then 1 else 0;
+    let t3 = if const_int(-1) == "I:-1" then 1 else 0;
+    let t4 = if const_int(999) == "I:999" then 1 else 0;
+    let t5 = if const_bool(true) == "B:1" then 1 else 0;
+    let t6 = if const_bool(false) == "B:0" then 1 else 0;
+    let t7 = if const_string("") == "S:" then 1 else 0;
+    let t8 = if const_string("hello") == "S:hello" then 1 else 0;
+    let t9 = if const_unit() == "U" then 1 else 0;
+    let t10 = if is_const_int("I:0") then 1 else 0;
+    let t11 = if is_const_int("I:-99") then 1 else 0;
+    let t12 = if not is_const_int("") then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12;
+
+-- v0.30.161: Extended place encoding tests
+fn test_place_encoding_ext() -> i64 =
+    let t1 = if place_var("a") == "%a" then 1 else 0;
+    let t2 = if place_var("x1") == "%x1" then 1 else 0;
+    let t3 = if place_var("my_var") == "%my_var" then 1 else 0;
+    let t4 = if place_temp(0) == "%_t0" then 1 else 0;
+    let t5 = if place_temp(1) == "%_t1" then 1 else 0;
+    let t6 = if place_temp(99) == "%_t99" then 1 else 0;
+    let t7 = if is_temp("%_t0") then 1 else 0;
+    let t8 = if is_temp("%_t123") then 1 else 0;
+    let t9 = if not is_temp("%x") then 1 else 0;
+    let t10 = if not is_temp("%my_var") then 1 else 0;
+    let t11 = if not is_temp("") then 1 else 0;
+    let t12 = if not is_temp("_t0") then 1 else 0;  -- missing %
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12;
+
+-- v0.30.161: mir_term_kind tests
+fn test_mir_term_kind() -> i64 =
+    let t1 = if mir_term_kind(10000) == 10 then 1 else 0;  -- RETURN
+    let t2 = if mir_term_kind(11000) == 11 then 1 else 0;  -- GOTO
+    let t3 = if mir_term_kind(12000) == 12 then 1 else 0;  -- BRANCH
+    let t4 = if is_terminator(10) then 1 else 0;
+    let t5 = if is_terminator(11) then 1 else 0;
+    let t6 = if is_terminator(12) then 1 else 0;
+    let t7 = if not is_terminator(9) then 1 else 0;
+    let t8 = if not is_terminator(13) then 1 else 0;
+    let t9 = if not is_terminator(1) then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9;
+
+-- v0.30.161: unop_symbol extended tests
+fn test_unop_symbols_ext() -> i64 =
+    let t1 = if unop_neg() == 1 then 1 else 0;
+    let t2 = if unop_not() == 2 then 1 else 0;
+    let t3 = if unop_symbol(1) == "-" then 1 else 0;
+    let t4 = if unop_symbol(2) == "not" then 1 else 0;
+    let t5 = if unop_symbol(99) == "?" then 1 else 0;  -- unknown
+    let t6 = if unop_symbol(0) == "?" then 1 else 0;   -- unknown
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.161: MIR text generation extended tests
+fn test_mir_text_ext() -> i64 =
+    -- Test binop with different operators
+    let t1 = if mir_text_binop("%_t0", binop_sub(), "%a", "%b") == "  %_t0 = - %a, %b" then 1 else 0;
+    let t2 = if mir_text_binop("%r", binop_mul(), "%x", "%y") == "  %r = * %x, %y" then 1 else 0;
+    let t3 = if mir_text_binop("%c", binop_eq(), "%a", "%b") == "  %c = == %a, %b" then 1 else 0;
+    -- Test unary
+    let t4 = if mir_text_unary("%neg", unop_neg(), "%x") == "  %neg = - %x" then 1 else 0;
+    let t5 = if mir_text_unary("%notb", unop_not(), "%b") == "  %notb = not %b" then 1 else 0;
+    -- Test call variations
+    let t6 = if mir_text_call("%r", "foo", "") == "  %r = call foo()" then 1 else 0;
+    let t7 = if mir_text_call_void("bar", "%x") == "  call bar(%x)" then 1 else 0;
+    let t8 = if mir_text_call_void("noop", "") == "  call noop()" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+
+-- v0.30.161: pack/unpack result tests
+fn test_pack_unpack_ext() -> i64 =
+    let r1 = pack_mir_result(0, "");
+    let t1 = if unpack_mir_count(r1) == 0 then 1 else 0;
+    let t2 = if unpack_mir_text(r1) == "" then 1 else 0;
+    let r2 = pack_mir_result(42, "hello world");
+    let t3 = if unpack_mir_count(r2) == 42 then 1 else 0;
+    let t4 = if unpack_mir_text(r2) == "hello world" then 1 else 0;
+    let r3 = pack_mir_result(7, "a:b:c:d");
+    let t5 = if unpack_mir_count(r3) == 7 then 1 else 0;
+    let t6 = if unpack_mir_text(r3) == "a:b:c:d" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.161: const detection edge cases
+fn test_const_detection_ext() -> i64 =
+    let t1 = if is_const_int("I:0") then 1 else 0;
+    let t2 = if is_const_int("I:-999") then 1 else 0;
+    let t3 = if not is_const_int("I") then 1 else 0;   -- too short
+    let t4 = if not is_const_int("") then 1 else 0;    -- empty
+    let t5 = if is_const_bool("B:0") then 1 else 0;
+    let t6 = if is_const_bool("B:1") then 1 else 0;
+    let t7 = if not is_const_bool("B") then 1 else 0;  -- too short
+    let t8 = if is_const_string("S:") then 1 else 0;   -- empty string
+    let t9 = if is_const_string("S:abc") then 1 else 0;
+    let t10 = if is_const_unit("U") then 1 else 0;
+    let t11 = if not is_const_unit("") then 1 else 0;  -- empty
+    let t12 = if not is_const_unit("UU") then 1 else 0;  -- too long
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12;
+
+-- v0.30.161: mir_text_block_start and function tests
+fn test_mir_text_blocks() -> i64 =
+    let t1 = if mir_text_block_start("entry") == "entry:" then 1 else 0;
+    let t2 = if mir_text_block_start("bb0") == "bb0:" then 1 else 0;
+    let t3 = if mir_text_block_start("then_1") == "then_1:" then 1 else 0;
+    let t4 = if mir_text_fn_end() == "}" then 1 else 0;
+    let t5 = if mir_text_param("x", mir_type_i64()) == "x: i64" then 1 else 0;
+    let t6 = if mir_text_param("b", mir_type_bool()) == "b: bool" then 1 else 0;
+    let t7 = if mir_text_param("s", mir_type_string()) == "s: String" then 1 else 0;
+    let t8 = if mir_text_param("u", mir_type_unit()) == "u: ()" then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+
+-- v0.30.161: lower_binop_example variations
+fn test_lower_binop_variations() -> i64 =
+    let r1 = lower_binop_example("x", binop_add(), "y", 0);
+    let t1 = if unpack_mir_count(r1) == 1 then 1 else 0;
+    let r2 = lower_binop_example("a", binop_sub(), "b", 5);
+    let t2 = if unpack_mir_count(r2) == 6 then 1 else 0;
+    let r3 = lower_binop_example("m", binop_mul(), "n", 10);
+    let t3 = if unpack_mir_count(r3) == 11 then 1 else 0;
+    let r4 = lower_binop_example("p", binop_lt(), "q", 0);
+    let t4 = if unpack_mir_count(r4) == 1 then 1 else 0;
+    -- Check text contains expected content
+    let text1 = unpack_mir_text(r1);
+    let t5 = if text1.len() > 10 then 1 else 0;
+    let text2 = unpack_mir_text(r4);
+    let t6 = if text2.len() > 10 then 1 else 0;
+    t1 + t2 + t3 + t4 + t5 + t6;
+
+-- v0.30.161: lower_if_example tests
+fn test_lower_if_variations() -> i64 =
+    let r1 = lower_if_example("cond", "a", "b", 0, 0);
+    let t1 = if unpack_mir_count(r1) == 1 then 1 else 0;
+    let r2 = lower_if_example("flag", "x", "y", 5, 2);
+    let t2 = if unpack_mir_count(r2) == 6 then 1 else 0;
+    let text1 = unpack_mir_text(r1);
+    let t3 = if text1.len() > 50 then 1 else 0;  -- contains branch, then, else blocks
+    let text2 = unpack_mir_text(r2);
+    let t4 = if text2.len() > 50 then 1 else 0;
+    t1 + t2 + t3 + t4;
+
+-- v0.30.161: example function structure tests
+fn test_example_function_structure() -> i64 =
+    let add_mir = example_add_function();
+    let max_mir = example_max_function();
+    -- Check that add function contains expected parts
+    let t1 = if add_mir.len() > 50 then 1 else 0;
+    let t2 = if max_mir.len() > 100 then 1 else 0;
+    -- Check max is longer due to branching
+    let t3 = if max_mir.len() > add_mir.len() then 1 else 0;
+    t1 + t2 + t3;
+
 -- ============================================================================
 -- Integration Tests
 -- ============================================================================
@@ -653,7 +929,7 @@ fn test_function_headers() -> i64 =
 fn main() -> i64 =
     let u0 = println(777);
 
-    -- Unit tests (v0.30.147)
+    -- Unit tests (v0.30.161)
     let ut1 = test_string_utils();
     let v1 = println(ut1);    -- Should be 8
     let ut2 = test_binop_constants();
@@ -666,8 +942,49 @@ fn main() -> i64 =
     let v5 = println(ut5);    -- Should be 6
     let ut6 = test_lower_examples();
     let v6 = println(ut6);    -- Should be 4
-    let unit_total = ut1 + ut2 + ut3 + ut4 + ut5 + ut6;
-    let v7 = println(unit_total);  -- Should be 36
+    -- v0.30.161: Extended unit tests
+    let ut7 = test_binop_constants_ext();
+    let v7 = println(ut7);    -- Should be 13
+    let ut8 = test_binop_symbols_ext();
+    let v8 = println(ut8);    -- Should be 14
+    let ut9 = test_type_names_ext();
+    let v9 = println(ut9);    -- Should be 7
+    let ut10 = test_digit_char_all();
+    let v10 = println(ut10);  -- Should be 10
+    let ut11 = test_int_to_string_ext();
+    let v11 = println(ut11);  -- Should be 11
+    let ut12 = test_is_digit_ext();
+    let v12 = println(ut12);  -- Should be 8
+    let ut13 = test_parse_int_prefix();
+    let v13 = println(ut13);  -- Should be 8
+    let ut14 = test_find_first_colon();
+    let v14 = println(ut14);  -- Should be 7
+    let ut15 = test_mir_inst_kind_name();
+    let v15 = println(ut15);  -- Should be 11
+    let ut16 = test_const_encoding_ext();
+    let v16 = println(ut16);  -- Should be 12
+    let ut17 = test_place_encoding_ext();
+    let v17 = println(ut17);  -- Should be 12
+    let ut18 = test_mir_term_kind();
+    let v18 = println(ut18);  -- Should be 9
+    let ut19 = test_unop_symbols_ext();
+    let v19 = println(ut19);  -- Should be 6
+    let ut20 = test_mir_text_ext();
+    let v20 = println(ut20);  -- Should be 8
+    let ut21 = test_pack_unpack_ext();
+    let v21 = println(ut21);  -- Should be 6
+    let ut22 = test_const_detection_ext();
+    let v22 = println(ut22);  -- Should be 12
+    let ut23 = test_mir_text_blocks();
+    let v23 = println(ut23);  -- Should be 8
+    let ut24 = test_lower_binop_variations();
+    let v24 = println(ut24);  -- Should be 6
+    let ut25 = test_lower_if_variations();
+    let v25 = println(ut25);  -- Should be 4
+    let ut26 = test_example_function_structure();
+    let v26 = println(ut26);  -- Should be 3
+    let unit_total = ut1 + ut2 + ut3 + ut4 + ut5 + ut6 + ut7 + ut8 + ut9 + ut10 + ut11 + ut12 + ut13 + ut14 + ut15 + ut16 + ut17 + ut18 + ut19 + ut20 + ut21 + ut22 + ut23 + ut24 + ut25 + ut26;
+    let v27 = println(unit_total);  -- Should be 211
 
     let u1 = println(555);  -- Integration tests marker
 
@@ -717,7 +1034,7 @@ fn main() -> i64 =
     let total = unit_total + integration;
 
     let u15 = println(888);
-    let u16 = println(total);  -- Should be 99
+    let u16 = println(total);  -- Should be 274 (211 unit + 63 integration)
     let u17 = println(999);
 
     total;
