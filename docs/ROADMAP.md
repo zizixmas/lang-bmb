@@ -164,15 +164,15 @@ v0.MAJOR.MINOR
 | v0.28 | Benchmark | C/Rust/BMB benchmark suite | Compute-intensive benchmarks, Contract-optimized benchmarks, Real-world workloads |
 | v0.29 | Velocity | C/Rust performance sprint | MIR optimization framework (6 passes), Contract-based optimization, Bootstrap optimization module |
 
-### Bootstrap Statistics (as of v0.30.100)
+### Bootstrap Statistics (as of v0.30.103)
 
 | Metric | Value |
 |--------|-------|
 | Rust Codebase | ~21,783 LOC |
-| BMB Bootstrap | ~13,800 LOC |
-| Coverage | 63% |
+| BMB Bootstrap | ~13,900 LOC |
+| Coverage | 64% |
 | Stage 1/2 Tests | 19 tests passing |
-| Bootstrap Tests | 1282 tests (733 types + 283 llvm_ir + 149 lowering + 46 mir + 104 parser_ast + ...) |
+| Bootstrap Tests | 1321 tests (733 types + 283 llvm_ir + 188 lowering + 46 mir + 104 parser_ast + ...) |
 
 ---
 
@@ -334,6 +334,26 @@ v0.MAJOR.MINOR
 - Pipeline integration verification: 3 new test groups in pipeline.bmb (12 tests)
 - Multi-operand expressions, mixed operations, combined expressions
 - pipeline.bmb total: 42 tests (10 test groups)
+
+**v0.30.103 Completed (2026-01-06)**:
+- Closure environment allocation in lowering.bmb (12 new tests)
+- gen_env_alloc: Generate EnvAlloc instruction for closure environments
+- gen_env_store, gen_env_stores: Generate EnvStore instructions for captured variables
+- gen_closure_with_env: Generate ClosureEnv instruction with function reference
+- lowering.bmb total: 188 tests
+
+**v0.30.102 Completed (2026-01-06)**:
+- Static trait dispatch lowering in lowering.bmb (8 new tests)
+- lower_trait_call_static: Generate call @Trait_Type_method for concrete types
+- lower_trait_call_smart: Auto-select between static dispatch and TraitCall
+- Enables direct function calls when receiver type is known
+
+**v0.30.101 Completed (2026-01-06)**:
+- Trait impl lookup integration in lowering.bmb (19 new tests)
+- static_method_symbol: Generate @Trait_Type_method format symbols
+- is_concrete_type: Check if type is concrete for static dispatch
+- gen_static_dispatch: Generate static dispatch call instructions
+- Expanded infer_trait_from_method: 19 additional trait-method mappings
 
 **v0.30.100 Completed (2026-01-06)**:
 - End-to-end integration tests: trait_closure_integration.bmb
@@ -1373,13 +1393,13 @@ $ bmb doc --check
 
 For detailed analysis of the remaining work, see [GAP_ANALYSIS.md](./GAP_ANALYSIS.md).
 
-**Key Metrics (as of v0.30.100)**:
+**Key Metrics (as of v0.30.103)**:
 - Rust code to remove: ~21,783 LOC
-- BMB bootstrap code: ~13,800 LOC (63% coverage)
-- Gap to close: ~8,900 LOC additional BMB
-- Bootstrap tests passing: 1282 tests
+- BMB bootstrap code: ~13,900 LOC (64% coverage)
+- Gap to close: ~8,800 LOC additional BMB
+- Bootstrap tests passing: 1321 tests
 
 ---
 
 **Last Updated**: 2026-01-06
-**Version**: v0.30.100 → v1.0.0-rc Planning Document
+**Version**: v0.30.103 → v1.0.0-rc Planning Document

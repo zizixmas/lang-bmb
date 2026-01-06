@@ -1,6 +1,6 @@
 # BMB Self-Hosting Gap Analysis
 
-**Version**: v0.30.100
+**Version**: v0.30.103
 **Date**: 2026-01-06
 **Status**: Ready for Self-Hosting Completion
 
@@ -64,7 +64,7 @@ This document provides a comprehensive analysis of the requirements for BMB v0.3
 | File | Size | LOC | Status | Test Coverage |
 |------|------|-----|--------|---------------|
 | llvm_ir.bmb | 97KB | 2,500 | Complete | 283 tests (57 test functions) |
-| lowering.bmb | 67KB | 1,750 | Complete | 149 tests |
+| lowering.bmb | 68KB | 1,850 | Complete | 188 tests |
 | compiler.bmb | 53KB | 1,202 | Complete | 2 tests |
 | parser_ast.bmb | 98KB | 2,390 | Complete | 104 tests (Struct/Enum/Trait/Impl/Array/Index/MethodCall) |
 | pipeline.bmb | 35KB | 810 | Complete | 42 tests |
@@ -216,11 +216,14 @@ Gap to Close:
 - ✅ TraitCall MIR generation (v0.30.98: is_trait_method, infer_trait_from_method, lower_trait_call)
 - ✅ Closure free variable analysis (v0.30.99: lambda_extract_params, collect_var_refs, filter_free_vars, gen_captures)
 - ✅ Trait/Closure integration tests (v0.30.100: trait_closure_integration.bmb)
+- ✅ Trait impl lookup integration (v0.30.101: static_method_symbol, is_concrete_type, gen_static_dispatch)
+- ✅ Static trait dispatch lowering (v0.30.102: lower_trait_call_static, lower_trait_call_smart)
+- ✅ Closure environment allocation (v0.30.103: gen_env_alloc, gen_env_store, gen_env_stores, gen_closure_with_env)
 
 ### What Bootstrap CANNOT Do Yet
 
-- ⚠️ Trait implementation dispatch (IR infrastructure ✅, MIR generation ✅, full trait impl lookup ❌)
-- ⚠️ Closure capture (type checking ✅, MIR ✅, IR infrastructure ✅, free variable analysis ✅, runtime closure env ❌)
+- ⚠️ Trait implementation dispatch (IR infrastructure ✅, MIR generation ✅, static dispatch ✅, full impl registry connection ❌)
+- ⚠️ Closure capture (type checking ✅, MIR ✅, IR infrastructure ✅, free variable analysis ✅, env allocation ✅, runtime env execution ❌)
 - ❌ FFI linking
 - ❌ Standard library operations (IO, String heap)
 - ❌ Interpreter execution

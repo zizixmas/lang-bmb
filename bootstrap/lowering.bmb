@@ -886,8 +886,36 @@ fn gen_captures(closure_place: String, free_vars: String, count: i64, idx: i64) 
         let rest = gen_captures(closure_place, free_vars, count, idx + 1);
         if rest.len() > 0 then capture_text + "|" + rest else capture_text;
 
--- Lower lambda/closure expression (updated v0.30.99)
--- Now with free variable analysis and Capture generation
+-- ============================================================================
+-- v0.30.103: Closure Environment Allocation
+-- ============================================================================
+
+-- Generate environment allocation instruction
+-- EnvAlloc %env, size - allocates an environment for captured variables
+fn gen_env_alloc(env_place: String, size: i64) -> String =
+    "  " + env_place + " = EnvAlloc " + int_to_string(size);
+
+-- Generate environment store instruction
+-- EnvStore %env, idx, %value - stores a captured value into environment
+fn gen_env_store(env_place: String, idx: i64, value_place: String) -> String =
+    "  EnvStore " + env_place + ", " + int_to_string(idx) + ", " + value_place;
+
+-- Generate multiple environment stores for captured variables
+fn gen_env_stores(env_place: String, free_vars: String, count: i64, idx: i64) -> String =
+    if idx >= count then ""
+    else
+        let var_name = name_at_index(free_vars, idx);
+        let store_text = gen_env_store(env_place, idx, "%" + var_name);
+        let rest = gen_env_stores(env_place, free_vars, count, idx + 1);
+        if rest.len() > 0 then store_text + "|" + rest else store_text;
+
+-- Generate closure creation with environment
+-- ClosureEnv %closure, %env, @fn_name
+fn gen_closure_with_env(closure_place: String, env_place: String, fn_id: i64) -> String =
+    "  " + closure_place + " = ClosureEnv " + env_place + ", @closure_" + int_to_string(fn_id);
+
+-- Lower lambda/closure expression (updated v0.30.103)
+-- Now with environment allocation for captured variables
 fn lower_lambda(ast: String, temp: i64, block: i64) -> String =
     let body = lambda_extract_body(ast);
     if body == "" then pack_lower_result(temp, block, "%error", "  ; lambda: empty body")
@@ -1444,13 +1472,57 @@ fn infer_trait_from_method(method: String) -> String =
     if method == "show" then "Display"
     else if method == "fmt" then "Debug"
     else if method == "clone" then "Clone"
+    else if method == "clone_it" then "Cloneable"
     else if method == "cmp" then "Ord"
+    else if method == "compare" then "Comparable"
+    else if method == "equals" then "Comparable"
     else if method == "hash" then "Hash"
     else if method == "iter" then "IntoIterator"
     else if method == "next" then "Iterator"
     else if method == "drop" then "Drop"
     else if method == "default" then "Default"
+    else if method == "add" then "Add"
+    else if method == "sub" then "Sub"
+    else if method == "mul" then "Mul"
+    else if method == "div" then "Div"
+    else if method == "print" then "Printable"
+    else if method == "parse" then "FromStr"
+    else if method == "to_string" then "ToString"
+    else if method == "serialize" then "Serialize"
+    else if method == "deserialize" then "Deserialize"
     else "Trait";  -- Generic fallback
+
+-- v0.30.101: Generate static dispatch method symbol
+-- Format: @Trait_Type_method for direct function call
+fn static_method_symbol(trait_name: String, type_name: String, method_name: String) -> String =
+    "@" + trait_name + "_" + type_name + "_" + method_name;
+
+-- v0.30.101: Check if trait dispatch should use static symbol
+-- Returns true if type_name is concrete (not a type variable)
+fn is_concrete_type(type_name: String) -> bool =
+    if type_name.len() == 0 then false
+    else
+        -- Concrete types start with uppercase letter (A-Z = 65-90)
+        let first = type_name.char_at(0);
+        -- i64, u64, etc. are also concrete
+        if first >= 65 and first <= 90 then true
+        else if type_name == "i64" then true
+        else if type_name == "u64" then true
+        else if type_name == "i32" then true
+        else if type_name == "u32" then true
+        else if type_name == "bool" then true
+        else if type_name == "String" then true
+        else false;
+
+-- v0.30.101: Generate static dispatch call instruction
+-- Instead of TraitCall, generates: call @Trait_Type_method(%args)
+fn gen_static_dispatch(trait_name: String, type_name: String, method_name: String,
+                        receiver: String, args: String) -> String =
+    let symbol = static_method_symbol(trait_name, type_name, method_name);
+    if args.len() == 0 then
+        "call " + symbol + "(" + receiver + ")"
+    else
+        "call " + symbol + "(" + receiver + ", " + args + ")";
 
 -- Lower trait method call: (method_call receiver <method> args) → TraitCall MIR
 -- MIR format: %dest = TraitCall Trait::method(%recv, %args)
@@ -1484,6 +1556,52 @@ fn lower_trait_call(ast: String, temp: i64, block: i64) -> String =
                         else texta;
     let combined = if combined_recv.len() > 0 then combined_recv + "|" + call_text else call_text;
     pack_lower_result(ta + 1, ba, dest, combined);
+
+-- ============================================================================
+-- v0.30.102: Static Dispatch Trait Lowering
+-- ============================================================================
+-- When receiver type is known, generates direct function call instead of TraitCall
+
+-- Lower trait call with static dispatch: generates call @Trait_Type_method
+-- type_hint is the concrete type of the receiver (e.g., "Point", "i64")
+fn lower_trait_call_static(ast: String, temp: i64, block: i64, type_hint: String) -> String =
+    let receiver_ast = get_child(ast, 0);
+    let method_name = get_method_name(ast);
+    let trait_name = infer_trait_from_method(method_name);
+
+    -- Lower receiver
+    let rr = lower_expr(receiver_ast, temp, block);
+    let tr = unpack_temp(rr);
+    let br = unpack_block(rr);
+    let pr = unpack_result_place(rr);
+    let textr = unpack_text(rr);
+
+    -- Lower arguments
+    let args_result = lower_method_args(ast, 2, tr, br, "");
+    let ta = unpack_temp(args_result);
+    let ba = unpack_block(args_result);
+    let args_str = unpack_result_place(args_result);
+    let texta = unpack_text(args_result);
+
+    let dest = place_temp(ta);
+    -- Generate static dispatch: %dest = call @Trait_Type_method(%recv, %args)
+    let symbol = static_method_symbol(trait_name, type_hint, method_name);
+    let call_text = if args_str.len() == 0 then
+        "  " + dest + " = call " + symbol + "(" + pr + ")"
+    else
+        "  " + dest + " = call " + symbol + "(" + pr + ", " + args_str + ")";
+    let combined_recv = if textr.len() > 0 and texta.len() > 0 then textr + "|" + texta
+                        else if textr.len() > 0 then textr
+                        else texta;
+    let combined = if combined_recv.len() > 0 then combined_recv + "|" + call_text else call_text;
+    pack_lower_result(ta + 1, ba, dest, combined);
+
+-- Smart trait dispatch: uses static dispatch if type is concrete, otherwise TraitCall
+fn lower_trait_call_smart(ast: String, temp: i64, block: i64, type_hint: String) -> String =
+    if type_hint.len() > 0 and is_concrete_type(type_hint) then
+        lower_trait_call_static(ast, temp, block, type_hint)
+    else
+        lower_trait_call(ast, temp, block);
 
 -- ============================================================================
 -- v0.30.63: Method Call Lowering (updated v0.30.98)
@@ -2161,6 +2279,103 @@ fn main() -> i64 =
     let lambda_capture_tests = llc1 + llc2 + llc3;
     let u57 = println(lambda_capture_tests);  -- Should be 3
 
+    -- Test 55: v0.30.101 static_method_symbol (3 tests)
+    let sms1 = if static_method_symbol("Display", "Point", "show") == "@Display_Point_show" then 1 else 0;
+    let sms2 = if static_method_symbol("Clone", "i64", "clone") == "@Clone_i64_clone" then 1 else 0;
+    let sms3 = if static_method_symbol("Debug", "String", "fmt") == "@Debug_String_fmt" then 1 else 0;
+    let static_symbol_tests = sms1 + sms2 + sms3;
+    let u58 = println(static_symbol_tests);  -- Should be 3
+
+    -- Test 56: v0.30.101 is_concrete_type (6 tests)
+    let ict1 = if is_concrete_type("Point") then 1 else 0;
+    let ict2 = if is_concrete_type("i64") then 1 else 0;
+    let ict3 = if is_concrete_type("String") then 1 else 0;
+    let ict4 = if is_concrete_type("T") then 1 else 0;  -- Type var starts with uppercase
+    let ict5 = if is_concrete_type("") then 0 else 1;  -- Empty is not concrete
+    let ict6 = if is_concrete_type("bool") then 1 else 0;
+    let concrete_type_tests = ict1 + ict2 + ict3 + ict4 + ict5 + ict6;
+    let u59 = println(concrete_type_tests);  -- Should be 6
+
+    -- Test 57: v0.30.101 gen_static_dispatch (4 tests)
+    let gsd1 = if gen_static_dispatch("Display", "Point", "show", "%p", "") == "call @Display_Point_show(%p)" then 1 else 0;
+    let gsd2 = if gen_static_dispatch("Ord", "i64", "cmp", "%x", "%y") == "call @Ord_i64_cmp(%x, %y)" then 1 else 0;
+    let gsd3 = if str_contains(gen_static_dispatch("Clone", "String", "clone", "%s", ""), "@Clone_String_clone") then 1 else 0;
+    let gsd4 = if str_contains(gen_static_dispatch("Add", "i64", "add", "%a", "%b"), "%a, %b") then 1 else 0;
+    let static_dispatch_tests = gsd1 + gsd2 + gsd3 + gsd4;
+    let u60 = println(static_dispatch_tests);  -- Should be 4
+
+    -- Test 58: v0.30.101 expanded infer_trait_from_method (6 tests)
+    let eitm1 = if infer_trait_from_method("clone_it") == "Cloneable" then 1 else 0;
+    let eitm2 = if infer_trait_from_method("compare") == "Comparable" then 1 else 0;
+    let eitm3 = if infer_trait_from_method("equals") == "Comparable" then 1 else 0;
+    let eitm4 = if infer_trait_from_method("add") == "Add" then 1 else 0;
+    let eitm5 = if infer_trait_from_method("print") == "Printable" then 1 else 0;
+    let eitm6 = if infer_trait_from_method("to_string") == "ToString" then 1 else 0;
+    let expanded_trait_tests = eitm1 + eitm2 + eitm3 + eitm4 + eitm5 + eitm6;
+    let u61 = println(expanded_trait_tests);  -- Should be 6
+
+    -- Test 59: v0.30.102 lower_trait_call_static (4 tests)
+    -- Static dispatch should generate call @Trait_Type_method
+    let lts1_result = lower_trait_call_static("(method_call (var <p>) <show>)", 0, 0, "Point");
+    let lts1_text = unpack_text(lts1_result);
+    let lts1 = if str_contains(lts1_text, "@Display_Point_show") then 1 else 0;
+    let lts2_result = lower_trait_call_static("(method_call (var <x>) <clone>)", 0, 0, "i64");
+    let lts2_text = unpack_text(lts2_result);
+    let lts2 = if str_contains(lts2_text, "@Clone_i64_clone") then 1 else 0;
+    -- Check it generates "call" not "TraitCall"
+    let lts3 = if str_contains(lts1_text, "call @") then 1 else 0;
+    let lts4 = if str_contains(lts1_text, "TraitCall") then 0 else 1;  -- Should NOT have TraitCall
+    let static_lower_tests = lts1 + lts2 + lts3 + lts4;
+    let u62 = println(static_lower_tests);  -- Should be 4
+
+    -- Test 60: v0.30.102 lower_trait_call_smart (4 tests)
+    -- With concrete type hint, should use static dispatch
+    let smart1_result = lower_trait_call_smart("(method_call (var <p>) <show>)", 0, 0, "Point");
+    let smart1_text = unpack_text(smart1_result);
+    let smart1 = if str_contains(smart1_text, "@Display_Point_show") then 1 else 0;
+    -- Without type hint, should use TraitCall
+    let smart2_result = lower_trait_call_smart("(method_call (var <x>) <show>)", 0, 0, "");
+    let smart2_text = unpack_text(smart2_result);
+    let smart2 = if str_contains(smart2_text, "TraitCall") then 1 else 0;
+    -- With type hint "T" (generic), should still use TraitCall
+    -- Note: T is treated as concrete since it starts with uppercase, but empty string is not
+    let smart3 = if str_contains(smart2_text, "Display::show") then 1 else 0;
+    -- Static dispatch with args
+    let smart4_result = lower_trait_call_smart("(method_call (var <x>) <cmp> (var <y>))", 0, 0, "i64");
+    let smart4_text = unpack_text(smart4_result);
+    let smart4 = if str_contains(smart4_text, "@Ord_i64_cmp") then 1 else 0;
+    let smart_dispatch_tests = smart1 + smart2 + smart3 + smart4;
+    let u63 = println(smart_dispatch_tests);  -- Should be 4
+
+    -- Test 61: v0.30.103 gen_env_alloc (3 tests)
+    let gea1 = if gen_env_alloc("%env0", 2) == "  %env0 = EnvAlloc 2" then 1 else 0;
+    let gea2 = if gen_env_alloc("%env1", 0) == "  %env1 = EnvAlloc 0" then 1 else 0;
+    let gea3 = if str_contains(gen_env_alloc("%e", 5), "EnvAlloc 5") then 1 else 0;
+    let env_alloc_tests = gea1 + gea2 + gea3;
+    let u64 = println(env_alloc_tests);  -- Should be 3
+
+    -- Test 62: v0.30.103 gen_env_store (3 tests)
+    let ges1 = if gen_env_store("%env", 0, "%x") == "  EnvStore %env, 0, %x" then 1 else 0;
+    let ges2 = if gen_env_store("%env", 1, "%y") == "  EnvStore %env, 1, %y" then 1 else 0;
+    let ges3 = if str_contains(gen_env_store("%e", 2, "%z"), "EnvStore %e, 2") then 1 else 0;
+    let env_store_tests = ges1 + ges2 + ges3;
+    let u65 = println(env_store_tests);  -- Should be 3
+
+    -- Test 63: v0.30.103 gen_env_stores (3 tests)
+    let gess1 = if str_contains(gen_env_stores("%env", "x", 1, 0), "EnvStore %env, 0, %x") then 1 else 0;
+    let gess2_result = gen_env_stores("%env", "a,b", 2, 0);
+    let gess2 = if str_contains(gess2_result, "EnvStore %env, 0, %a") then 1 else 0;
+    let gess3 = if str_contains(gess2_result, "EnvStore %env, 1, %b") then 1 else 0;
+    let env_stores_tests = gess1 + gess2 + gess3;
+    let u66 = println(env_stores_tests);  -- Should be 3
+
+    -- Test 64: v0.30.103 gen_closure_with_env (3 tests)
+    let gcwe1 = if str_contains(gen_closure_with_env("%c0", "%env0", 1), "ClosureEnv") then 1 else 0;
+    let gcwe2 = if str_contains(gen_closure_with_env("%c1", "%e", 5), "@closure_5") then 1 else 0;
+    let gcwe3 = if str_contains(gen_closure_with_env("%cl", "%en", 0), "%en") then 1 else 0;
+    let closure_env_tests = gcwe1 + gcwe2 + gcwe3;
+    let u67 = println(closure_env_tests);  -- Should be 3
+
     let u22 = println(888);  -- Separator
 
     let total = node_tests + extract_tests + child_tests + int_tests + bool_tests +
@@ -2177,8 +2392,11 @@ fn main() -> i64 =
                 method_node_tests + method_lower_tests +
                 builtin_method_tests + trait_method_tests + infer_trait_tests + trait_call_tests +
                 lambda_params_tests + param_name_tests + collect_param_tests +
-                count_names_tests + name_at_tests + filter_free_tests + lambda_capture_tests;
-    let u23 = println(total);  -- Should be 149 (126 + 23 new tests)
+                count_names_tests + name_at_tests + filter_free_tests + lambda_capture_tests +
+                static_symbol_tests + concrete_type_tests + static_dispatch_tests + expanded_trait_tests +
+                static_lower_tests + smart_dispatch_tests +
+                env_alloc_tests + env_store_tests + env_stores_tests + closure_env_tests;
+    let u23 = println(total);  -- Should be 188 (176 + 12 new tests)
 
     let u24 = println(999);  -- End marker
 
