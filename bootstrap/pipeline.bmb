@@ -821,8 +821,26 @@ fn main() -> i64 =
     let t12 = lt1 + lt2 + lt3 + lt4;
     let u12 = println(t12);
 
+    -- v0.30.125: Test 13: Multi-param and return type verification (4 tests)
+    -- Tests function parsing with varied parameters and return types
+    let mp1 = test_parse("fn triple(a: i64, b: i64, c: i64) -> i64 = a;", "(p <c> i64)");
+    let mp2 = test_parse("fn compare(x: i64, y: i64) -> bool = x;", "bool (var");
+    let mp3 = test_parse("fn text(s: String) -> String = s;", "String (var");
+    let mp4 = test_parse("fn zero() -> i64 = 0;", "i64 (int 0)");
+    let t13 = mp1 + mp2 + mp3 + mp4;
+    let u13 = println(t13);
+
+    -- v0.30.126: Test 14: Complex MIR generation patterns (4 tests)
+    -- Tests nested operations and operator combinations in MIR
+    let mir1 = test_pipeline("a * b + c * d", "+ %_t0");
+    let mir2 = test_pipeline("not (a and b)", "not %_t0");
+    let mir3 = test_pipeline("a < b or c > d", "or");
+    let mir4 = test_pipeline("(a + b) * (c + d)", "* %_t0, %_t1");
+    let t14 = mir1 + mir2 + mir3 + mir4;
+    let u14 = println(t14);
+
     let u8 = println(888);
-    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12;
+    let total = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14;
     let u9 = println(total);
     let u10 = println(999);
 

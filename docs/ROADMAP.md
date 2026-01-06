@@ -335,6 +335,27 @@ v0.MAJOR.MINOR
 - Multi-operand expressions, mixed operations, combined expressions
 - pipeline.bmb total: 42 tests (10 test groups)
 
+**v0.30.128 Completed (2026-01-06)**:
+- Function boundary IR tests in llvm_ir.bmb (6 tests)
+- test_function_boundary_ir: fn header/footer, params, bool return, call, return
+- llvm_ir.bmb: 355 tests (67 test functions)
+- Total bootstrap tests: 1,388
+
+**v0.30.127 Completed (2026-01-06)**:
+- Type system edge case tests in llvm_ir.bmb (6 tests)
+- test_type_system_edges: String/bool/unit type mapping, comparison, inttoptr
+- llvm_ir.bmb: 349 tests (66 test functions)
+
+**v0.30.126 Completed (2026-01-06)**:
+- Complex MIR generation patterns in pipeline.bmb (4 tests)
+- Test 14: Nested operations, logical combinations, grouped expressions
+- pipeline.bmb: 56 tests (14 test groups)
+
+**v0.30.125 Completed (2026-01-06)**:
+- Multi-param and return type verification in pipeline.bmb (4 tests)
+- Test 13: Triple-param, bool return, String return, zero-param functions
+- pipeline.bmb: 52 tests (13 test groups)
+
 **v0.30.124 Completed (2026-01-06)**:
 - Complex pattern matching MIR tests in lowering.bmb (4 tests)
 - test_pattern_match_tests: Match arm blocks, merge blocks, switch dispatch, copy
@@ -1524,14 +1545,14 @@ $ bmb doc --check
 
 For detailed analysis of the remaining work, see [GAP_ANALYSIS.md](./GAP_ANALYSIS.md).
 
-**Key Metrics (as of v0.30.124)**:
+**Key Metrics (as of v0.30.128)**:
 - Rust code to remove: ~21,783 LOC
-- BMB bootstrap code: ~14,600 LOC (68% coverage)
-- Gap to close: ~8,100 LOC additional BMB
-- Bootstrap tests: 1,368 tests passing
+- BMB bootstrap code: ~14,800 LOC (68% coverage)
+- Gap to close: ~8,000 LOC additional BMB
+- Bootstrap tests: 1,388 tests passing
 - Note: lowering.bmb at stack limit (244 tests max)
 
 ---
 
 **Last Updated**: 2026-01-06
-**Version**: v0.30.122 → v1.0.0-rc Planning Document
+**Version**: v0.30.128 → v1.0.0-rc Planning Document

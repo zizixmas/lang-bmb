@@ -1,8 +1,8 @@
 # BMB Self-Hosting Gap Analysis
 
-**Version**: v0.30.124
+**Version**: v0.30.128
 **Date**: 2026-01-06
-**Status**: Ready for Self-Hosting Completion (control flow + pattern matching MIR tests complete, stack limit reached)
+**Status**: Ready for Self-Hosting Completion (pipeline + LLVM IR tests complete)
 
 ## Executive Summary
 
@@ -63,11 +63,11 @@ This document provides a comprehensive analysis of the requirements for BMB v0.3
 
 | File | Size | LOC | Status | Test Coverage |
 |------|------|-----|--------|---------------|
-| llvm_ir.bmb | 103KB | 2,850 | Complete | 343 tests (66 test functions) |
+| llvm_ir.bmb | 105KB | 2,900 | Complete | 355 tests (67 test functions) |
 | lowering.bmb | 74KB | 2,000 | Complete | 244 tests (stack limit reached) |
 | compiler.bmb | 53KB | 1,202 | Complete | 2 tests |
 | parser_ast.bmb | 98KB | 2,390 | Complete | 104 tests (Struct/Enum/Trait/Impl/Array/Index/MethodCall) |
-| pipeline.bmb | 35KB | 830 | Complete | 48 tests (12 test groups) |
+| pipeline.bmb | 36KB | 850 | Complete | 56 tests (14 test groups) |
 | parser_test.bmb | 25KB | 641 | Complete | 15 categories |
 | types.bmb | 310KB | 8,210 | Complete | 733 tests (159 test functions) |
 | parser.bmb | 22KB | 605 | Complete | Syntax validation |
@@ -342,11 +342,11 @@ $ diff stage2/bmb stage3/bmb
 
 v0.30 "Pure" represents the culmination of the BMB self-hosting journey. With Stage 1/2 verification complete and the bootstrap covering the full compilation pipeline, the remaining work is substantial but achievable within the 2026 Q4 timeline.
 
-**Key Metrics** (as of v0.30.100):
+**Key Metrics** (as of v0.30.128):
 - Rust code to remove: ~21,783 LOC
-- BMB bootstrap code: ~13,800 LOC (63% coverage)
-- Gap to close: ~8,900 LOC additional BMB
-- Bootstrap tests passing: 1282 tests (733 types + 283 llvm_ir + 149 lowering + 46 mir + 104 parser_ast + ...)
+- BMB bootstrap code: ~14,800 LOC (68% coverage)
+- Gap to close: ~8,000 LOC additional BMB
+- Bootstrap tests: 1,388 tests (733 types + 355 llvm_ir + 244 lowering + 56 pipeline + ...)
 - Estimated effort: 6-9 months
 
 ---
