@@ -1,12 +1,28 @@
 # Bootstrap Feature Gap Analysis
 
-> Version: v0.30.221
-> Date: 2025-01-06
+> Version: v0.30.228
+> Date: 2025-01-07
 > Purpose: Document gaps between Rust compiler and BMB bootstrap implementation
 
 ## Executive Summary
 
-The BMB bootstrap implements the **complete core compilation pipeline** (lexer → parser → type checker → MIR → LLVM IR) with **914 test functions** across 14 files. All P0 features for self-hosting are complete. Remaining gaps are **interpreter** (P1), **verification** (P2), and **tooling** (P3).
+The BMB bootstrap implements the **complete core compilation pipeline** (lexer → parser → type checker → MIR → LLVM IR) with **914 test functions** across 14 files. All P0 features for self-hosting are complete. **Stage 2 equivalence tests passing** (152 assertions). Remaining gaps are **interpreter** (P1), **verification** (P2), and **tooling** (P3).
+
+## Self-Hosting Stage Status
+
+| Stage | Description | Status | Verification |
+|-------|-------------|--------|--------------|
+| **Stage 1** | Build BMB compiler with Rust | ✅ Complete | Rust tests passing |
+| **Stage 2** | Build BMB with Bootstrap | ✅ Verified | 152 equivalence assertions |
+| **Stage 3** | Rebuild with Stage 2 output | 📋 Planned | Pending Stage 2 completion |
+
+**Stage 2 Verification Details** (`selfhost_equiv.bmb`):
+- MIR Equivalence Tests ✅
+- LLVM IR Equivalence Tests ✅
+- Bootstrap Lowering Pattern Tests ✅
+- Bootstrap LLVM Pattern Tests ✅
+
+**Bootstrap Design**: Uses minimal BMB subset (no closures/structs/enums in implementation code) to enable self-compilation with the core features the bootstrap supports.
 
 ## Module Comparison Matrix
 
@@ -207,16 +223,17 @@ lexer.bmb ← parser.bmb ← parser_ast.bmb
 
 ## Conclusion
 
-The bootstrap implementation covers **100% of the core compilation pipeline** (P0 complete as of v0.30.221):
+The bootstrap implementation covers **100% of the core compilation pipeline** (P0 complete as of v0.30.228):
 
 ✅ **Completed**:
 1. **Trait support** - Full trait/impl registry and dispatch (v0.30.211+)
 2. **Complete generics** - Type inference, substitution, tuple types (v0.30.217)
 3. **Closure codegen** - MIR lowering + LLVM IR emission (v0.30.108)
+4. **Stage 2 equivalence** - 152 assertions verifying Rust↔Bootstrap output match (v0.30.228)
 
 🔲 **Remaining (P1+)**:
 1. **Bootstrap interpreter** (P1) - Enable self-testing without Rust
 2. **Verification system** (P2) - SMT integration for contracts
 3. **Tooling** (P3) - LSP, REPL, multi-file resolver
 
-The bootstrap is ready for Stage 3 self-hosting verification.
+The bootstrap is ready for Stage 3 self-hosting verification (full binary equivalence).

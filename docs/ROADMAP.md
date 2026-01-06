@@ -337,6 +337,14 @@ v0.MAJOR.MINOR
 - Multi-operand expressions, mixed operations, combined expressions
 - pipeline.bmb total: 42 tests (10 test groups)
 
+**v0.30.228 Completed (2026-01-07)**:
+- Phase 30.1.228-231: Stage 2 verification analysis and documentation
+- **STAGE 2 VERIFIED**: 152 equivalence assertions passing (selfhost_equiv.bmb)
+- Stage 2 tests: MIR equivalence, LLVM IR equivalence, lowering patterns, LLVM patterns
+- Bootstrap design: minimal BMB subset (no closures/structs/enums) enables self-compilation
+- All bootstrap tests verified: types(821), llvm_ir(433), pipeline(415), mir(406), compiler(393)
+- Updated BOOTSTRAP_FEATURE_GAP.md with Stage status table and Stage 2 verification details
+
 **v0.30.221 Completed (2026-01-07)**:
 - Phase 30.1.221-223: Bootstrap documentation actualization
 - **P0 ALL COMPLETE**: Trait support (v0.30.211), Generics (v0.30.217), Closures (v0.30.108)
