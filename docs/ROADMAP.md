@@ -337,6 +337,21 @@ v0.MAJOR.MINOR
 - Multi-operand expressions, mixed operations, combined expressions
 - pipeline.bmb total: 42 tests (10 test groups)
 
+**v0.30.306 Completed (2026-01-07)**:
+- Phase 30.1.304-306: Test Artifact Cleanup & Example Validation
+- **Artifact cleanup (30.1.304)**: Removed generated test artifacts
+  - Deleted: `cfg_test.exe`, `cfg_test.wat`, `simple_add.ll`
+  - Updated `.gitignore`: Added `*.wat`, `*.ll` patterns
+- **Example validation (30.1.305)**: Fixed type errors in 7 example files
+  - Type consistency: Changed `i32` → `i64` (5 files)
+  - Closure return types: Fixed function return type mismatches (1 file)
+  - Contract syntax: Updated to use `ret` keyword consistently (1 file)
+  - Files: `003_comparison.bmb`, `004_if_else.bmb`, `005_let_binding.bmb`, `010_simple_contract.bmb`, `011_logical.bmb`, `013_ret_binding.bmb`, `closure_test.bmb`
+- **Test verification (30.1.306)**: All 42 valid examples type check successfully
+  - Cargo tests: 113 tests passing
+  - Example files: 42/42 passing (100%)
+- **Milestone**: Complete test validation for v0.30
+
 **v0.30.303 Completed (2026-01-07)**:
 - Phase 30.1.301-303: Documentation & Final Polish
 - **Doc comment fixes (30.1.301)**: Fixed all rustdoc warnings (17 → 0)

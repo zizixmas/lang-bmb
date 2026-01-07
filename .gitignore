@@ -17,9 +17,11 @@ Cargo.lock
 
 # Compiled output
 *.wasm
+*.wat
 *.o
 *.a
 *.exe
+*.ll
 
 experiments/.env.local
 *.obj

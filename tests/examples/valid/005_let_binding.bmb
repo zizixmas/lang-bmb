@@ -1,9 +1,9 @@
 -- Let bindings
-fn double_add(x: i32, y: i32) -> i32 =
+fn double_add(x: i64, y: i64) -> i64 =
   let a = x + x;
   let b = y + y;
   a + b;
 
-fn with_type_annotation(x: i32) -> i32 =
-  let doubled: i32 = x * 2;
+fn with_type_annotation(x: i64) -> i64 =
+  let doubled: i64 = x * 2;
   doubled;
