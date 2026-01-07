@@ -1,6 +1,6 @@
 # Bootstrap Feature Gap Analysis
 
-> Version: v0.30.287
+> Version: v0.31.10
 > Date: 2026-01-07
 > Purpose: Document gaps between Rust compiler and BMB bootstrap implementation
 
@@ -29,10 +29,17 @@ The BMB bootstrap implements the **complete core compilation pipeline** (lexer �
 | Blocker | Description | Impact | Status |
 |---------|-------------|--------|--------|
 | ~~**Stack Overflow**~~ | ~~Bootstrap .bmb files overflow stack when run~~ | ~~Can't execute bootstrap~~ | ✅ **FIXED** (v0.30.241) |
-| **No File I/O** | Bootstrap can't read/write files | Can't process source files | 🔄 **SPEC** (v0.31.9) → `stdlib/io/mod.bmb` |
+| **No File I/O** | Bootstrap can't read/write files | Can't process source files | ✅ **IMPLEMENTED** (v0.31.10) → Interpreter builtins |
 | **No Process Exec** | Can't invoke LLVM toolchain | Can't produce executables | 🔲 Needs stdlib extension |
 | **No Module Import** | Files are standalone, can't import | Limited code organization | 🔲 Needs module system |
 | ~~**No Verification Harness**~~ | ~~No tool to compare outputs~~ | ~~Can't verify equivalence~~ | ✅ **IMPLEMENTED** (v0.30.248) |
+
+**v0.31.10 File I/O**: Interpreter builtins for file operations:
+- `read_file(path: String) -> String` - Read entire file
+- `write_file(path: String, content: String) -> i64` - Write file (0=success)
+- `append_file(path: String, content: String) -> i64` - Append to file
+- `file_exists(path: String) -> i64` - Check existence (1=exists)
+- `file_size(path: String) -> i64` - Get file size in bytes
 
 **v0.30.241 Fix**: Interpreter now runs in 64MB stack thread (`thread::Builder::stack_size`). All bootstrap files execute successfully.
 
@@ -322,11 +329,12 @@ The bootstrap implementation covers **100% of the core compilation pipeline** (P
 5. **Stack overflow fix** - 64MB interpreter thread enables bootstrap execution (v0.30.241)
 6. **Stage 3 verification** - `bmb verify-stage3` compares Rust vs Bootstrap IR (v0.30.248)
 
-⚠️ **Remaining Stage 3 Blockers** (v0.30.248):
+⚠️ **Remaining Stage 3 Blockers** (v0.31.10):
 1. ~~**Stack overflow**~~ ✅ FIXED - Bootstrap files now execute successfully (v0.30.241)
 2. ~~**Verification harness**~~ ✅ IMPLEMENTED - `bmb verify-stage3` command (v0.30.248)
-3. **No external integration** - Missing file I/O, LLVM toolchain invocation
-4. **Let binding memory** - Bootstrap's string operations exceed memory limits
+3. ~~**File I/O**~~ ✅ IMPLEMENTED - Interpreter builtins for file operations (v0.31.10)
+4. **No Process Exec** - Can't invoke LLVM toolchain (clang, opt)
+5. **Let binding memory** - Bootstrap's string operations exceed memory limits
 
 🔲 **Remaining (P1+)**:
 1. **Bootstrap interpreter** (P1) - Enable self-testing without Rust

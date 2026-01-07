@@ -6,7 +6,9 @@ use super::scope::ScopeStack;
 use super::value::Value;
 use crate::ast::{BinOp, EnumDef, Expr, FnDef, Pattern, Program, Spanned, StructDef, UnOp};
 use std::collections::HashMap;
+use std::fs;
 use std::io::{self, BufRead, Write};
+use std::path::Path;
 use std::rc::Rc;
 
 /// Maximum recursion depth (v0.30.248: increased for bootstrap compiler Stage 3 verification)
@@ -66,6 +68,12 @@ impl Interpreter {
         self.builtins.insert("abs".to_string(), builtin_abs);
         self.builtins.insert("min".to_string(), builtin_min);
         self.builtins.insert("max".to_string(), builtin_max);
+        // v0.31.10: File I/O builtins for Phase 32.0 Bootstrap Infrastructure
+        self.builtins.insert("read_file".to_string(), builtin_read_file);
+        self.builtins.insert("write_file".to_string(), builtin_write_file);
+        self.builtins.insert("append_file".to_string(), builtin_append_file);
+        self.builtins.insert("file_exists".to_string(), builtin_file_exists);
+        self.builtins.insert("file_size".to_string(), builtin_file_size);
     }
 
     /// v0.30.280: Enable ScopeStack-based evaluation for better memory efficiency
@@ -1151,6 +1159,111 @@ fn builtin_max(args: &[Value]) -> InterpResult<Value> {
         (Value::Int(a), Value::Int(b)) => Ok(Value::Int(*a.max(b))),
         (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a.max(*b))),
         _ => Err(RuntimeError::type_error("numeric", "mixed types")),
+    }
+}
+
+// ============ v0.31.10: File I/O Builtins for Phase 32.0 Bootstrap Infrastructure ============
+
+/// Helper: Extract string from Value (handles both Str and StringRope)
+fn extract_string(val: &Value) -> Option<String> {
+    val.materialize_string()
+}
+
+/// read_file(path: String) -> String
+/// Reads entire file contents as a string. Returns error on failure.
+fn builtin_read_file(args: &[Value]) -> InterpResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::arity_mismatch("read_file", 1, args.len()));
+    }
+    match extract_string(&args[0]) {
+        Some(path) => {
+            match fs::read_to_string(&path) {
+                Ok(content) => Ok(Value::Str(Rc::new(content))),
+                Err(e) => Err(RuntimeError::io_error(&format!("read_file '{}': {}", path, e))),
+            }
+        }
+        None => Err(RuntimeError::type_error("string", args[0].type_name())),
+    }
+}
+
+/// write_file(path: String, content: String) -> i64
+/// Writes content to file. Returns 0 on success, -1 on error.
+fn builtin_write_file(args: &[Value]) -> InterpResult<Value> {
+    if args.len() != 2 {
+        return Err(RuntimeError::arity_mismatch("write_file", 2, args.len()));
+    }
+    match (extract_string(&args[0]), extract_string(&args[1])) {
+        (Some(path), Some(content)) => {
+            match fs::write(&path, &content) {
+                Ok(()) => Ok(Value::Int(0)),
+                Err(e) => {
+                    eprintln!("write_file error: {}", e);
+                    Ok(Value::Int(-1))
+                }
+            }
+        }
+        _ => Err(RuntimeError::type_error("(string, string)", "other")),
+    }
+}
+
+/// append_file(path: String, content: String) -> i64
+/// Appends content to file. Returns 0 on success, -1 on error.
+fn builtin_append_file(args: &[Value]) -> InterpResult<Value> {
+    if args.len() != 2 {
+        return Err(RuntimeError::arity_mismatch("append_file", 2, args.len()));
+    }
+    match (extract_string(&args[0]), extract_string(&args[1])) {
+        (Some(path), Some(content)) => {
+            use std::fs::OpenOptions;
+            match OpenOptions::new().create(true).append(true).open(&path) {
+                Ok(mut file) => {
+                    match file.write_all(content.as_bytes()) {
+                        Ok(()) => Ok(Value::Int(0)),
+                        Err(e) => {
+                            eprintln!("append_file write error: {}", e);
+                            Ok(Value::Int(-1))
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("append_file open error: {}", e);
+                    Ok(Value::Int(-1))
+                }
+            }
+        }
+        _ => Err(RuntimeError::type_error("(string, string)", "other")),
+    }
+}
+
+/// file_exists(path: String) -> i64
+/// Returns 1 if file exists, 0 otherwise.
+fn builtin_file_exists(args: &[Value]) -> InterpResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::arity_mismatch("file_exists", 1, args.len()));
+    }
+    match extract_string(&args[0]) {
+        Some(path) => {
+            let exists = Path::new(&path).exists();
+            Ok(Value::Int(if exists { 1 } else { 0 }))
+        }
+        None => Err(RuntimeError::type_error("string", args[0].type_name())),
+    }
+}
+
+/// file_size(path: String) -> i64
+/// Returns file size in bytes, or -1 on error.
+fn builtin_file_size(args: &[Value]) -> InterpResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::arity_mismatch("file_size", 1, args.len()));
+    }
+    match extract_string(&args[0]) {
+        Some(path) => {
+            match fs::metadata(&path) {
+                Ok(meta) => Ok(Value::Int(meta.len() as i64)),
+                Err(_) => Ok(Value::Int(-1)),
+            }
+        }
+        None => Err(RuntimeError::type_error("string", args[0].type_name())),
     }
 }
 

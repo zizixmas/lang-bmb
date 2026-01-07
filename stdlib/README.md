@@ -45,10 +45,10 @@ stdlib/
 | string | 40+ | v0.10.14 | char classification, search, trim, parse, int_to_string |
 | parse | 20+ | v0.10.15 | position-based parsing, field extraction, pattern matching |
 | array | 25+ | v0.6.2 | search, aggregation, predicates, bounds |
-| io | 8 | v0.32.0 | file I/O (read_file, write_file) **[SPEC ONLY]** |
+| io | 5 | v0.31.10 | file I/O (read_file, write_file) **[INTERPRETER BUILTINS]** |
 | test | 40+ | v0.7.2 | test assertions for bmb test runner |
 
-**Total: 178+ functions with contracts** (170 implemented, 8 specified)
+**Total: 175+ functions with contracts** (175 implemented)
 
 ## string Module (v0.10.14)
 

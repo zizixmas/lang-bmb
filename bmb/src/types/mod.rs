@@ -92,6 +92,18 @@ impl TypeChecker {
         // max(a, b) -> i64
         functions.insert("max".to_string(), (vec![Type::I64, Type::I64], Type::I64));
 
+        // v0.31.10: File I/O builtins for Phase 32.0 Bootstrap Infrastructure
+        // read_file(path: String) -> String
+        functions.insert("read_file".to_string(), (vec![Type::String], Type::String));
+        // write_file(path: String, content: String) -> i64 (0 = success, -1 = error)
+        functions.insert("write_file".to_string(), (vec![Type::String, Type::String], Type::I64));
+        // append_file(path: String, content: String) -> i64
+        functions.insert("append_file".to_string(), (vec![Type::String, Type::String], Type::I64));
+        // file_exists(path: String) -> i64 (1 = exists, 0 = not found)
+        functions.insert("file_exists".to_string(), (vec![Type::String], Type::I64));
+        // file_size(path: String) -> i64 (-1 = error)
+        functions.insert("file_size".to_string(), (vec![Type::String], Type::I64));
+
         Self {
             env: HashMap::new(),
             functions,
