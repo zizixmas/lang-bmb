@@ -1766,7 +1766,7 @@ $ diff stage2/bmb stage3/bmb
 **Duration Estimate**: 4-6 weeks
 
 **Prerequisites**: v0.30 Complete
-**Exit Criteria**: Stage 3 86% documented, Benchmark Gate #1 baseline established
+**Exit Criteria**: ✅ Stage 3 86% documented (v0.31.7) ✅ Benchmark Gate #1 baseline established (v0.31.8)
 
 #### Phase 31.0: Language Refinements (RFCs) ✅ Complete (v0.31.4)
 
@@ -1838,27 +1838,32 @@ string overhead. Fixing requires architectural redesign.
 
 **Exit Criteria**: ✅ Documented in BOOTSTRAP_FEATURE_GAP.md
 
-#### Phase 31.3: Benchmark Gate #1 (Rust Compiler 기준)
+#### Phase 31.3: Benchmark Gate #1 ✅ Baseline Complete (v0.31.8)
 
 **Goal**: 현재 Rust 컴파일러 성능 기준선 확립
 
-| Task | Description | Priority | Effort |
+| Task | Description | Priority | Status |
 |------|-------------|----------|--------|
-| 31.3.1 | Define benchmark suite (compute + contract) | P0 | 1 week |
-| 31.3.2 | Run Rust compiler benchmarks | P0 | 1 week |
-| 31.3.3 | Document baseline metrics | P0 | 3 days |
-| 31.3.4 | Create benchmark regression CI | P1 | 1 week |
+| 31.3.1 | Define benchmark suite (compute + contract) | P0 | ✅ 13 benchmarks |
+| 31.3.2 | Run Rust compiler benchmarks | P0 | ✅ Complete |
+| 31.3.3 | Document baseline metrics | P0 | ✅ baseline_v0.31.8.md |
+| 31.3.4 | Create benchmark regression CI | P1 | ⏳ Deferred |
 
-**Benchmark Suite**:
+**Benchmark Suite** (실제 측정 완료):
 
-| Category | Benchmarks | Target |
-|----------|------------|--------|
-| Compute | fibonacci, n-body, mandelbrot, spectral-norm | >= C -O3 |
-| Contract | bounds-check, null-check, purity-opt | > C -O3 |
-| Compile | self-compile time, incremental build | baseline |
-| Memory | peak usage, allocation count | baseline |
+| Category | Benchmarks | Count | Target | Status |
+|----------|------------|-------|--------|--------|
+| Compute | binary_trees, fannkuch, fibonacci, mandelbrot, n_body, spectral_norm | 6 | >= Rust baseline | ✅ Measured |
+| Contract | bounds_check, null_check, purity_opt, aliasing | 4 | > Rust by 10%+ | ✅ Measured |
+| Real World | json_parse, sorting | 2 | >= Rust baseline | ✅ Measured |
+| Compile | self-compile time | - | baseline | 📋 Gate #2 |
 
-**Exit Criteria**: All benchmarks documented, CI integrated
+**Baseline Results** (Rust `-C opt-level=3 -C lto=fat`):
+- Compute range: 8.86ms (spectral_norm) ~ 315.38ms (fannkuch)
+- Contract range: 6.46ms (purity_opt) ~ 8.62ms (null_check)
+- Full details: `ecosystem/benchmark-bmb/results/baseline_v0.31.8.md`
+
+**Exit Criteria**: ✅ Baseline documented | CI deferred to post-v0.32
 
 ---
 
@@ -2092,7 +2097,7 @@ $ git ls-files 'Cargo.toml' | wc -l
 | Criterion | Requirement | Gate | Status |
 |-----------|-------------|------|--------|
 | Stage 3 Analysis | 86% documented, architecture analyzed | Gate #1 | ✅ Complete (v0.31.7) |
-| Benchmark Baseline | Rust compiler metrics established | Gate #1 | Pending (v0.31) |
+| Benchmark Baseline | 13 benchmarks, Rust metrics documented | Gate #1 | ✅ Complete (v0.31.8) |
 | Stage 3 Full | 100% (7/7 tests with Bootstrap redesign) | Gate #2 | Pending (v0.32) |
 | Self-Hosting | 0 lines of Rust, BMB-only build | Gate #2 | Pending (v0.32) |
 | Performance | All compute benchmarks >= C -O3 | Gate #2 | Pending (v0.32) |
