@@ -337,6 +337,16 @@ v0.MAJOR.MINOR
 - Multi-operand expressions, mixed operations, combined expressions
 - pipeline.bmb total: 42 tests (10 test groups)
 
+**v0.30.253 Completed (2026-01-07)**:
+- Phase 30.1.250-253: Bootstrap Memory Analysis
+- **ROOT CAUSE IDENTIFIED**: Let binding memory failure in `compile_program`
+  - Bootstrap compiler (2035 lines) creates deep call graphs when interpreting
+  - Each function call creates new Environment (Rc<RefCell>)
+  - String operations in `pack_lower_result` accumulate ~2MB before stack unwinds
+  - Test gap: `compile_program` + let bindings never tested in selfhost_equiv.bmb
+- **Decision**: Accept current limitation (3/4 tests pass) as Stage 3 baseline
+- Future priority: Optimize bootstrap string operations for full let binding support
+
 **v0.30.248 Completed (2026-01-07)**:
 - Phase 30.1.245-249: Stage 3 Verification Harness
 - **NEW COMMAND**: `bmb verify-stage3 <file.bmb>` compares Rust vs Bootstrap IR output

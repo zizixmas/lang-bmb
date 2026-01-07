@@ -260,13 +260,43 @@ stage3_let.bmb:    ❌ FAIL (Memory allocation of ~2MB failed)
 
 ### Known Issues
 
-1. **Let Binding Memory**: Bootstrap compiler's `lower_let` function creates excessive string concatenations, causing ~2MB allocation attempts to fail
-2. **String Interning**: Bootstrap lacks string interning, leading to memory growth
+1. **Let Binding Memory** (v0.30.250 Analysis):
+   - **Root Cause**: Bootstrap compiler (2035 lines) runs in interpreter
+   - **Problem**: Let binding lowering creates deep call graphs
+   - **Effect**: Many Environment frames (Rc<RefCell>) held simultaneously
+   - **Symptom**: ~2MB single allocation failure during string concatenation
+   - **Test Gap**: `compile_program` + let bindings not tested in selfhost_equiv.bmb
+
+2. **String Operations**: Each `pack_lower_result` + `unpack_text` creates new strings
 3. **Optimization Differences**: Bootstrap doesn't optimize, Rust compiler may inline/fold
+
+### Root Cause Analysis (v0.30.250)
+
+```
+compile_program(source)
+├─ parse_source(source)           # Deep recursion for let bindings
+│  ├─ parse_program(...)
+│  │  └─ parse_fn(...)
+│  │     └─ parse_expr(...)       # Each let creates nested parse calls
+│  │        └─ parse_expr(...)    # Recursive for let body
+├─ lower_program(ast)             # More recursion
+│  └─ lower_let(...)
+│     ├─ lower_expr(value)
+│     └─ lower_expr(body)         # Nested lowering
+└─ gen_program(mir)               # String concatenation heavy
+```
+
+Each function call creates:
+- New Environment (Rc<RefCell<Environment>>)
+- String arguments (cloned for each call)
+- Intermediate string values
+
+Result: ~1.9-2MB of simultaneous string allocations that cannot be freed until call stack unwinds.
 
 ### Future Improvements
 
-- Optimize bootstrap `lowering.bmb` for memory efficiency
-- Add string interning to interpreter
-- Support more complex expressions (closures, arrays)
-- Add `--exact` flag for character-identical comparison
+- **P1**: Optimize bootstrap compiler's string operations (avoid intermediate allocations)
+- **P2**: Add memory tracking to interpreter (identify hotspots)
+- **P3**: Implement string interning for common patterns
+- **P4**: Support more complex expressions (closures, arrays)
+- **P5**: Add `--exact` flag for character-identical comparison
