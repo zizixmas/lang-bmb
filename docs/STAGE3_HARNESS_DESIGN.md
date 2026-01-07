@@ -1,6 +1,6 @@
 # Stage 3 Verification Harness Design
 
-> Version: v0.30.268
+> Version: v0.30.269
 > Date: 2026-01-07
 > Purpose: Design specification for Stage 3 self-hosting verification
 > Status: ✅ Implemented (6/7 test cases pass)
@@ -265,15 +265,21 @@ stage3_let.bmb:    ❌ FAIL (Memory allocation of ~2MB failed)
 
 ### Known Issues
 
-1. **Let Binding Memory** (v0.30.250 Analysis):
+1. **Let Binding Memory** (v0.30.269 Analysis):
    - **Root Cause**: Bootstrap compiler (2035 lines) runs in interpreter
    - **Problem**: Let binding lowering creates deep call graphs
    - **Effect**: Many Environment frames (Rc<RefCell>) held simultaneously
-   - **Symptom**: ~2MB single allocation failure during string concatenation
+   - **Symptom**: ~1.3MB allocation failure + stack buffer overrun
    - **Test Gap**: `compile_program` + let bindings not tested in selfhost_equiv.bmb
+   - **v0.30.269 Finding**: Even single let binding fails due to self-referential complexity
+     - Bootstrap's `lower_let` recursively calls `lower_expr` for value and body
+     - Each call creates pack/unpack string operations
+     - Compiling let-binding code uses bootstrap's own let-binding-heavy implementation
+     - Result: exponential growth in call depth and memory
 
 2. **String Operations**: Each `pack_lower_result` + `unpack_text` creates new strings
 3. **Optimization Differences**: Bootstrap doesn't optimize, Rust compiler may inline/fold
+4. **Windows Fiber Limit**: stacker crate's fiber allocation fails under high memory pressure
 
 ### Root Cause Analysis (v0.30.250)
 

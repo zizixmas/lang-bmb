@@ -12,6 +12,7 @@ use std::rc::Rc;
 const MAX_RECURSION_DEPTH: usize = 100000;
 
 /// Stack growth parameters for deep recursion
+/// v0.30.248: 128KB red zone, 4MB growth (original for bootstrap)
 const STACK_RED_ZONE: usize = 128 * 1024; // 128KB remaining triggers growth
 const STACK_GROW_SIZE: usize = 4 * 1024 * 1024; // Grow by 4MB each time
 

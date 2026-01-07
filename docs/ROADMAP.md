@@ -337,6 +337,17 @@ v0.MAJOR.MINOR
 - Multi-operand expressions, mixed operations, combined expressions
 - pipeline.bmb total: 42 tests (10 test groups)
 
+**v0.30.269 Completed (2026-01-07)**:
+- Phase 30.1.269-272: Let Binding Root Cause Analysis
+- **Investigation**: Analyzed why even single let bindings fail in Stage 3
+- **Root cause identified**: Self-referential complexity
+  - Bootstrap's `lower_let` uses recursive `lower_expr` calls
+  - Compiling let-binding code triggers bootstrap's own let-binding implementation
+  - Exponential growth in call depth and memory allocation
+- **Stacker tuning tested**: Reduced 4MB→1MB→2MB segments all fail
+- **Conclusion**: Architectural limitation requiring trampolining or CPS transformation
+- **Status**: 6/7 tests pass (let bindings remain unsupported)
+
 **v0.30.268 Completed (2026-01-07)**:
 - Phase 30.1.264-268: Value::Str Rc<String> Optimization
 - **Memory optimization**: Changed `Value::Str(String)` to `Value::Str(Rc<String>)`
