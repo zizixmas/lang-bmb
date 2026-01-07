@@ -51,9 +51,9 @@ pub enum Type {
     /// Named type (struct or enum)
     Named(String),
     /// Type variable (v0.13.1): T, U, etc.
-    /// Used in generic context, e.g., fn identity<T>(x: T) -> T
+    /// Used in generic context, e.g., `fn identity<T>(x: T) -> T`
     TypeVar(String),
-    /// Generic type (v0.13.1): Container<T>, Result<T, E>, etc.
+    /// Generic type (v0.13.1): `Container<T>`, `Result<T, E>`, etc.
     /// Used for applying type arguments to generic types
     Generic {
         name: String,

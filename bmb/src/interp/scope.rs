@@ -1,5 +1,5 @@
 //! Scope Stack for efficient environment management
-//! v0.30.279: Alternative to Rc<RefCell<Environment>> chain
+//! v0.30.279: Alternative to `Rc<RefCell<Environment>>` chain
 //!
 //! This module provides a stack-based scope management that allows
 //! immediate memory deallocation when scopes exit, avoiding the
@@ -10,8 +10,8 @@ use std::collections::HashMap;
 
 /// Stack-based scope management for interpreter
 ///
-/// Unlike the Rc<RefCell<Environment>> chain approach, this uses a simple
-/// Vec<HashMap> which allows immediate deallocation on scope exit.
+/// Unlike the `Rc<RefCell<Environment>>` chain approach, this uses a simple
+/// `Vec<HashMap>` which allows immediate deallocation on scope exit.
 #[derive(Debug)]
 pub struct ScopeStack {
     /// Stack of scopes, index 0 is global

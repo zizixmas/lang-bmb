@@ -141,13 +141,13 @@ pub enum MirInst {
         element_type: MirType,
         elements: Vec<Operand>,
     },
-    /// v0.19.3: Array index load: %dest = %array[%index]
+    /// v0.19.3: Array index load: `%dest = %array[%index]`
     IndexLoad {
         dest: Place,
         array: Place,
         index: Operand,
     },
-    /// v0.19.3: Array index store: %array[%index] = %value
+    /// v0.19.3: Array index store: `%array[%index] = %value`
     IndexStore {
         array: Place,
         index: Operand,

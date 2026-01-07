@@ -40,7 +40,7 @@ pub enum Expr {
         else_branch: Box<Spanned<Expr>>,
     },
 
-    /// Let binding: let [mut] name = value; body
+    /// Let binding: `let [mut] name = value; body`
     Let {
         name: String,
         mutable: bool,
@@ -134,7 +134,7 @@ pub enum Expr {
     /// Array literal: [elem1, elem2, ...]
     ArrayLit(Vec<Spanned<Expr>>),
 
-    /// Index access: expr[index]
+    /// Index access: `expr[index]`
     Index {
         expr: Box<Spanned<Expr>>,
         index: Box<Spanned<Expr>>,

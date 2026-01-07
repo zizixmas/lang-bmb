@@ -47,15 +47,15 @@ pub struct TypeChecker {
     /// Function signatures (non-generic)
     functions: HashMap<String, (Vec<Type>, Type)>,
     /// Generic function signatures: name -> (type_params, param_types, return_type)
-    /// v0.15: Support for generic functions like fn identity<T>(x: T) -> T
+    /// v0.15: Support for generic functions like `fn identity<T>(x: T) -> T`
     generic_functions: HashMap<String, (Vec<TypeParam>, Vec<Type>, Type)>,
     /// Generic struct definitions: name -> (type_params, fields)
-    /// v0.15: Support for generic structs like struct Container<T> { value: T }
+    /// v0.15: Support for generic structs like `struct Container<T> { value: T }`
     generic_structs: HashMap<String, (Vec<TypeParam>, Vec<(String, Type)>)>,
     /// Struct definitions: name -> field types
     structs: HashMap<String, Vec<(String, Type)>>,
     /// Generic enum definitions: name -> (type_params, variants)
-    /// v0.16: Support for generic enums like enum Option<T> { Some(T), None }
+    /// v0.16: Support for generic enums like `enum Option<T> { Some(T), None }`
     generic_enums: HashMap<String, (Vec<TypeParam>, Vec<(String, Vec<Type>)>)>,
     /// Enum definitions: name -> variant info (variant_name, field types)
     enums: HashMap<String, Vec<(String, Vec<Type>)>>,
@@ -1028,7 +1028,7 @@ impl TypeChecker {
         }
     }
 
-    /// v0.18: Check Option<T> method calls
+    /// v0.18: Check `Option<T>` method calls
     fn check_option_method(&mut self, method: &str, args: &[Spanned<Expr>], inner_ty: Option<Type>, span: Span) -> Result<Type> {
         match method {
             // is_some() -> bool

@@ -620,7 +620,7 @@ impl OptimizationPass for CommonSubexpressionElimination {
 ///
 /// These optimizations leverage BMB's contract system:
 /// - Bounds check elimination based on `pre` conditions
-/// - Null check elimination with Option<T> contracts
+/// - Null check elimination with `Option<T>` contracts
 /// - Purity-based CSE using `post` conditions
 pub struct ContractBasedOptimization;
 

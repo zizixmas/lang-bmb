@@ -110,7 +110,7 @@ pub struct TraitDef {
     pub visibility: Visibility,
     /// Trait name
     pub name: Spanned<String>,
-    /// Type parameters (if any): trait Container<T> { ... }
+    /// Type parameters (if any): `trait Container<T> { ... }`
     pub type_params: Vec<TypeParam>,
     /// Trait method signatures (without bodies)
     pub methods: Vec<TraitMethod>,
@@ -138,7 +138,7 @@ pub struct TraitMethod {
 pub struct ImplBlock {
     /// Attributes
     pub attributes: Vec<Attribute>,
-    /// Type parameters (if any): impl<T> Trait for Container<T>
+    /// Type parameters (if any): `impl<T> Trait for Container<T>`
     pub type_params: Vec<TypeParam>,
     /// Trait being implemented
     pub trait_name: Spanned<String>,
@@ -157,7 +157,7 @@ pub struct StructDef {
     pub attributes: Vec<Attribute>,
     pub visibility: Visibility,
     pub name: Spanned<String>,
-    /// Type parameters (v0.13.1): e.g., <T>, <T, U>, <T: Ord>
+    /// Type parameters (v0.13.1): e.g., `<T>`, `<T, U>`, `<T: Ord>`
     pub type_params: Vec<TypeParam>,
     pub fields: Vec<StructField>,
     pub span: Span,
@@ -177,7 +177,7 @@ pub struct EnumDef {
     pub attributes: Vec<Attribute>,
     pub visibility: Visibility,
     pub name: Spanned<String>,
-    /// Type parameters (v0.13.1): e.g., <T>, <T, E>
+    /// Type parameters (v0.13.1): e.g., `<T>`, `<T, E>`
     pub type_params: Vec<TypeParam>,
     pub variants: Vec<EnumVariant>,
     pub span: Span,
@@ -212,7 +212,7 @@ pub struct FnDef {
     pub attributes: Vec<Attribute>,
     pub visibility: Visibility,
     pub name: Spanned<String>,
-    /// Type parameters (v0.13.1): e.g., <T>, <T: Ord, U>
+    /// Type parameters (v0.13.1): e.g., `<T>`, `<T: Ord, U>`
     pub type_params: Vec<TypeParam>,
     pub params: Vec<Param>,
     /// Optional explicit return value binding name (v0.2)
