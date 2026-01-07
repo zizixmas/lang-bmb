@@ -607,6 +607,187 @@ fn unpack_text(r: String) -> String =
     r.slice(colon3 + 1, r.len());
 
 -- ============================================================================
+-- StringBuilder-aware Lowering (v0.31.20)
+-- ============================================================================
+-- Threads StringBuilder through all functions to avoid O(n²) concatenation.
+-- New format: "temp:block:result" (no text - text goes to StringBuilder)
+
+fn pack_result_sb(temp: i64, block: i64, result: String) -> String =
+    int_to_string(temp) + ":" + int_to_string(block) + ":" + result;
+
+-- Push MIR text to StringBuilder with separator handling
+fn sb_push_mir(sb: i64, text: String) -> i64 =
+    if text.len() > 0 then
+        let len = sb_len(sb);
+        let w0 = if len > 0 then sb_push(sb, "|") else 0;
+        sb_push(sb, text)
+    else 0;
+
+-- StringBuilder-aware leaf lowering functions
+fn lower_int_sb(ast: String, temp: i64, block: i64, sb: i64) -> String =
+    let value = extract_int_value(ast);
+    let dest = place_temp(temp);
+    let text = mir_text_const(dest, "I:" + int_to_string(value));
+    let w1 = sb_push_mir(sb, text);
+    pack_result_sb(temp + 1, block, dest);
+
+fn lower_bool_sb(ast: String, temp: i64, block: i64, sb: i64) -> String =
+    let value = extract_bool_value(ast);
+    let dest = place_temp(temp);
+    let text = mir_text_const(dest, if value then "I:1" else "I:0");
+    let w1 = sb_push_mir(sb, text);
+    pack_result_sb(temp + 1, block, dest);
+
+fn lower_string_sb(ast: String, temp: i64, block: i64, sb: i64) -> String =
+    -- String is already in raw form "...", strip quotes for MIR
+    let content = if ast.len() >= 2 then ast.slice(1, ast.len() - 1) else "";
+    let dest = place_temp(temp);
+    let text = mir_text_const(dest, "S:" + content);
+    let w1 = sb_push_mir(sb, text);
+    pack_result_sb(temp + 1, block, dest);
+
+fn lower_var_sb(ast: String, temp: i64, block: i64, sb: i64) -> String =
+    let name = extract_var_name(ast);
+    let dest = place_temp(temp);
+    let text = mir_text_copy(dest, place_var(name));
+    let w1 = sb_push_mir(sb, text);
+    pack_result_sb(temp + 1, block, dest);
+
+fn lower_unit_sb(ast: String, temp: i64, block: i64, sb: i64) -> String =
+    let dest = place_temp(temp);
+    let text = mir_text_const(dest, "I:0");
+    let w1 = sb_push_mir(sb, text);
+    pack_result_sb(temp + 1, block, dest);
+
+-- StringBuilder-aware compound lowering functions
+fn lower_binop_sb(ast: String, temp: i64, block: i64, sb: i64) -> String =
+    let op = get_op_symbol(ast);
+    let left_ast = get_op_left(ast);
+    let right_ast = get_op_right(ast);
+    let r1 = lower_expr_sb(left_ast, temp, block, sb);
+    let t1 = unpack_temp(r1);
+    let b1 = unpack_block(r1);
+    let p1 = unpack_result_place(r1);
+    let r2 = lower_expr_sb(right_ast, t1, b1, sb);
+    let t2 = unpack_temp(r2);
+    let b2 = unpack_block(r2);
+    let p2 = unpack_result_place(r2);
+    let dest = place_temp(t2);
+    let op_text = mir_text_binop(dest, binop_from_symbol(op), p1, p2);
+    let w1 = sb_push_mir(sb, op_text);
+    pack_result_sb(t2 + 1, b2, dest);
+
+fn lower_neg_sb(ast: String, temp: i64, block: i64, sb: i64) -> String =
+    let operand_ast = get_unary_operand(ast);
+    let ro = lower_expr_sb(operand_ast, temp, block, sb);
+    let to = unpack_temp(ro);
+    let bo = unpack_block(ro);
+    let po = unpack_result_place(ro);
+    let dest = place_temp(to);
+    let neg_text = mir_text_unary_neg(dest, po);
+    let w1 = sb_push_mir(sb, neg_text);
+    pack_result_sb(to + 1, bo, dest);
+
+fn lower_not_sb(ast: String, temp: i64, block: i64, sb: i64) -> String =
+    let operand_ast = get_unary_operand(ast);
+    let ro = lower_expr_sb(operand_ast, temp, block, sb);
+    let to = unpack_temp(ro);
+    let bo = unpack_block(ro);
+    let po = unpack_result_place(ro);
+    let dest = place_temp(to);
+    let not_text = mir_text_unary_not(dest, po);
+    let w1 = sb_push_mir(sb, not_text);
+    pack_result_sb(to + 1, bo, dest);
+
+fn lower_let_sb(ast: String, temp: i64, block: i64, sb: i64) -> String =
+    let name = get_let_name(ast);
+    let value_ast = get_let_value(ast);
+    let body_ast = get_let_body(ast);
+    let rv = lower_expr_sb(value_ast, temp, block, sb);
+    let tv = unpack_temp(rv);
+    let bv = unpack_block(rv);
+    let pv = unpack_result_place(rv);
+    let assign_text = mir_text_copy(place_var(name), pv);
+    let w1 = sb_push_mir(sb, assign_text);
+    lower_expr_sb(body_ast, tv, bv, sb);
+
+fn lower_if_sb(ast: String, temp: i64, block: i64, sb: i64) -> String =
+    let cond_ast = get_if_cond(ast);
+    let then_ast = get_if_then(ast);
+    let else_ast = get_if_else(ast);
+    let rc = lower_expr_sb(cond_ast, temp, block, sb);
+    let tc = unpack_temp(rc);
+    let bc = unpack_block(rc);
+    let pc = unpack_result_place(rc);
+    let then_lbl = "then_" + int_to_string(bc);
+    let else_lbl = "else_" + int_to_string(bc);
+    let merge_lbl = "merge_" + int_to_string(bc);
+    let result_place = place_temp(tc);
+    let branch = mir_text_branch(pc, then_lbl, else_lbl);
+    let w1 = sb_push_mir(sb, branch);
+    let w2 = sb_push_mir(sb, mir_text_block_start(then_lbl));
+    let rt = lower_expr_sb(then_ast, tc + 1, bc + 1, sb);
+    let tt = unpack_temp(rt);
+    let bt = unpack_block(rt);
+    let pt = unpack_result_place(rt);
+    let w3 = sb_push_mir(sb, mir_text_copy(result_place, pt));
+    let w4 = sb_push_mir(sb, mir_text_goto(merge_lbl));
+    let w5 = sb_push_mir(sb, mir_text_block_start(else_lbl));
+    let re = lower_expr_sb(else_ast, tt, bt, sb);
+    let te = unpack_temp(re);
+    let be = unpack_block(re);
+    let pe = unpack_result_place(re);
+    let w6 = sb_push_mir(sb, mir_text_copy(result_place, pe));
+    let w7 = sb_push_mir(sb, mir_text_goto(merge_lbl));
+    let w8 = sb_push_mir(sb, mir_text_block_start(merge_lbl));
+    pack_result_sb(te, be, result_place);
+
+fn lower_call_sb(ast: String, temp: i64, block: i64, sb: i64) -> String =
+    let name = get_call_name(ast);
+    let r_args = lower_call_args_sb(ast, 1, temp, block, "", sb);
+    let t_args = unpack_temp(r_args);
+    let b_args = unpack_block(r_args);
+    let args_list = unpack_result_place(r_args);
+    let dest = place_temp(t_args);
+    let call_text = mir_text_call(dest, name, args_list);
+    let w1 = sb_push_mir(sb, call_text);
+    pack_result_sb(t_args + 1, b_args, dest);
+
+fn lower_call_args_sb(ast: String, idx: i64, temp: i64, block: i64, acc: String, sb: i64) -> String =
+    let arg_ast = get_child(ast, idx);
+    if arg_ast == "" then pack_result_sb(temp, block, acc)
+    else
+        let ra = lower_expr_sb(arg_ast, temp, block, sb);
+        let ta = unpack_temp(ra);
+        let ba = unpack_block(ra);
+        let pa = unpack_result_place(ra);
+        let new_acc = if acc == "" then pa else acc + ", " + pa;
+        lower_call_args_sb(ast, idx + 1, ta, ba, new_acc, sb);
+
+-- StringBuilder-aware expression dispatcher
+fn lower_expr_sb(ast: String, temp: i64, block: i64, sb: i64) -> String =
+    if is_int_node(ast) then lower_int_sb(ast, temp, block, sb)
+    else if is_bool_node(ast) then lower_bool_sb(ast, temp, block, sb)
+    else if is_string_node(ast) then lower_string_sb(ast, temp, block, sb)
+    else if is_var_node(ast) then lower_var_sb(ast, temp, block, sb)
+    else if is_op_node(ast) then lower_binop_sb(ast, temp, block, sb)
+    else if is_neg_node(ast) then lower_neg_sb(ast, temp, block, sb)
+    else if is_not_node(ast) then lower_not_sb(ast, temp, block, sb)
+    else if is_if_node(ast) then lower_if_sb(ast, temp, block, sb)
+    else if is_let_node(ast) or is_let_mut_node(ast) then lower_let_sb(ast, temp, block, sb)
+    else if is_call_node(ast) then lower_call_sb(ast, temp, block, sb)
+    else if is_unit_node(ast) then lower_unit_sb(ast, temp, block, sb)
+    -- Fallback to original for complex nodes (struct, enum, lambda, etc.)
+    else
+        let r = lower_expr(ast, temp, block);
+        let t = unpack_temp(r);
+        let b = unpack_block(r);
+        let p = unpack_result_place(r);
+        let text = unpack_text(r);
+        let w1 = sb_push_mir(sb, text);
+        pack_result_sb(t, b, p);
+
+-- ============================================================================
 -- Expression Lowering
 -- ============================================================================
 
@@ -1954,6 +2135,39 @@ fn format_params_inner(params_ast: String, idx: i64, acc: String) -> String =
         format_params_inner(params_ast, idx + 1, new_acc);
 
 -- Lower a complete function
+-- StringBuilder-aware function lowering (v0.31.20)
+-- Uses O(1) append instead of O(n²) concatenation
+fn lower_function_sb(ast: String) -> String =
+    let name = get_fn_name(ast);
+    let params_ast = get_fn_params(ast);
+    let ret_type_str = get_fn_ret_type(ast);
+    let body_ast = get_fn_body(ast);
+
+    let ret_type = mir_type_from_string(ret_type_str);
+    let params_str = format_params(params_ast);
+
+    -- Create StringBuilder for body
+    let sb = sb_new();
+
+    -- Lower body using StringBuilder
+    let rb = lower_expr_sb(body_ast, 0, 0, sb);
+    let result_place = unpack_result_place(rb);
+
+    -- Add return instruction to StringBuilder
+    let ret_inst = mir_text_ret(result_place);
+    let w1 = sb_push_mir(sb, ret_inst);
+
+    -- Build final body text
+    let body_text = sb_build(sb);
+
+    -- Generate function (header/entry/footer are small, concat is OK)
+    let header = mir_text_fn_start(name, params_str, ret_type);
+    let entry = mir_text_block_start("entry");
+    let footer = mir_text_fn_end();
+
+    header + "|" + entry + "|" + body_text + "|" + footer;
+
+-- Original lower_function (kept for compatibility)
 fn lower_function(ast: String) -> String =
     let name = get_fn_name(ast);
     let params_ast = get_fn_params(ast);
@@ -1982,6 +2196,24 @@ fn lower_function(ast: String) -> String =
 -- ============================================================================
 
 -- Lower program: "(program (fn ...) (fn ...)...)"
+-- StringBuilder-aware program lowering (v0.31.20)
+fn lower_program_sb(ast: String) -> String =
+    let sb = sb_new();
+    let w1 = lower_program_inner_sb(ast, 0, sb);
+    sb_build(sb);
+
+fn lower_program_inner_sb(ast: String, idx: i64, sb: i64) -> i64 =
+    let fn_ast = get_child(ast, idx);
+    if fn_ast.len() == 0 or fn_ast == "" then 0
+    else if not is_fn_node(fn_ast) then 0
+    else
+        let fn_mir = lower_function_sb(fn_ast);
+        let len = sb_len(sb);
+        let w1 = if len > 0 then sb_push(sb, "||") else 0;
+        let w2 = sb_push(sb, fn_mir);
+        lower_program_inner_sb(ast, idx + 1, sb);
+
+-- Original program lowering (kept for compatibility)
 fn lower_program(ast: String) -> String =
     lower_program_inner(ast, 0, "");
 

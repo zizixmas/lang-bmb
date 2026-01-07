@@ -642,6 +642,151 @@ fn unpack_text(r: String) -> String =
     else r.slice(cpos + 1, r.len());
 
 -- ============================================================================
+-- SECTION 8B: StringBuilder-aware Lowering (v0.31.20)
+-- ============================================================================
+-- Uses StringBuilder builtins for O(1) amortized string concatenation.
+-- Returns just temp_id (MIR text is pushed to StringBuilder).
+
+fn pack_lower_result_sb(temp_id: i64) -> i64 = temp_id;
+
+fn sb_push_mir(sb: i64, text: String) -> i64 =
+    if text.len() > 0 then
+        let len = sb_len(sb);
+        let w0 = if len > 0 then sb_push(sb, "|") else 0;
+        sb_push(sb, text)
+    else 0;
+
+fn lower_expr_sb(ast: String, temp_id: i64, block_id: i64, sb: i64) -> i64 =
+    let ntype = get_node_type(ast);
+    if ntype == "int" then lower_int_sb(ast, temp_id, sb)
+    else if ntype == "bool" then lower_bool_sb(ast, temp_id, sb)
+    else if ntype == "var" then lower_var_sb(ast, temp_id, sb)
+    else if ntype == "binop" then lower_binop_sb(ast, temp_id, block_id, sb)
+    else if ntype == "unary" then lower_unary_sb(ast, temp_id, block_id, sb)
+    else if ntype == "if" then lower_if_sb(ast, temp_id, block_id, sb)
+    else if ntype == "let" then lower_let_sb(ast, temp_id, block_id, sb)
+    else if ntype == "call" then lower_call_sb(ast, temp_id, block_id, sb)
+    else temp_id;
+
+fn lower_int_sb(ast: String, temp_id: i64, sb: i64) -> i64 =
+    let val = extract_int_value(ast);
+    let tmp = "%_t" + int_to_string(temp_id);
+    let w1 = sb_push_mir(sb, "  " + tmp + " = const " + int_to_string(val));
+    temp_id + 1;
+
+fn lower_bool_sb(ast: String, temp_id: i64, sb: i64) -> i64 =
+    let child = get_child(ast, 0);
+    let val = if child == "true" then 1 else 0;
+    let tmp = "%_t" + int_to_string(temp_id);
+    let w1 = sb_push_mir(sb, "  " + tmp + " = const " + int_to_string(val));
+    temp_id + 1;
+
+fn lower_var_sb(ast: String, temp_id: i64, sb: i64) -> i64 =
+    let name = extract_name(ast);
+    let tmp = "%_t" + int_to_string(temp_id);
+    let w1 = sb_push_mir(sb, "  " + tmp + " = copy %" + name);
+    temp_id + 1;
+
+fn lower_binop_sb(ast: String, temp_id: i64, block_id: i64, sb: i64) -> i64 =
+    let op = get_child(ast, 0);
+    let left_ast = get_child(ast, 1);
+    let right_ast = get_child(ast, 2);
+    let left_new = lower_expr_sb(left_ast, temp_id, block_id, sb);
+    let left_id = left_new - 1;
+    let right_new = lower_expr_sb(right_ast, left_new, block_id, sb);
+    let right_id = right_new - 1;
+    let result_tmp = "%_t" + int_to_string(right_new);
+    let w1 = sb_push_mir(sb, "  " + result_tmp + " = " + op + " %_t" + int_to_string(left_id) + ", %_t" + int_to_string(right_id));
+    right_new + 1;
+
+fn lower_unary_sb(ast: String, temp_id: i64, block_id: i64, sb: i64) -> i64 =
+    let op = get_child(ast, 0);
+    let operand = get_child(ast, 1);
+    let operand_new = lower_expr_sb(operand, temp_id, block_id, sb);
+    let operand_id = operand_new - 1;
+    let result_tmp = "%_t" + int_to_string(operand_new);
+    let mir_op = if op == "not" then "not" else if op == "-" then "neg" else op;
+    let w1 = sb_push_mir(sb, "  " + result_tmp + " = " + mir_op + " %_t" + int_to_string(operand_id));
+    operand_new + 1;
+
+fn lower_if_sb(ast: String, temp_id: i64, block_id: i64, sb: i64) -> i64 =
+    let cond = get_child(ast, 0);
+    let then_branch = get_child(ast, 1);
+    let else_branch = get_child(ast, 2);
+    let cond_new = lower_expr_sb(cond, temp_id, block_id, sb);
+    let cond_id = cond_new - 1;
+    let then_label = "then_" + int_to_string(block_id);
+    let else_label = "else_" + int_to_string(block_id);
+    let merge_label = "merge_" + int_to_string(block_id);
+    let w1 = sb_push_mir(sb, "  branch %_t" + int_to_string(cond_id) + ", " + then_label + ", " + else_label);
+    let w2 = sb_push_mir(sb, then_label + ":");
+    let then_new = lower_expr_sb(then_branch, cond_new, block_id + 1, sb);
+    let then_id = then_new - 1;
+    let w3 = sb_push_mir(sb, "  goto " + merge_label);
+    let w4 = sb_push_mir(sb, else_label + ":");
+    let else_new = lower_expr_sb(else_branch, then_new, block_id + 2, sb);
+    let else_id = else_new - 1;
+    let w5 = sb_push_mir(sb, "  goto " + merge_label);
+    let w6 = sb_push_mir(sb, merge_label + ":");
+    let phi_tmp = "%_t" + int_to_string(else_new);
+    let w7 = sb_push_mir(sb, "  " + phi_tmp + " = phi [%_t" + int_to_string(then_id) + ", " + then_label + "], [%_t" + int_to_string(else_id) + ", " + else_label + "]");
+    else_new + 1;
+
+fn lower_let_sb(ast: String, temp_id: i64, block_id: i64, sb: i64) -> i64 =
+    let name = extract_name(ast);
+    let value_ast = get_child(ast, 1);
+    let body_ast = get_child(ast, 2);
+    let val_new = lower_expr_sb(value_ast, temp_id, block_id, sb);
+    let val_id = val_new - 1;
+    let w1 = sb_push_mir(sb, "  %" + name + " = copy %_t" + int_to_string(val_id));
+    lower_expr_sb(body_ast, val_new, block_id, sb);
+
+fn lower_call_sb(ast: String, temp_id: i64, block_id: i64, sb: i64) -> i64 =
+    let name = extract_name(ast);
+    lower_call_args_sb(ast, name, temp_id, block_id, 1, "", sb);
+
+fn lower_call_args_sb(ast: String, name: String, temp_id: i64, block_id: i64, idx: i64, args_acc: String, sb: i64) -> i64 =
+    let arg = get_child(ast, idx);
+    if arg == "" then
+        let result_tmp = "%_t" + int_to_string(temp_id);
+        let w1 = sb_push_mir(sb, "  " + result_tmp + " = call @" + name + "(" + args_acc + ")");
+        temp_id + 1
+    else
+        let arg_new = lower_expr_sb(arg, temp_id, block_id, sb);
+        let arg_id = arg_new - 1;
+        let new_args = if args_acc == "" then "%_t" + int_to_string(arg_id)
+            else args_acc + ", %_t" + int_to_string(arg_id);
+        lower_call_args_sb(ast, name, arg_new, block_id, idx + 1, new_args, sb);
+
+fn lower_function_sb(ast: String) -> String =
+    let name = extract_name(ast);
+    let params = collect_params(ast, 1, "");
+    let ret_type = get_fn_return_type(ast);
+    let body_ast = get_fn_body(ast);
+    let sb = sb_new();
+    let final_temp = lower_expr_sb(body_ast, 0, 0, sb);
+    let result_id = final_temp - 1;
+    let w1 = sb_push_mir(sb, "  return %_t" + int_to_string(result_id));
+    let body_mir = sb_build(sb);
+    "fn " + name + "(" + params + ") -> " + ret_type + " {|entry:|" + body_mir + "|}";
+
+fn lower_program_sb(ast: String) -> String =
+    let sb = sb_new();
+    let w1 = lower_program_inner_sb(ast, 0, sb);
+    sb_build(sb);
+
+fn lower_program_inner_sb(ast: String, idx: i64, sb: i64) -> i64 =
+    let fn_ast = get_child(ast, idx);
+    if fn_ast.len() == 0 or fn_ast == "" then 0
+    else if not is_fn_node(fn_ast) then 0
+    else
+        let fn_mir = lower_function_sb(fn_ast);
+        let len = sb_len(sb);
+        let w1 = if len > 0 then sb_push(sb, "||") else 0;
+        let w2 = sb_push(sb, fn_mir);
+        lower_program_inner_sb(ast, idx + 1, sb);
+
+-- ============================================================================
 -- SECTION 9: Expression Lowering
 -- ============================================================================
 
@@ -997,6 +1142,45 @@ fn gen_function_lines(mir: String, pos: i64, acc: String) -> String =
         if pipe_pos >= mir.len() then new_acc
         else gen_function_lines(mir, pipe_pos + 1, new_acc);
 
+-- ============================================================================
+-- SECTION 11B: StringBuilder-aware LLVM Generation (v0.31.20)
+-- ============================================================================
+-- O(1) amortized string concatenation for LLVM IR generation
+
+fn gen_function_sb(mir: String) -> String =
+    let sb = sb_new();
+    let w1 = gen_function_lines_sb(mir, 0, sb);
+    sb_build(sb);
+
+fn gen_function_lines_sb(mir: String, pos: i64, sb: i64) -> i64 =
+    if pos >= mir.len() then 0
+    else
+        let pipe_pos = find_pipe(mir, pos);
+        let line = mir.slice(pos, pipe_pos);
+        let llvm_line = llvm_gen_fn_line(line);
+        let len = sb_len(sb);
+        let w1 = if len > 0 then sb_push(sb, "|") else 0;
+        let w2 = sb_push(sb, llvm_line);
+        if pipe_pos >= mir.len() then 0
+        else gen_function_lines_sb(mir, pipe_pos + 1, sb);
+
+fn gen_program_sb(mir: String) -> String =
+    let sb = sb_new();
+    let w1 = gen_program_acc_sb(mir, 0, sb);
+    sb_build(sb);
+
+fn gen_program_acc_sb(mir: String, pos: i64, sb: i64) -> i64 =
+    if pos >= mir.len() then 0
+    else
+        let fn_end = find_double_pipe(mir, pos);
+        let fn_mir = mir.slice(pos, fn_end);
+        let fn_llvm = gen_function_sb(fn_mir);
+        let len = sb_len(sb);
+        let w1 = if len > 0 then sb_push(sb, "||") else 0;
+        let w2 = sb_push(sb, fn_llvm);
+        if fn_end + 2 >= mir.len() then 0
+        else gen_program_acc_sb(mir, fn_end + 2, sb);
+
 fn llvm_gen_fn_line(line: String) -> String =
     let p = low_skip_ws(line, 0);
     if p >= line.len() then ""
@@ -1091,12 +1275,14 @@ fn compile_program(source: String) -> String =
     let ast = parse_source(source);
     if is_error(ast) then "ERR:PARSE:" + ast
     else
-        let mir = lower_program(ast);
+        -- v0.31.20: Use StringBuilder-aware lowering for O(1) MIR generation
+        let mir = lower_program_sb(ast);
         if mir == "" then "ERR:LOWERING:empty"
         else
             let header = gen_module_header();
             let decls = gen_runtime_decls();
-            let code = gen_program(mir);
+            -- v0.31.20: Use StringBuilder-aware LLVM generation for O(1) IR generation
+            let code = gen_program_sb(mir);
             header + "|" + decls + "||" + code;
 
 -- Compile single function source to LLVM IR
@@ -1105,9 +1291,11 @@ fn compile_function(source: String) -> String =
     let ast = parse_source(full_source);
     if is_error(ast) then "ERR:PARSE:" + ast
     else
-        let mir = lower_program(ast);
+        -- v0.31.20: Use StringBuilder-aware lowering for O(1) MIR generation
+        let mir = lower_program_sb(ast);
         if mir == "" then "ERR:LOWERING:empty"
-        else gen_function(mir);
+        -- v0.31.20: Use StringBuilder-aware LLVM generation for O(1) IR generation
+        else gen_function_sb(mir);
 
 -- Check if compilation result is an error
 fn is_compile_error(result: String) -> bool =
