@@ -15,6 +15,9 @@ pub enum Value {
     Bool(bool),
     /// String value (v0.5 Phase 2, v0.30.268: Rc for efficient cloning)
     Str(Rc<String>),
+    /// String rope for lazy concatenation (v0.30.283)
+    /// Stores fragments that are concatenated only when materialized
+    StringRope(Rc<RefCell<Vec<Rc<String>>>>),
     /// Unit value
     Unit,
     /// Struct value: (type_name, fields)
@@ -37,6 +40,7 @@ impl Value {
             Value::Int(n) => *n != 0,
             Value::Float(f) => *f != 0.0,
             Value::Str(s) => !s.is_empty(),
+            Value::StringRope(fragments) => !fragments.borrow().is_empty(),
             Value::Unit => false,
             Value::Struct(_, _) => true,
             Value::Enum(_, _, _) => true,
@@ -53,6 +57,7 @@ impl Value {
             Value::Float(_) => "float",
             Value::Bool(_) => "bool",
             Value::Str(_) => "String",
+            Value::StringRope(_) => "String",  // Same type name for user
             Value::Unit => "()",
             Value::Struct(name, _) => name,
             Value::Enum(name, _, _) => name,
@@ -60,6 +65,48 @@ impl Value {
             Value::Ref(_) => "&ref",
             Value::Array(_) => "array",
         }
+    }
+
+    /// Materialize a StringRope into a regular String (v0.30.283)
+    pub fn materialize_string(&self) -> Option<String> {
+        match self {
+            Value::Str(s) => Some(s.as_ref().clone()),
+            Value::StringRope(fragments) => {
+                let frags = fragments.borrow();
+                let total_len: usize = frags.iter().map(|s| s.len()).sum();
+                let mut result = String::with_capacity(total_len);
+                for frag in frags.iter() {
+                    result.push_str(frag);
+                }
+                Some(result)
+            }
+            _ => None,
+        }
+    }
+
+    /// Create a StringRope from two string values (v0.30.283)
+    pub fn concat_strings(a: &Value, b: &Value) -> Option<Value> {
+        let mut fragments: Vec<Rc<String>> = Vec::new();
+
+        // Collect fragments from first operand
+        match a {
+            Value::Str(s) => fragments.push(s.clone()),
+            Value::StringRope(frags) => {
+                fragments.extend(frags.borrow().iter().cloned());
+            }
+            _ => return None,
+        }
+
+        // Collect fragments from second operand
+        match b {
+            Value::Str(s) => fragments.push(s.clone()),
+            Value::StringRope(frags) => {
+                fragments.extend(frags.borrow().iter().cloned());
+            }
+            _ => return None,
+        }
+
+        Some(Value::StringRope(Rc::new(RefCell::new(fragments))))
     }
 
     /// Try to convert to i64
@@ -103,6 +150,16 @@ impl fmt::Display for Value {
             Value::Float(x) => write!(f, "{x}"),
             Value::Bool(b) => write!(f, "{b}"),
             Value::Str(s) => write!(f, "\"{s}\""),
+            Value::StringRope(fragments) => {
+                // Materialize for display (v0.30.283)
+                let frags = fragments.borrow();
+                let total_len: usize = frags.iter().map(|s| s.len()).sum();
+                let mut result = String::with_capacity(total_len);
+                for frag in frags.iter() {
+                    result.push_str(frag);
+                }
+                write!(f, "\"{}\"", result)
+            }
             Value::Unit => write!(f, "()"),
             Value::Struct(name, fields) => {
                 write!(f, "{} {{ ", name)?;
@@ -151,6 +208,27 @@ impl PartialEq for Value {
             (Value::Float(a), Value::Float(b)) => a == b,
             (Value::Bool(a), Value::Bool(b)) => a == b,
             (Value::Str(a), Value::Str(b)) => a == b,
+            // StringRope comparisons (v0.30.283): materialize and compare
+            (Value::StringRope(a), Value::StringRope(b)) => {
+                let a_frags = a.borrow();
+                let b_frags = b.borrow();
+                if a_frags.len() == b_frags.len() {
+                    a_frags.iter().zip(b_frags.iter()).all(|(x, y)| x == y)
+                } else {
+                    // Different fragment counts, materialize to compare
+                    let a_str: String = a_frags.iter().map(|s| s.as_str()).collect();
+                    let b_str: String = b_frags.iter().map(|s| s.as_str()).collect();
+                    a_str == b_str
+                }
+            }
+            (Value::Str(a), Value::StringRope(b)) => {
+                let b_str: String = b.borrow().iter().map(|s| s.as_str()).collect();
+                a.as_str() == b_str
+            }
+            (Value::StringRope(a), Value::Str(b)) => {
+                let a_str: String = a.borrow().iter().map(|s| s.as_str()).collect();
+                a_str == b.as_str()
+            }
             (Value::Unit, Value::Unit) => true,
             (Value::Struct(n1, f1), Value::Struct(n2, f2)) => n1 == n2 && f1 == f2,
             (Value::Enum(e1, v1, a1), Value::Enum(e2, v2, a2)) => e1 == e2 && v1 == v2 && a1 == a2,
@@ -183,5 +261,69 @@ mod tests {
         assert!(!Value::Int(0).is_truthy());
         assert!(Value::Str(Rc::new("hello".to_string())).is_truthy());
         assert!(!Value::Str(Rc::new("".to_string())).is_truthy());
+    }
+
+    // v0.30.283: StringRope tests
+    #[test]
+    fn test_string_rope_concat() {
+        let a = Value::Str(Rc::new("hello".to_string()));
+        let b = Value::Str(Rc::new(" world".to_string()));
+        let result = Value::concat_strings(&a, &b).unwrap();
+        assert_eq!(result.materialize_string().unwrap(), "hello world");
+    }
+
+    #[test]
+    fn test_string_rope_multi_concat() {
+        let a = Value::Str(Rc::new("a".to_string()));
+        let b = Value::Str(Rc::new("b".to_string()));
+        let c = Value::Str(Rc::new("c".to_string()));
+
+        let ab = Value::concat_strings(&a, &b).unwrap();
+        let abc = Value::concat_strings(&ab, &c).unwrap();
+
+        assert_eq!(abc.materialize_string().unwrap(), "abc");
+    }
+
+    #[test]
+    fn test_string_rope_equality() {
+        let a = Value::Str(Rc::new("hello".to_string()));
+        let b = Value::Str(Rc::new("hello".to_string()));
+        let rope = Value::concat_strings(
+            &Value::Str(Rc::new("hel".to_string())),
+            &Value::Str(Rc::new("lo".to_string()))
+        ).unwrap();
+
+        assert_eq!(a, b);
+        assert_eq!(a, rope);
+        assert_eq!(rope, a);
+    }
+
+    #[test]
+    fn test_string_rope_display() {
+        let rope = Value::concat_strings(
+            &Value::Str(Rc::new("foo".to_string())),
+            &Value::Str(Rc::new("bar".to_string()))
+        ).unwrap();
+        assert_eq!(format!("{}", rope), "\"foobar\"");
+    }
+
+    #[test]
+    fn test_string_rope_memory_efficiency() {
+        // Simulate many concatenations (like bootstrap's 253)
+        let mut result = Value::Str(Rc::new(String::new()));
+        for i in 0..100 {
+            let fragment = Value::Str(Rc::new(format!("fragment{}", i)));
+            result = Value::concat_strings(&result, &fragment).unwrap();
+        }
+
+        // Should have 101 fragments (empty + 100 fragments)
+        if let Value::StringRope(frags) = &result {
+            assert_eq!(frags.borrow().len(), 101);
+        }
+
+        // Materialize should produce correct result
+        let materialized = result.materialize_string().unwrap();
+        assert!(materialized.starts_with("fragment0"));
+        assert!(materialized.ends_with("fragment99"));
     }
 }

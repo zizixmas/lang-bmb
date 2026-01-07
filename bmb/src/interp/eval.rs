@@ -481,9 +481,16 @@ impl Interpreter {
         }
     }
 
-    /// Evaluate method call (v0.5 Phase 8)
+    /// Evaluate method call (v0.5 Phase 8, v0.30.283: StringRope support)
     fn eval_method_call(&self, receiver: Value, method: &str, args: Vec<Value>) -> InterpResult<Value> {
         match receiver {
+            // v0.30.283: Handle StringRope by materializing
+            Value::StringRope(_) => {
+                let materialized = receiver.materialize_string()
+                    .ok_or_else(|| RuntimeError::type_error("string", "invalid StringRope"))?;
+                let s = Rc::new(materialized);
+                self.eval_method_call(Value::Str(s), method, args)
+            }
             Value::Str(s) => {
                 match method {
                     "len" => Ok(Value::Int(s.len() as i64)),
@@ -581,6 +588,11 @@ impl Interpreter {
                     (crate::ast::LiteralPattern::Float(f), Value::Float(v)) if *f == *v => Some(vec![]),
                     (crate::ast::LiteralPattern::Bool(b), Value::Bool(v)) if *b == *v => Some(vec![]),
                     (crate::ast::LiteralPattern::String(s), Value::Str(v)) if s == v.as_ref() => Some(vec![]),
+                    // v0.30.283: StringRope support for pattern matching
+                    (crate::ast::LiteralPattern::String(s), Value::StringRope(r)) => {
+                        let materialized: String = r.borrow().iter().map(|f| f.as_str()).collect();
+                        if s == &materialized { Some(vec![]) } else { None }
+                    }
                     _ => None,
                 }
             }
@@ -698,12 +710,14 @@ impl Interpreter {
                 (Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
                 (Value::Int(a), Value::Float(b)) => Ok(Value::Float(*a as f64 + b)),
                 (Value::Float(a), Value::Int(b)) => Ok(Value::Float(a + *b as f64)),
-                // String concatenation (v0.30.256: pre-allocated capacity, v0.30.268: Rc<String>)
-                (Value::Str(a), Value::Str(b)) => {
-                    let mut result = String::with_capacity(a.len() + b.len());
-                    result.push_str(a);
-                    result.push_str(b);
-                    Ok(Value::Str(Rc::new(result)))
+                // String concatenation (v0.30.283: StringRope for lazy concat)
+                (Value::Str(_), Value::Str(_)) |
+                (Value::Str(_), Value::StringRope(_)) |
+                (Value::StringRope(_), Value::Str(_)) |
+                (Value::StringRope(_), Value::StringRope(_)) => {
+                    Value::concat_strings(&left, &right).ok_or_else(|| {
+                        RuntimeError::type_error("string", "invalid string concat")
+                    })
                 }
                 _ => Err(RuntimeError::type_error(
                     "numeric or string",

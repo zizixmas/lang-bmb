@@ -1524,9 +1524,14 @@ fn generate_bootstrap_ir(source: &str) -> Result<String, Box<dyn std::error::Err
                 vec![Value::Str(Rc::new(escaped_source))],
             ).map_err(|e| format!("Runtime error: {}", e.message))?;
 
-            // Extract string result (v0.30.268: unwrap Rc<String>)
-            match result {
-                Value::Str(ir) => Ok(Rc::try_unwrap(ir).unwrap_or_else(|rc| (*rc).clone())),
+            // Extract string result (v0.30.283: handle both Str and StringRope)
+            match &result {
+                Value::Str(ir) => Ok(ir.as_ref().clone()),
+                Value::StringRope(_) => {
+                    // Materialize StringRope to String
+                    result.materialize_string()
+                        .ok_or_else(|| "Failed to materialize StringRope".to_string())
+                }
                 other => Err(format!("Expected string from compile_program, got: {:?}", other.type_name())),
             }
         })?;

@@ -1,6 +1,6 @@
 # Bootstrap Feature Gap Analysis
 
-> Version: v0.30.280
+> Version: v0.30.286
 > Date: 2026-01-07
 > Purpose: Document gaps between Rust compiler and BMB bootstrap implementation
 
@@ -74,7 +74,9 @@ The BMB bootstrap implements the **complete core compilation pipeline** (lexer â
 
 **v0.30.280 Optimization**: ScopeStack introduced to replace Rc<RefCell<Environment>> chains. Uses Vec<HashMap<String, Value>> for immediate scope deallocation on exit. Environment chain memory issue resolved.
 
-**Known Limitation**: Memory allocation failures for let bindings. Root cause: Bootstrap compiler's LLVM IR text generation uses 253+ string concatenations per compilation, causing ~1.4MB allocation failures during complex patterns.
+**v0.30.286 Optimization**: StringRope introduced for lazy string concatenation. Uses Vec<Rc<String>> fragments instead of immediate concatenation. Memory usage reduced ~28% (1.4MB â†’ 1MB).
+
+**Known Limitation**: Memory allocation failures for let bindings (~1MB). Root cause: Bootstrap compiler's architecture creates many intermediate data structures during let binding compilation, exceeding stacker fiber limits. StringRope helps but doesn't fully resolve the architectural constraint.
 
 ## Module Comparison Matrix
 
