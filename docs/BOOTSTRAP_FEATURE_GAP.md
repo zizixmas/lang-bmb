@@ -121,6 +121,12 @@ Architectural comparison between Rust and Bootstrap implementations:
 - Tests: Compilation pipeline, StringBuilder, File I/O (all pass)
 - Architecture: Standalone (~500 LOC), no module imports (Bootstrap constraint)
 
+**v0.31.16 E2E Self-Compile Test** (Phase 32.1.3):
+- Created `tests/e2e/selfcompile_test.bmb`: Full pipeline validation
+- Tests: Expression compile, File read, File write, StringBuilder, Full pipeline, IR structure
+- Pipeline: Source string → Parse → AST → LLVM IR → File output
+- All 6 tests pass, generates valid LLVM IR files
+
 **Decision**: Accept 86% Stage 3 as sufficient for v0.31. Full architectural fix deferred to v0.32+ where Bootstrap redesign can be done alongside Rust removal.
 
 **Rationale**:

@@ -1964,7 +1964,7 @@ Original "porting" tasks were based on incomplete understanding of Bootstrap sta
 | ~~32.1.4~~ | ~~Port codegen module to BMB~~ | - | - | ✅ Already in llvm_ir.bmb |
 | 32.1.1 | Integrate BMB CLI with stdlib io/process | P0 | 1 week | ✅ v0.31.15 |
 | 32.1.2 | Add module import support to Bootstrap | P2 | 3 weeks | ⚠️ Deferred |
-| 32.1.3 | End-to-end self-compile test | P1 | 1 week | ⏳ Pending |
+| 32.1.3 | End-to-end self-compile test | P1 | 1 week | ✅ v0.31.16 |
 
 **v0.31.15: CLI Compiler Integration**
 - Created `bmb_compile.bmb`: Self-hosted CLI compiler demo
@@ -1972,11 +1972,19 @@ Original "porting" tasks were based on incomplete understanding of Bootstrap sta
 - Includes: Complete lexer, parser, LLVM IR generator (simplified)
 - Tests: Compilation pipeline, StringBuilder, File I/O (all pass)
 
+**v0.31.16: E2E Self-Compile Test**
+- Created `tests/e2e/selfcompile_test.bmb`: Full pipeline validation
+- 6 tests: Expression compile, File read, File write, StringBuilder, Full pipeline, IR structure
+- Demonstrates: Source → Parse → AST → LLVM IR → File output
+- All tests pass, output files verified (`output.ll`, `pipeline_out.ll`)
+
 **32.1.2 Deferral Rationale**:
 - Bootstrap architecture: ~30K LOC standalone, NO module imports
 - All files self-contained with duplicated utility functions
 - Import support requires: Parser changes, resolver, namespace management
 - Recommended: Address in v0.32 with full architectural redesign
+
+**Phase 32.1 Exit Criteria**: ✅ Complete (32.1.1 + 32.1.3, 32.1.2 deferred)
 
 #### Phase 32.2: Package Manager Porting (was 30.3)
 
