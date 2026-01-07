@@ -25,11 +25,13 @@ stdlib/
 ├── string/
 │   └── mod.bmb        # String utilities (40+ functions)
 ├── parse/
-│   └── mod.bmb        # Position-based parsing (20+ functions) [NEW v0.10.15]
+│   └── mod.bmb        # Position-based parsing (20+ functions) [v0.10.15]
 ├── array/
 │   └── mod.bmb        # Array utilities (25+ functions)
 ├── io/
-│   └── mod.bmb        # File I/O operations (8 functions) [NEW v0.32.0 - SPEC ONLY]
+│   └── mod.bmb        # File I/O operations (5 functions) [v0.31.10 - INTERPRETER BUILTINS]
+├── process/
+│   └── mod.bmb        # Process execution (4 functions) [v0.31.11 - INTERPRETER BUILTINS]
 └── test/
     └── mod.bmb        # Test assertions (40+ functions)
 ```
@@ -46,9 +48,10 @@ stdlib/
 | parse | 20+ | v0.10.15 | position-based parsing, field extraction, pattern matching |
 | array | 25+ | v0.6.2 | search, aggregation, predicates, bounds |
 | io | 5 | v0.31.10 | file I/O (read_file, write_file) **[INTERPRETER BUILTINS]** |
+| process | 4 | v0.31.11 | process exec (exec, system) **[INTERPRETER BUILTINS]** |
 | test | 40+ | v0.7.2 | test assertions for bmb test runner |
 
-**Total: 175+ functions with contracts** (175 implemented)
+**Total: 179+ functions with contracts** (179 implemented)
 
 ## string Module (v0.10.14)
 

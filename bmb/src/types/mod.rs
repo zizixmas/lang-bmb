@@ -104,6 +104,16 @@ impl TypeChecker {
         // file_size(path: String) -> i64 (-1 = error)
         functions.insert("file_size".to_string(), (vec![Type::String], Type::I64));
 
+        // v0.31.11: Process execution builtins for Phase 32.0.2 Bootstrap Infrastructure
+        // exec(command: String, args: String) -> i64 (exit code)
+        functions.insert("exec".to_string(), (vec![Type::String, Type::String], Type::I64));
+        // exec_output(command: String, args: String) -> String (stdout)
+        functions.insert("exec_output".to_string(), (vec![Type::String, Type::String], Type::String));
+        // system(command: String) -> i64 (exit code via shell)
+        functions.insert("system".to_string(), (vec![Type::String], Type::I64));
+        // getenv(name: String) -> String (env var value)
+        functions.insert("getenv".to_string(), (vec![Type::String], Type::String));
+
         Self {
             env: HashMap::new(),
             functions,

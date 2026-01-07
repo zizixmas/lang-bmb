@@ -1890,7 +1890,7 @@ string overhead. Fixing requires architectural redesign.
 | Blocker | Impact | Solution | Status |
 |---------|--------|----------|--------|
 | ~~No File I/O~~ | ~~Can't read source files~~ | ~~Interpreter builtins~~ | ✅ v0.31.10 |
-| No Process Exec | Can't invoke clang/ld | Stdlib extension | 🔲 Pending |
+| ~~No Process Exec~~ | ~~Can't invoke clang/ld~~ | ~~Interpreter builtins~~ | ✅ v0.31.11 |
 | O(n²) Concatenation | Stage 3 limited to 86% | StringBuilder pattern | 🔲 Pending |
 
 #### Phase 32.0: Bootstrap Infrastructure (NEW - Critical Path)
@@ -1900,14 +1900,14 @@ string overhead. Fixing requires architectural redesign.
 | Task | Description | Priority | Effort | Status |
 |------|-------------|----------|--------|--------|
 | 32.0.1 | Add stdlib `io` module (read_file, write_file) | P0 | ~~2 weeks~~ 1 day | ✅ v0.31.10 |
-| 32.0.2 | Add stdlib `process` module (exec, system) | P0 | 2 weeks | 🔲 Pending |
+| 32.0.2 | Add stdlib `process` module (exec, system) | P0 | ~~2 weeks~~ 1 day | ✅ v0.31.11 |
 | 32.0.3 | Create minimal BMB CLI wrapper | P0 | 1 week | 🔲 Pending |
 | 32.0.4 | Fix O(n²) string concatenation (StringBuilder) | P0 | 2 weeks | 🔲 Pending |
 | 32.0.5 | Stage 3 verification (7/7 tests) | P0 | 1 week | 🔲 Pending |
 
 **Implementation Strategy**:
 1. ~~LLVM intrinsics for File I/O~~ → ✅ Interpreter builtins (faster path)
-2. LLVM Process execution via libc calls
+2. ~~LLVM Process execution via libc calls~~ → ✅ Interpreter builtins (v0.31.11)
 3. BMB CLI: parse args → read file → call bootstrap → write output
 4. StringBuilder: mutable string accumulator in BMB subset
 
@@ -1916,6 +1916,12 @@ string overhead. Fixing requires architectural redesign.
 - Functions: `read_file`, `write_file`, `append_file`, `file_exists`, `file_size`
 - Type signatures registered in type checker
 - Enables Bootstrap to read/write files via `bmb run`
+
+**v0.31.11 Implementation Details**:
+- Process execution via interpreter builtins
+- Functions: `exec`, `exec_output`, `system`, `getenv`
+- Cross-platform: Windows (cmd) and Unix (sh) shell support
+- Enables Bootstrap to invoke LLVM toolchain via `bmb run`
 
 **Exit Criteria**: Bootstrap compiles and runs simple programs standalone
 

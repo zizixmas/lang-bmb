@@ -6,9 +6,11 @@ use super::scope::ScopeStack;
 use super::value::Value;
 use crate::ast::{BinOp, EnumDef, Expr, FnDef, Pattern, Program, Spanned, StructDef, UnOp};
 use std::collections::HashMap;
+use std::env;
 use std::fs;
 use std::io::{self, BufRead, Write};
 use std::path::Path;
+use std::process::Command;
 use std::rc::Rc;
 
 /// Maximum recursion depth (v0.30.248: increased for bootstrap compiler Stage 3 verification)
@@ -74,6 +76,12 @@ impl Interpreter {
         self.builtins.insert("append_file".to_string(), builtin_append_file);
         self.builtins.insert("file_exists".to_string(), builtin_file_exists);
         self.builtins.insert("file_size".to_string(), builtin_file_size);
+
+        // v0.31.11: Process execution builtins for Phase 32.0.2 Bootstrap Infrastructure
+        self.builtins.insert("exec".to_string(), builtin_exec);
+        self.builtins.insert("exec_output".to_string(), builtin_exec_output);
+        self.builtins.insert("system".to_string(), builtin_system);
+        self.builtins.insert("getenv".to_string(), builtin_getenv);
     }
 
     /// v0.30.280: Enable ScopeStack-based evaluation for better memory efficiency
@@ -1262,6 +1270,131 @@ fn builtin_file_size(args: &[Value]) -> InterpResult<Value> {
                 Ok(meta) => Ok(Value::Int(meta.len() as i64)),
                 Err(_) => Ok(Value::Int(-1)),
             }
+        }
+        None => Err(RuntimeError::type_error("string", args[0].type_name())),
+    }
+}
+
+// ============ v0.31.11: Process Execution Builtins for Phase 32.0.2 Bootstrap Infrastructure ============
+
+/// Helper: Parse command arguments string into Vec<String>
+/// Simple split on whitespace, handles quoted strings
+fn parse_args(args_str: &str) -> Vec<String> {
+    let mut result = Vec::new();
+    let mut current = String::new();
+    let mut in_quote = false;
+    let mut quote_char = ' ';
+
+    for c in args_str.chars() {
+        if in_quote {
+            if c == quote_char {
+                in_quote = false;
+            } else {
+                current.push(c);
+            }
+        } else if c == '"' || c == '\'' {
+            in_quote = true;
+            quote_char = c;
+        } else if c.is_whitespace() {
+            if !current.is_empty() {
+                result.push(current.clone());
+                current.clear();
+            }
+        } else {
+            current.push(c);
+        }
+    }
+
+    if !current.is_empty() {
+        result.push(current);
+    }
+
+    result
+}
+
+/// exec(command: String, args: String) -> i64
+/// Execute a command with arguments, returns exit code (0 = success, -1 = error).
+fn builtin_exec(args: &[Value]) -> InterpResult<Value> {
+    if args.len() != 2 {
+        return Err(RuntimeError::arity_mismatch("exec", 2, args.len()));
+    }
+    match (extract_string(&args[0]), extract_string(&args[1])) {
+        (Some(command), Some(args_str)) => {
+            let parsed_args = parse_args(&args_str);
+            match Command::new(&command).args(&parsed_args).status() {
+                Ok(status) => {
+                    Ok(Value::Int(status.code().unwrap_or(-1) as i64))
+                }
+                Err(e) => {
+                    eprintln!("exec error: {}", e);
+                    Ok(Value::Int(-1))
+                }
+            }
+        }
+        _ => Err(RuntimeError::type_error("(string, string)", "other")),
+    }
+}
+
+/// exec_output(command: String, args: String) -> String
+/// Execute a command and capture stdout.
+fn builtin_exec_output(args: &[Value]) -> InterpResult<Value> {
+    if args.len() != 2 {
+        return Err(RuntimeError::arity_mismatch("exec_output", 2, args.len()));
+    }
+    match (extract_string(&args[0]), extract_string(&args[1])) {
+        (Some(command), Some(args_str)) => {
+            let parsed_args = parse_args(&args_str);
+            match Command::new(&command).args(&parsed_args).output() {
+                Ok(output) => {
+                    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                    Ok(Value::Str(Rc::new(stdout)))
+                }
+                Err(e) => {
+                    eprintln!("exec_output error: {}", e);
+                    Ok(Value::Str(Rc::new(String::new())))
+                }
+            }
+        }
+        _ => Err(RuntimeError::type_error("(string, string)", "other")),
+    }
+}
+
+/// system(command: String) -> i64
+/// Execute a shell command, returns exit code.
+fn builtin_system(args: &[Value]) -> InterpResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::arity_mismatch("system", 1, args.len()));
+    }
+    match extract_string(&args[0]) {
+        Some(command) => {
+            // Use platform-specific shell
+            #[cfg(windows)]
+            let result = Command::new("cmd").args(["/C", &command]).status();
+            #[cfg(not(windows))]
+            let result = Command::new("sh").args(["-c", &command]).status();
+
+            match result {
+                Ok(status) => Ok(Value::Int(status.code().unwrap_or(-1) as i64)),
+                Err(e) => {
+                    eprintln!("system error: {}", e);
+                    Ok(Value::Int(-1))
+                }
+            }
+        }
+        None => Err(RuntimeError::type_error("string", args[0].type_name())),
+    }
+}
+
+/// getenv(name: String) -> String
+/// Get environment variable value, or empty string if not set.
+fn builtin_getenv(args: &[Value]) -> InterpResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::arity_mismatch("getenv", 1, args.len()));
+    }
+    match extract_string(&args[0]) {
+        Some(name) => {
+            let value = env::var(&name).unwrap_or_default();
+            Ok(Value::Str(Rc::new(value)))
         }
         None => Err(RuntimeError::type_error("string", args[0].type_name())),
     }
