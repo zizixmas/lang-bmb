@@ -2015,12 +2015,28 @@ Original "porting" tasks were based on incomplete understanding of Bootstrap sta
 
 #### Phase 32.2: Package Manager Porting (was 30.3)
 
-| Task | Description | Priority | Effort |
-|------|-------------|----------|--------|
-| 32.2.1 | Port registry client to BMB | P1 | 2 weeks |
-| 32.2.2 | Port dependency resolver to BMB | P1 | 2 weeks |
-| 32.2.3 | Port build system to BMB | P1 | 3 weeks |
-| 32.2.4 | Port CLI and config to BMB | P1 | 1 week |
+**Goal**: Port gotgan to BMB while extracting reusable packages to `gotgan-packages`
+
+| Task | Description | Priority | Effort | Status |
+|------|-------------|----------|--------|--------|
+| 32.2.0 | Extract reusable packages (semver, toml) | P0 | 1 week | ✅ v0.31.21 |
+| 32.2.1 | Port registry client to BMB | P1 | 2 weeks | 📋 Planned |
+| 32.2.2 | Port dependency resolver to BMB | P1 | 2 weeks | 📋 Planned |
+| 32.2.3 | Port build system to BMB | P1 | 3 weeks | 📋 Planned |
+| 32.2.4 | Port CLI and config to BMB | P1 | 1 week | 📋 Planned |
+
+**v0.31.21: Reusable Package Extraction**
+- Created `bmb-semver` package (198 LOC):
+  - Version packing/unpacking (major.minor.patch as i64)
+  - Constraint parsing (^, ~, >, >=, <, <=, =)
+  - Constraint matching (satisfies, matches_caret, matches_tilde)
+  - Extracted from gotgan registry.rs
+- Created `bmb-toml` package (303 LOC):
+  - Character classification and tokenization
+  - Value type detection (string, integer, boolean, array, table)
+  - Line classification and validation
+  - High-level API (validate, has_section, has_package)
+- Updated gotgan-packages README with contribution guidelines
 
 #### Phase 32.3: Rust Removal (was 30.4)
 
