@@ -83,6 +83,20 @@ pub enum Token {
     #[token("todo")]
     Todo,
 
+    // v0.31: Module header system (RFC-0002)
+    #[token("module")]
+    Module,
+    #[token("version")]
+    Version,
+    #[token("summary")]
+    Summary,
+    #[token("exports")]
+    Exports,
+    #[token("depends")]
+    Depends,
+    #[token("===")]
+    HeaderSep,
+
     // Type keywords
     #[token("i32")]
     TyI32,
@@ -265,6 +279,13 @@ impl std::fmt::Display for Token {
             Token::Lt => write!(f, "<"),
             Token::Gt => write!(f, ">"),
             Token::Todo => write!(f, "todo"),
+            // v0.31: Module header tokens
+            Token::Module => write!(f, "module"),
+            Token::Version => write!(f, "version"),
+            Token::Summary => write!(f, "summary"),
+            Token::Exports => write!(f, "exports"),
+            Token::Depends => write!(f, "depends"),
+            Token::HeaderSep => write!(f, "==="),
         }
     }
 }

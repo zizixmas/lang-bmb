@@ -2,6 +2,9 @@
 //!
 //! Verifies pre/post conditions for functions.
 
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+
 use crate::ast::{Expr, FnDef, Item, NamedContract, Program, Spanned, Type};
 use crate::smt::{
     SmtLibGenerator, SmtTranslator, SmtSolver, SolverResult,
@@ -87,6 +90,9 @@ impl ContractVerifier {
             return report;
         }
 
+        // v0.31: Check for duplicate contracts
+        self.detect_duplicate_contracts(func, &mut report);
+
         // Set up translator
         let mut generator = SmtLibGenerator::new();
         let mut translator = SmtTranslator::new();
@@ -124,6 +130,40 @@ impl ContractVerifier {
         }
 
         report
+    }
+
+    /// v0.31: Detect duplicate contracts by hashing their expressions
+    fn detect_duplicate_contracts(&self, func: &FnDef, report: &mut FunctionReport) {
+        use std::collections::HashMap;
+        let mut seen_hashes: HashMap<u64, (usize, Option<String>)> = HashMap::new();
+
+        for (idx, contract) in func.contracts.iter().enumerate() {
+            let hash = self.hash_expr(&contract.condition.node);
+            let contract_name = contract.name.as_ref().map(|s| s.node.clone());
+
+            if let Some((prev_idx, prev_name)) = seen_hashes.get(&hash) {
+                let current_desc = contract_name
+                    .clone()
+                    .unwrap_or_else(|| format!("contract #{}", idx + 1));
+                let prev_desc = prev_name
+                    .clone()
+                    .unwrap_or_else(|| format!("contract #{}", prev_idx + 1));
+                report.warnings.push(format!(
+                    "Duplicate contract: '{}' has the same condition as '{}'",
+                    current_desc, prev_desc
+                ));
+            } else {
+                seen_hashes.insert(hash, (idx, contract_name));
+            }
+        }
+    }
+
+    /// Compute hash of an expression for duplicate detection
+    fn hash_expr(&self, expr: &Expr) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        // Use debug format as a canonical representation
+        format!("{:?}", expr).hash(&mut hasher);
+        hasher.finish()
     }
 
     /// Verify pre-condition: Check that pre is satisfiable
@@ -412,6 +452,8 @@ pub struct FunctionReport {
     pub message: Option<String>,
     /// v0.31: Whether this function was trusted via @trust attribute
     pub trusted: bool,
+    /// v0.31: Warnings (e.g., duplicate contracts)
+    pub warnings: Vec<String>,
 }
 
 impl FunctionReport {
@@ -424,6 +466,7 @@ impl FunctionReport {
             refinement_results: Vec::new(),
             message: None,
             trusted: false,
+            warnings: Vec::new(),
         }
     }
 
@@ -531,6 +574,11 @@ impl std::fmt::Display for FunctionReport {
         // Optional message
         if let Some(ref msg) = self.message {
             writeln!(f, "  Note: {}", msg)?;
+        }
+
+        // v0.31: Warnings (e.g., duplicate contracts)
+        for warning in &self.warnings {
+            writeln!(f, "⚠ {}: {}", self.name, warning)?;
         }
 
         Ok(())
@@ -646,5 +694,57 @@ mod tests {
         assert!(report.is_verified());
         assert!(report.message.is_some());
         assert!(report.message.unwrap().contains("No contracts"));
+    }
+
+    #[test]
+    fn test_duplicate_contract_detection() {
+        use crate::ast::NamedContract;
+
+        let verifier = ContractVerifier::new();
+
+        // Create a function with duplicate contracts
+        let same_condition = spanned(Expr::Binary {
+            left: Box::new(spanned(Expr::Var("x".to_string()))),
+            op: crate::ast::BinOp::Ge,
+            right: Box::new(spanned(Expr::IntLit(0))),
+        });
+
+        let func = FnDef {
+            attributes: vec![],
+            visibility: Visibility::Private,
+            name: spanned("test_func".to_string()),
+            type_params: vec![],
+            params: vec![crate::ast::Param {
+                name: spanned("x".to_string()),
+                ty: spanned(Type::I64),
+            }],
+            ret_name: Some(spanned("r".to_string())),
+            ret_ty: spanned(Type::I64),
+            pre: None,
+            post: None,
+            contracts: vec![
+                NamedContract {
+                    name: Some(spanned("positive".to_string())),
+                    condition: same_condition.clone(),
+                    span: dummy_span(),
+                },
+                NamedContract {
+                    name: Some(spanned("also_positive".to_string())),
+                    condition: same_condition.clone(),
+                    span: dummy_span(),
+                },
+            ],
+            body: spanned(Expr::Var("x".to_string())),
+            span: dummy_span(),
+        };
+
+        let mut report = FunctionReport::new("test_func".to_string());
+        verifier.detect_duplicate_contracts(&func, &mut report);
+
+        // Should have detected the duplicate
+        assert_eq!(report.warnings.len(), 1);
+        assert!(report.warnings[0].contains("Duplicate contract"));
+        assert!(report.warnings[0].contains("also_positive"));
+        assert!(report.warnings[0].contains("positive"));
     }
 }

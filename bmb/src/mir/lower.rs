@@ -929,6 +929,7 @@ mod tests {
     #[test]
     fn test_lower_simple_function() {
         let program = Program {
+            header: None,
             items: vec![Item::FnDef(FnDef {
                 attributes: vec![],
                 visibility: Visibility::Private,
@@ -976,6 +977,7 @@ mod tests {
     #[test]
     fn test_lower_if_expression() {
         let program = Program {
+            header: None,
             items: vec![Item::FnDef(FnDef {
                 attributes: vec![],
                 visibility: Visibility::Private,
@@ -1025,6 +1027,7 @@ mod tests {
     #[test]
     fn test_lower_let_binding() {
         let program = Program {
+            header: None,
             items: vec![Item::FnDef(FnDef {
                 attributes: vec![],
                 visibility: Visibility::Private,
@@ -1058,6 +1061,7 @@ mod tests {
     #[test]
     fn test_lower_string_literal() {
         let program = Program {
+            header: None,
             items: vec![Item::FnDef(FnDef {
                 attributes: vec![],
                 visibility: Visibility::Private,
@@ -1090,6 +1094,7 @@ mod tests {
     #[test]
     fn test_lower_while_loop() {
         let program = Program {
+            header: None,
             items: vec![Item::FnDef(FnDef {
                 attributes: vec![],
                 visibility: Visibility::Private,
@@ -1120,6 +1125,7 @@ mod tests {
     #[test]
     fn test_lower_struct_init() {
         let program = Program {
+            header: None,
             items: vec![Item::FnDef(FnDef {
                 attributes: vec![],
                 visibility: Visibility::Private,
@@ -1154,6 +1160,7 @@ mod tests {
     #[test]
     fn test_lower_field_access() {
         let program = Program {
+            header: None,
             items: vec![Item::FnDef(FnDef {
                 attributes: vec![],
                 visibility: Visibility::Private,
@@ -1189,6 +1196,7 @@ mod tests {
     #[test]
     fn test_lower_enum_variant() {
         let program = Program {
+            header: None,
             items: vec![Item::FnDef(FnDef {
                 attributes: vec![],
                 visibility: Visibility::Private,
@@ -1222,6 +1230,7 @@ mod tests {
     #[test]
     fn test_lower_enum_unit_variant() {
         let program = Program {
+            header: None,
             items: vec![Item::FnDef(FnDef {
                 attributes: vec![],
                 visibility: Visibility::Private,
@@ -1258,6 +1267,7 @@ mod tests {
         use crate::ast::MatchArm;
 
         let program = Program {
+            header: None,
             items: vec![Item::FnDef(FnDef {
                 attributes: vec![],
                 visibility: Visibility::Private,
@@ -1314,6 +1324,7 @@ mod tests {
         use crate::ast::MatchArm;
 
         let program = Program {
+            header: None,
             items: vec![Item::FnDef(FnDef {
                 attributes: vec![],
                 visibility: Visibility::Private,
@@ -1364,6 +1375,7 @@ mod tests {
     #[test]
     fn test_lower_array_init() {
         let program = Program {
+            header: None,
             items: vec![Item::FnDef(FnDef {
                 attributes: vec![],
                 visibility: Visibility::Private,
@@ -1396,6 +1408,7 @@ mod tests {
     #[test]
     fn test_lower_array_index() {
         let program = Program {
+            header: None,
             items: vec![Item::FnDef(FnDef {
                 attributes: vec![],
                 visibility: Visibility::Private,
@@ -1431,6 +1444,7 @@ mod tests {
     fn test_lower_method_call() {
         // Test: obj.method(arg) should lower to call method(obj, arg)
         let program = Program {
+            header: None,
             items: vec![Item::FnDef(FnDef {
                 attributes: vec![],
                 visibility: Visibility::Private,

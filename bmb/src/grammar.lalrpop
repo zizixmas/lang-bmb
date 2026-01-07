@@ -54,6 +54,14 @@ extern {
         // v0.31: Incremental development
         "todo" => Token::Todo,
 
+        // v0.31: Module header system (RFC-0002)
+        "module" => Token::Module,
+        "version" => Token::Version,
+        "summary" => Token::Summary,
+        "exports" => Token::Exports,
+        "depends" => Token::Depends,
+        "===" => Token::HeaderSep,
+
         "i32" => Token::TyI32,
         "i64" => Token::TyI64,
         "f64" => Token::TyF64,
@@ -103,9 +111,124 @@ extern {
     }
 }
 
-// Program
+// Program (v0.31: RFC-0002 module header support)
 pub Program: Program = {
-    <items:Item*> => Program { items },
+    // With module header
+    <header:ModuleHeader> "===" <items:Item*> => Program { header: Some(header), items },
+    // Without module header (backwards compatible)
+    <items:Item*> => Program { header: None, items },
+};
+
+// v0.31: Module header (RFC-0002)
+// Syntax: module path.to.module
+//           version 1.0.0
+//           summary "description"
+//           exports sym1, sym2
+//           depends
+//             dep.path (imported_sym)
+ModuleHeader: ModuleHeader = {
+    <l:@L> "module" <name:ModulePath>
+        <version:ModuleVersion?>
+        <summary:ModuleSummary?>
+        <exports:ModuleExports?>
+        <depends:ModuleDepends?>
+    <r:@R> => ModuleHeader {
+        name,
+        version,
+        summary,
+        exports: exports.unwrap_or_default(),
+        depends: depends.unwrap_or_default(),
+        span: Span::new(l, r),
+    },
+};
+
+// Module path: dotted identifier (e.g., "math.arithmetic")
+ModulePath: Spanned<String> = {
+    <l:@L> <first:Ident> <rest:DottedIdent*> <r:@R> => {
+        let mut path = first.node.clone();
+        for segment in rest {
+            path.push('.');
+            path.push_str(&segment.node);
+        }
+        Spanned::new(path, Span::new(l, r))
+    },
+};
+
+// Helper: dot followed by identifier
+DottedIdent: Spanned<String> = {
+    "." <i:Ident> => i,
+};
+
+// Optional version clause
+ModuleVersion: Spanned<String> = {
+    "version" <s:SpannedString> => s,
+};
+
+// Optional summary clause
+ModuleSummary: Spanned<String> = {
+    "summary" <s:SpannedString> => s,
+};
+
+// Optional exports clause
+ModuleExports: Vec<Spanned<String>> = {
+    "exports" <first:Ident> <rest:CommaIdent*> => {
+        let mut exports = vec![first];
+        for ident in rest {
+            exports.push(ident);
+        }
+        exports
+    },
+};
+
+// Helper: comma followed by identifier
+CommaIdent: Spanned<String> = {
+    "," <i:Ident> => i,
+};
+
+// Import identifier - accepts both regular idents and type keywords
+ImportIdent: Spanned<String> = {
+    <i:Ident> => i,
+    <l:@L> "i32" <r:@R> => Spanned::new("i32".to_string(), Span::new(l, r)),
+    <l:@L> "i64" <r:@R> => Spanned::new("i64".to_string(), Span::new(l, r)),
+    <l:@L> "f64" <r:@R> => Spanned::new("f64".to_string(), Span::new(l, r)),
+    <l:@L> "bool" <r:@R> => Spanned::new("bool".to_string(), Span::new(l, r)),
+    <l:@L> "String" <r:@R> => Spanned::new("String".to_string(), Span::new(l, r)),
+};
+
+// Helper: comma followed by import identifier
+CommaImportIdent: Spanned<String> = {
+    "," <i:ImportIdent> => i,
+};
+
+// Optional depends clause
+ModuleDepends: Vec<ModuleDependency> = {
+    "depends" <deps:ModuleDependency+> => deps,
+};
+
+// Single dependency: module.path (sym1, sym2)
+ModuleDependency: ModuleDependency = {
+    <l:@L> <path:ModulePath> "(" <imports:IdentList> ")" <r:@R> => ModuleDependency {
+        module_path: path,
+        imports,
+        span: Span::new(l, r),
+    },
+    // Dependency without specific imports: module.path
+    <l:@L> <path:ModulePath> <r:@R> => ModuleDependency {
+        module_path: path,
+        imports: vec![],
+        span: Span::new(l, r),
+    },
+};
+
+// Comma-separated import identifier list (accepts type keywords too)
+IdentList: Vec<Spanned<String>> = {
+    <first:ImportIdent> <rest:CommaImportIdent*> => {
+        let mut list = vec![first];
+        for ident in rest {
+            list.push(ident);
+        }
+        list
+    },
 };
 
 // Items

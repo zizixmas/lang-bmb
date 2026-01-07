@@ -1,6 +1,6 @@
 # BMB Language Specification
 
-**Version**: v0.18.1 (2026-01-04)
+**Version**: v0.31 (2026-01-07)
 **Status**: Implementation in Progress
 
 ## 1. Overview
@@ -203,6 +203,38 @@ Result type with propagation operator (?) for recoverable errors.
 
 Module system with use statements and pub visibility.
 
+### 8.1 Module Headers (v0.31: RFC-0002)
+
+Module headers provide AI-friendly metadata for navigation and dependency tracking.
+
+**Syntax:**
+```bmb
+module math.arithmetic
+  version "1.0.0"
+  summary "Basic integer arithmetic"
+  exports add, subtract
+  depends
+    core.types (i64)
+===
+
+fn add(a: i64, b: i64) -> i64 = a + b;
+```
+
+**Components:**
+| Component | Required | Description |
+|-----------|----------|-------------|
+| module | Yes | Fully qualified module name (dot-separated) |
+| version | No | SemVer version string |
+| summary | No | One-line description |
+| exports | No | List of exported symbols |
+| depends | No | Module dependencies with specific imports |
+| === | Yes | Header-body separator |
+
+**Design Notes:**
+- Header separator `===` chosen over `---` to avoid conflict with `--` comments
+- Export validation: All exported symbols must have definitions in the module
+- Backward compatible: Files without headers still parse correctly
+
 ## 9. Standard Library
 
 Option, Result, array operations, higher-order functions.
@@ -220,6 +252,7 @@ See full grammar in source code grammar.lalrpop.
 | old(expr) | Complete |
 | @trust "reason" | Complete |
 | todo keyword | Complete (v0.31) |
-| module header | Planned (v0.31) |
+| module header | Complete (v0.31) |
+| contract duplicate detection | Complete (v0.31) |
 | Z3 integration | Complete |
 | SMT-LIB2 generation | Complete |

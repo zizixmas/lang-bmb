@@ -14,7 +14,52 @@ use serde::{Deserialize, Serialize};
 /// A program is a sequence of top-level items
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Program {
+    /// Optional module header (v0.31: RFC-0002)
+    pub header: Option<ModuleHeader>,
     pub items: Vec<Item>,
+}
+
+/// Module header (v0.31: RFC-0002)
+/// Provides metadata for AI-friendly navigation and dependency tracking
+///
+/// Syntax:
+/// ```bmb
+/// module math.arithmetic
+///   version 1.0.0
+///   summary "integer arithmetic"
+///   exports add, subtract
+///   depends
+///     core.types (i64)
+/// ===
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModuleHeader {
+    /// Fully qualified module name (e.g., "math.arithmetic")
+    pub name: Spanned<String>,
+    /// Optional SemVer version (e.g., "1.0.0")
+    pub version: Option<Spanned<String>>,
+    /// Optional one-line description
+    pub summary: Option<Spanned<String>>,
+    /// List of exported symbols
+    pub exports: Vec<Spanned<String>>,
+    /// Module dependencies
+    pub depends: Vec<ModuleDependency>,
+    /// Span of the entire header
+    pub span: Span,
+}
+
+/// Module dependency (v0.31: RFC-0002)
+/// Represents an explicit dependency on another module
+///
+/// Syntax: `core.types (i64, i128)`
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModuleDependency {
+    /// Module path (e.g., "core.types")
+    pub module_path: Spanned<String>,
+    /// Specific imports from the module (e.g., ["i64", "i128"])
+    pub imports: Vec<Spanned<String>>,
+    /// Span
+    pub span: Span,
 }
 
 /// Visibility modifier (v0.5 Phase 4)

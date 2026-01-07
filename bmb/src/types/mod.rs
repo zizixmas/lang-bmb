@@ -296,6 +296,11 @@ impl TypeChecker {
             }
         }
 
+        // v0.31: Validate module header exports (RFC-0002)
+        if let Some(header) = &program.header {
+            self.validate_module_exports(header, program)?;
+        }
+
         Ok(())
     }
 
@@ -349,6 +354,49 @@ impl TypeChecker {
 
         self.current_ret_ty = None;
         self.type_param_env.clear();
+        Ok(())
+    }
+
+    /// v0.31: Validate module header exports (RFC-0002)
+    /// Ensures all exported symbols are actually defined in the module
+    fn validate_module_exports(&self, header: &ModuleHeader, program: &Program) -> Result<()> {
+        // Collect all defined symbols (public visibility only for exports)
+        let mut defined_symbols: std::collections::HashSet<&str> = std::collections::HashSet::new();
+
+        for item in &program.items {
+            match item {
+                Item::FnDef(f) => {
+                    defined_symbols.insert(&f.name.node);
+                }
+                Item::StructDef(s) => {
+                    defined_symbols.insert(&s.name.node);
+                }
+                Item::EnumDef(e) => {
+                    defined_symbols.insert(&e.name.node);
+                }
+                Item::TraitDef(t) => {
+                    defined_symbols.insert(&t.name.node);
+                }
+                Item::ExternFn(e) => {
+                    defined_symbols.insert(&e.name.node);
+                }
+                Item::Use(_) | Item::ImplBlock(_) => {}
+            }
+        }
+
+        // Check each export matches a defined symbol
+        for export in &header.exports {
+            if !defined_symbols.contains(export.node.as_str()) {
+                return Err(CompileError::type_error(
+                    format!(
+                        "Module '{}' exports '{}' but no such definition exists",
+                        header.name.node, export.node
+                    ),
+                    export.span,
+                ));
+            }
+        }
+
         Ok(())
     }
 

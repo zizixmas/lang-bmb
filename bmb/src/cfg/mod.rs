@@ -65,7 +65,10 @@ impl CfgEvaluator {
             .cloned()
             .collect();
 
-        Program { items }
+        Program {
+            header: program.header.clone(),
+            items,
+        }
     }
 
     /// Check if an item should be included for the current target
@@ -221,6 +224,7 @@ mod tests {
         let eval = CfgEvaluator::new(Target::Wasm32);
 
         let program = Program {
+            header: None,
             items: vec![
                 Item::FnDef(make_fn("always", vec![])),
                 Item::FnDef(make_fn("wasm_only", vec![make_cfg_attr("wasm32")])),

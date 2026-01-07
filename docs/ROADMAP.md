@@ -1745,16 +1745,16 @@ $ diff stage2/bmb stage3/bmb
 
 **Duration Estimate**: 6-8 weeks
 
-#### Phase 31.0: Language Refinements (RFCs)
+#### Phase 31.0: Language Refinements (RFCs) ✅ Complete (v0.31.4)
 
-| Task | Description | Priority | Effort | RFC |
-|------|-------------|----------|--------|-----|
-| 31.0.1 | Remove @check annotation | P0 | 1 day | RFC-0003 |
-| 31.0.2 | Add @trust "reason" mandatory reason | P0 | 1 day | RFC-0003 |
-| 31.0.3 | Add `todo` keyword | P0 | 2 days | RFC-0004 |
-| 31.0.4 | Add module header system | P0 | 1 week | RFC-0002 |
-| 31.0.5 | Add contract hash duplicate detection | P1 | 3 days | - |
-| 31.0.6 | Update SPECIFICATION.md | P0 | 1 day | - |
+| Task | Description | Priority | Effort | RFC | Status |
+|------|-------------|----------|--------|-----|--------|
+| 31.0.1 | Remove @check annotation | P0 | 1 day | RFC-0003 | ✅ |
+| 31.0.2 | Add @trust "reason" mandatory reason | P0 | 1 day | RFC-0003 | ✅ |
+| 31.0.3 | Add `todo` keyword | P0 | 2 days | RFC-0004 | ✅ |
+| 31.0.4 | Add module header system | P0 | 1 week | RFC-0002 | ✅ |
+| 31.0.5 | Add contract hash duplicate detection | P1 | 3 days | - | ✅ |
+| 31.0.6 | Update SPECIFICATION.md | P0 | 1 day | - | ✅ |
 
 **Deliverables**:
 - @check removed, @trust requires reason
