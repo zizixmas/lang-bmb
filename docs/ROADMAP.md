@@ -337,6 +337,19 @@ v0.MAJOR.MINOR
 - Multi-operand expressions, mixed operations, combined expressions
 - pipeline.bmb total: 42 tests (10 test groups)
 
+**v0.30.263 Completed (2026-01-07)**:
+- Phase 30.1.259-263: Stage 3 Test Expansion
+- **Test coverage expanded**: 3/4 → 6/7 tests pass
+- **New passing tests**:
+  - `stage3_nested_cond.bmb`: Nested conditional expressions
+  - `stage3_call.bmb`: Function composition (`f(g(x))`)
+  - `stage3_arith.bmb`: Complex arithmetic expressions
+- **New limitations discovered**:
+  - Boolean return types cause memory allocation failures
+  - Recursive functions cause fiber allocation failures on Windows
+- **Supported patterns documented**: Binary ops, conditionals, function composition
+- **Unsupported patterns documented**: Let bindings, bool returns, recursion
+
 **v0.30.258 Completed (2026-01-07)**:
 - Phase 30.1.254-258: Bootstrap String Optimization
 - **Interpreter optimization**: String concatenation with pre-allocated capacity (`String::with_capacity` + `push_str`)

@@ -50,15 +50,29 @@ The BMB bootstrap implements the **complete core compilation pipeline** (lexer �
 - Normalizes and compares function signatures
 - Reports exact match, semantic match, or differences
 
-**Test Results (v0.30.258)**:
-- `stage3_simple.bmb`: ✅ PASS (single function)
+**Test Results (v0.30.263)**:
+- `stage3_simple.bmb`: ✅ PASS (single binary operation)
 - `stage3_max.bmb`: ✅ PASS (conditional expression)
-- `stage3_multi.bmb`: ✅ PASS (multiple functions)
+- `stage3_multi.bmb`: ✅ PASS (multiple independent functions)
+- `stage3_nested_cond.bmb`: ✅ PASS (nested conditionals) - v0.30.263
+- `stage3_call.bmb`: ✅ PASS (function composition) - v0.30.263
+- `stage3_arith.bmb`: ✅ PASS (complex arithmetic) - v0.30.263
 - `stage3_let.bmb`: ❌ FAIL (memory allocation failure in bootstrap)
 
-**v0.30.258 Optimization**: String concatenation with pre-allocated capacity reduced memory from ~2MB to ~1.1MB (~44% reduction), but let bindings still fail due to memory lifetime issue.
+**Result: 6/7 tests pass** (expanded from 3/4)
 
-**Known Limitation**: Let bindings cause ~1.1MB memory allocation. Root cause: Rc<RefCell<Environment>> chain keeps all scopes alive until stack unwinds.
+**Supported Stage 3 Patterns**:
+- ✅ Binary operations (`a + b`, `a * b`, etc.)
+- ✅ Conditional expressions (`if ... then ... else`)
+- ✅ Nested conditionals
+- ✅ Multiple functions (independent)
+- ✅ Function composition (`f(g(x))`)
+- ✅ Complex arithmetic expressions
+- ❌ Let bindings (memory limitation)
+- ❌ Boolean return types (memory limitation)
+- ❌ Recursive functions (fiber allocation limitation)
+
+**Known Limitation**: Memory allocation failures for complex patterns. Root cause: Rc<RefCell<Environment>> chain keeps all scopes alive until stack unwinds.
 
 ## Module Comparison Matrix
 

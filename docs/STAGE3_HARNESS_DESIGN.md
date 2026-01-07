@@ -1,9 +1,9 @@
 # Stage 3 Verification Harness Design
 
-> Version: v0.30.248
+> Version: v0.30.263
 > Date: 2026-01-07
 > Purpose: Design specification for Stage 3 self-hosting verification
-> Status: ✅ Implemented (3/4 test cases pass)
+> Status: ✅ Implemented (6/7 test cases pass)
 
 ## Implementation Status
 
@@ -17,7 +17,12 @@
 | Simple functions | ✅ | `stage3_simple.bmb` passes |
 | Conditionals | ✅ | `stage3_max.bmb` passes |
 | Multiple functions | ✅ | `stage3_multi.bmb` passes |
+| Nested conditionals | ✅ | `stage3_nested_cond.bmb` passes (v0.30.263) |
+| Function composition | ✅ | `stage3_call.bmb` passes (v0.30.263) |
+| Complex arithmetic | ✅ | `stage3_arith.bmb` passes (v0.30.263) |
 | Let bindings | ❌ | Memory allocation failure in bootstrap |
+| Boolean return types | ❌ | Memory allocation failure (v0.30.263 finding) |
+| Recursive functions | ❌ | Fiber allocation failure (v0.30.263 finding) |
 
 ## Overview
 
