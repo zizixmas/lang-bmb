@@ -1417,7 +1417,7 @@ thread_local! {
     /// Thread-local string builder storage. Each builder is identified by an i64 ID.
     static STRING_BUILDERS: SbRefCell<HashMap<i64, Vec<String>>> = SbRefCell::new(HashMap::new());
     /// Counter for generating unique builder IDs
-    static SB_COUNTER: SbRefCell<i64> = SbRefCell::new(0);
+    static SB_COUNTER: SbRefCell<i64> = const { SbRefCell::new(0) };
 }
 
 /// sb_new() -> i64
