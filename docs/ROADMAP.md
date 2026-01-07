@@ -72,12 +72,12 @@ v0.MAJOR.MINOR
 
 > "A self-hosting compiler is a compiler capable of compiling its own source code." - Wikipedia
 
-| Condition | Description | Status |
-|-----------|-------------|--------|
-| **Stage 1** | Build BMB compiler with Rust compiler | ✅ Complete |
-| **Stage 2** | Build BMB compiler with BMB compiler | 🔄 In Progress |
-| **Stage 3** | Rebuild with Stage 2 output (identical binary) | 📋 Planned |
-| **Rust Removal** | Remove all Rust code, BMB-only composition | 📋 Planned (v0.30) |
+| Condition | Description | Status | Target |
+|-----------|-------------|--------|--------|
+| **Stage 1** | Build BMB compiler with Rust compiler | ✅ Complete | v0.30 |
+| **Stage 2** | Build BMB compiler with BMB compiler | ✅ Verified | v0.30 |
+| **Stage 3** | Rebuild with Stage 2 output (identical binary) | 🔄 86% (6/7) | v0.31 |
+| **Rust Removal** | Remove all Rust code, BMB-only composition | 📋 Planned | v0.32 |
 
 **Historical References**:
 - Rust: Started with OCaml → First self-compile April 2011 (1 hour)
@@ -94,10 +94,22 @@ v0.MAJOR.MINOR
 | v0.10-v0.18 | Language | Generics, modules, methods | ✅ Complete |
 | v0.19-v0.23 | Bootstrap | MIR completion, Stage 1/2 verification | ✅ Complete |
 | v0.24-v0.29 | Polish | Examples, AI Query, benchmarks, optimization | ✅ Complete |
-| **v0.30** | **Pure** | **Code Quality & Stability (Self-Hosting)** | ✅ Complete |
-| **v0.31** | **Docs** | **Language refinements (RFCs) + Documentation + website** | 🔄 In Progress |
-| **v0.32** | **Ecosystem** | **100+ packages + community** | 📋 Planned |
-| **v1.0.0-rc** | **Golden** | **Final verification + stability promise** | 📋 Planned |
+| **v0.30** | **Pure** | **Bootstrap code + Stage 2 verification** | ✅ Complete |
+| **v0.31** | **Refine** | **Language polish + Stage 3 resolution + Benchmark Gate #1** | 🔄 In Progress |
+| **v0.32** | **Independence** | **Self-Hosting completion (Rust removal) + Benchmark Gate #2** | 📋 Planned |
+| **v0.33** | **Docs** | **Documentation + Website (BMB compiler 기준)** | 📋 Planned |
+| **v0.34** | **Ecosystem** | **100+ packages + community** | 📋 Planned |
+| **v1.0.0-rc** | **Golden** | **Final verification + Benchmark Gate #3 + stability promise** | 📋 Planned |
+
+### Restructuring Rationale (v0.31.5)
+
+| 변경 | 이유 |
+|------|------|
+| v0.30 "Self-Hosting" → "Bootstrap code" | Rust 미제거 상태에서 "Complete" 부정확 수정 |
+| v0.31 Stage 3 추가 | 86% → 100% 달성 필수 (기술부채 해소) |
+| v0.32 Rust Removal | Self-Hosting 완료를 별도 버전으로 명확화 |
+| v0.33 Documentation | Rust 제거 후 BMB 컴파일러 기준 문서화 |
+| Benchmark Gates | 각 마일스톤에서 성능 검증 필수화 |
 
 ---
 
@@ -182,13 +194,19 @@ v0.MAJOR.MINOR
 
 > Detailed task breakdown with gradual difficulty progression
 
-### v0.30 Pure - Self-Hosting Completion
+### v0.30 Pure - Bootstrap Code Complete
 
-**Goal**: Complete Rust code removal, achieve full self-hosting
+**Goal**: Bootstrap code written, Stage 1/2 verified (Rust removal은 v0.32로 이동)
 
 **Difficulty**: ⭐⭐⭐⭐⭐ (Highest - Core milestone)
 
-**Status**: ✅ **Complete (v0.30.318) - Released as v0.30.0**
+**Status**: ✅ **Complete (v0.30.318)**
+
+**Scope Clarification (v0.31.5)**:
+- ✅ Bootstrap BMB code 작성 (~26K LOC)
+- ✅ Stage 2 검증 (152 동등성 테스트)
+- 🔄 Stage 3: 86% (v0.31에서 100% 달성 목표)
+- 📋 Rust 제거: v0.32로 이동 (명확한 마일스톤 분리)
 
 #### v0.30 Achievement Summary
 
@@ -1737,13 +1755,16 @@ $ diff stage2/bmb stage3/bmb
 
 ---
 
-### v0.31 Docs - Documentation Completion
+### v0.31 Refine - Language Polish & Stage 3 Completion
 
-**Goal**: Comprehensive documentation, language refinement, and website launch
+**Goal**: Language refinement, Stage 3 100% 달성, Benchmark Gate #1
 
-**Difficulty**: ⭐⭐⭐ (Medium)
+**Difficulty**: ⭐⭐⭐⭐ (High - Technical debt resolution)
 
-**Duration Estimate**: 6-8 weeks
+**Duration Estimate**: 8-10 weeks
+
+**Prerequisites**: v0.30 Complete
+**Exit Criteria**: Stage 3 100%, Benchmark Gate #1 Pass
 
 #### Phase 31.0: Language Refinements (RFCs) ✅ Complete (v0.31.4)
 
@@ -1780,49 +1801,162 @@ $ diff stage2/bmb stage3/bmb
 - Complete language reference document (LANGUAGE_REFERENCE.md)
 - Comprehensive coverage: lexical structure, types, expressions, functions, contracts, memory model
 
-#### Phase 31.2: Standard Library Documentation
+#### Phase 31.2: Stage 3 Resolution (기술부채 해소)
+
+**Goal**: Stage 3 86% → 100% 달성
 
 | Task | Description | Priority | Effort |
 |------|-------------|----------|--------|
-| 31.2.1 | Generate API documentation for stdlib | P0 | 1 week |
-| 31.2.2 | Add usage examples for each module | P1 | 1 week |
-| 31.2.3 | Document contract specifications | P1 | 1 week |
+| 31.2.1 | Analyze let binding memory issue root cause | P0 | 1 week |
+| 31.2.2 | Redesign lower_let MIR generation (trampolining) | P0 | 2 weeks |
+| 31.2.3 | Implement iterative MIR lowering | P0 | 2 weeks |
+| 31.2.4 | Verify Stage 3: 7/7 tests pass | P0 | 1 week |
 
-**Deliverables**:
-- Searchable API documentation
-- Code examples for all public functions
+**Current Blocker Analysis**:
+```
+Root Cause: lower_let 재귀적 MIR 생성 → 힙 메모리 한계 (~1MB)
+해결 방향:
+  1. Trampolining: 재귀 → 반복 변환
+  2. Continuation-passing: 스택 분리
+  3. Arena allocation: 메모리 풀링
+```
 
-#### Phase 31.3: Tutorials and Guides
+**Exit Criteria**: `bmb verify-stage3` 7/7 tests pass
 
-| Task | Description | Priority | Effort |
-|------|-------------|----------|--------|
-| 31.3.1 | Write "Getting Started" tutorial | P0 | 1 week |
-| 31.3.2 | Write "By Example" guide | P0 | 2 weeks |
-| 31.3.3 | Write "From Rust" migration guide | P1 | 1 week |
-| 31.3.4 | Write "Contract Programming" guide | P1 | 1 week |
+#### Phase 31.3: Benchmark Gate #1 (Rust Compiler 기준)
 
-**Deliverables**:
-- Step-by-step getting started guide
-- Comprehensive example collection
-- Migration guides for Rust/C developers
-
-#### Phase 31.4: Website Launch (bmb.dev)
+**Goal**: 현재 Rust 컴파일러 성능 기준선 확립
 
 | Task | Description | Priority | Effort |
 |------|-------------|----------|--------|
-| 31.4.1 | Deploy documentation site | P0 | 1 week |
-| 31.4.2 | Integrate playground (play.bmb.dev) | P0 | 1 week |
-| 31.4.3 | Set up package registry UI (gotgan.bmb.dev) | P1 | 1 week |
-| 31.4.4 | Set up benchmark dashboard (bench.bmb.dev) | P1 | 1 week |
+| 31.3.1 | Define benchmark suite (compute + contract) | P0 | 1 week |
+| 31.3.2 | Run Rust compiler benchmarks | P0 | 1 week |
+| 31.3.3 | Document baseline metrics | P0 | 3 days |
+| 31.3.4 | Create benchmark regression CI | P1 | 1 week |
 
-**Deliverables**:
-- Live documentation website
-- Integrated playground
-- Package registry with search
+**Benchmark Suite**:
+
+| Category | Benchmarks | Target |
+|----------|------------|--------|
+| Compute | fibonacci, n-body, mandelbrot, spectral-norm | >= C -O3 |
+| Contract | bounds-check, null-check, purity-opt | > C -O3 |
+| Compile | self-compile time, incremental build | baseline |
+| Memory | peak usage, allocation count | baseline |
+
+**Exit Criteria**: All benchmarks documented, CI integrated
 
 ---
 
-### v0.32 Ecosystem - Package Ecosystem Growth
+### v0.32 Independence - Self-Hosting Completion (Rust Removal)
+
+**Goal**: Rust 코드 완전 제거, BMB-only 컴파일러
+
+**Difficulty**: ⭐⭐⭐⭐⭐ (Highest - Core milestone)
+
+**Duration Estimate**: 10-12 weeks
+
+**Prerequisites**: v0.31 Complete (Stage 3 100%)
+**Exit Criteria**: 0 lines Rust, Benchmark Gate #2 Pass
+
+#### Phase 32.1: Compiler Porting (was 30.2)
+
+| Task | Description | Priority | Effort |
+|------|-------------|----------|--------|
+| 32.1.1 | Port main.rs CLI to BMB | P0 | 2 weeks |
+| 32.1.2 | Port AST types to BMB | P0 | 2 weeks |
+| 32.1.3 | Port full MIR module to BMB | P0 | 4 weeks |
+| 32.1.4 | Port codegen module to BMB | P0 | 3 weeks |
+| 32.1.5 | Stage 3 verification (BMB compiler) | P0 | 2 weeks |
+
+#### Phase 32.2: Package Manager Porting (was 30.3)
+
+| Task | Description | Priority | Effort |
+|------|-------------|----------|--------|
+| 32.2.1 | Port registry client to BMB | P1 | 2 weeks |
+| 32.2.2 | Port dependency resolver to BMB | P1 | 2 weeks |
+| 32.2.3 | Port build system to BMB | P1 | 3 weeks |
+| 32.2.4 | Port CLI and config to BMB | P1 | 1 week |
+
+#### Phase 32.3: Rust Removal (was 30.4)
+
+| Task | Description | Priority | Effort |
+|------|-------------|----------|--------|
+| 32.3.1 | Remove bmb/src/*.rs | P0 | 1 week |
+| 32.3.2 | Remove gotgan/src/*.rs | P0 | 1 week |
+| 32.3.3 | Remove Cargo.toml files | P0 | 1 day |
+| 32.3.4 | Update CI/CD for pure BMB | P0 | 1 week |
+
+**Verification**:
+```bash
+$ git ls-files '*.rs' | wc -l
+0
+
+$ git ls-files 'Cargo.toml' | wc -l
+0
+```
+
+#### Phase 32.4: Benchmark Gate #2 (BMB Compiler 기준)
+
+**Goal**: BMB 컴파일러가 Rust 컴파일러와 동등 이상 성능 확인
+
+| Task | Description | Priority | Effort |
+|------|-------------|----------|--------|
+| 32.4.1 | Run BMB compiler benchmarks | P0 | 1 week |
+| 32.4.2 | Compare with Gate #1 baseline | P0 | 3 days |
+| 32.4.3 | Performance regression fix (if needed) | P0 | 2 weeks |
+| 32.4.4 | Document final metrics | P0 | 3 days |
+
+**Acceptance Criteria**:
+
+| Metric | Requirement |
+|--------|-------------|
+| Compute benchmarks | BMB >= Rust baseline |
+| Contract benchmarks | BMB > Rust baseline (expected: 10-30% better) |
+| Compile time | BMB <= Rust * 1.2 (20% tolerance) |
+| Memory usage | BMB <= Rust * 1.1 (10% tolerance) |
+
+---
+
+### v0.33 Docs - Documentation (BMB Compiler 기준)
+
+**Goal**: Comprehensive documentation based on final BMB compiler
+
+**Difficulty**: ⭐⭐⭐ (Medium)
+
+**Duration Estimate**: 6-8 weeks
+
+**Prerequisites**: v0.32 Complete (Rust removed)
+**Rationale**: Rust 제거 후 BMB 컴파일러 기준으로 문서화 (변경 가능성 제거)
+
+#### Phase 33.1: Standard Library Documentation
+
+| Task | Description | Priority | Effort |
+|------|-------------|----------|--------|
+| 33.1.1 | Generate API documentation for stdlib | P0 | 1 week |
+| 33.1.2 | Add usage examples for each module | P1 | 1 week |
+| 33.1.3 | Document contract specifications | P1 | 1 week |
+
+#### Phase 33.2: Tutorials and Guides
+
+| Task | Description | Priority | Effort |
+|------|-------------|----------|--------|
+| 33.2.1 | Write "Getting Started" tutorial | P0 | 1 week |
+| 33.2.2 | Write "By Example" guide | P0 | 2 weeks |
+| 33.2.3 | Write "From Rust" migration guide | P1 | 1 week |
+| 33.2.4 | Write "Contract Programming" guide | P1 | 1 week |
+
+#### Phase 33.3: Website Launch (bmb.dev)
+
+| Task | Description | Priority | Effort |
+|------|-------------|----------|--------|
+| 33.3.1 | Deploy documentation site | P0 | 1 week |
+| 33.3.2 | Integrate playground (play.bmb.dev) | P0 | 1 week |
+| 33.3.3 | Set up package registry UI (gotgan.bmb.dev) | P1 | 1 week |
+| 33.3.4 | Set up benchmark dashboard (bench.bmb.dev) | P1 | 1 week |
+
+---
+
+### v0.34 Ecosystem - Package Ecosystem Growth
 
 **Goal**: 100+ packages and active community
 
@@ -1830,14 +1964,16 @@ $ diff stage2/bmb stage3/bmb
 
 **Duration Estimate**: 6-8 weeks
 
-#### Phase 32.1: Core Package Development
+**Prerequisites**: v0.33 Complete (Documentation)
+
+#### Phase 34.1: Core Package Development
 
 | Task | Description | Priority | Effort |
 |------|-------------|----------|--------|
-| 32.1.1 | Develop bmb-json (JSON serialization) | P0 | 1 week |
-| 32.1.2 | Develop bmb-http (HTTP client) | P0 | 2 weeks |
-| 32.1.3 | Develop bmb-regex (Regular expressions) | P0 | 2 weeks |
-| 32.1.4 | Develop bmb-crypto (Cryptography) | P1 | 2 weeks |
+| 34.1.1 | Develop bmb-json (JSON serialization) | P0 | 1 week |
+| 34.1.2 | Develop bmb-http (HTTP client) | P0 | 2 weeks |
+| 34.1.3 | Develop bmb-regex (Regular expressions) | P0 | 2 weeks |
+| 34.1.4 | Develop bmb-crypto (Cryptography) | P1 | 2 weeks |
 
 **Target Package Categories**:
 
@@ -1853,27 +1989,27 @@ $ diff stage2/bmb stage3/bmb
 | Database | 10 | bmb-sql, bmb-postgres, bmb-redis |
 | **Total** | **100+** | |
 
-#### Phase 32.2: Rust Library Migration
+#### Phase 34.2: Rust Library Migration
 
 | Task | Description | Priority | Effort |
 |------|-------------|----------|--------|
-| 32.2.1 | Port serde patterns to BMB | P0 | 2 weeks |
-| 32.2.2 | Port regex patterns to BMB | P0 | 2 weeks |
-| 32.2.3 | Port clap patterns to BMB | P1 | 1 week |
+| 34.2.1 | Port serde patterns to BMB | P0 | 2 weeks |
+| 34.2.2 | Port regex patterns to BMB | P0 | 2 weeks |
+| 34.2.3 | Port clap patterns to BMB | P1 | 1 week |
 
 **Migration Principles**:
 - API compatibility maintained (Rust user familiarity)
 - Active use of BMB contract system (enhanced type safety)
 - Performance parity or improvement goal
 
-#### Phase 32.3: Community Building
+#### Phase 34.3: Community Building
 
 | Task | Description | Priority | Effort |
 |------|-------------|----------|--------|
-| 32.3.1 | Set up contribution guidelines | P0 | 1 week |
-| 32.3.2 | Create package submission process | P0 | 1 week |
-| 32.3.3 | Establish quality standards | P1 | 1 week |
-| 32.3.4 | Set up community forum/Discord | P2 | 1 week |
+| 34.3.1 | Set up contribution guidelines | P0 | 1 week |
+| 34.3.2 | Create package submission process | P0 | 1 week |
+| 34.3.3 | Establish quality standards | P1 | 1 week |
+| 34.3.4 | Set up community forum/Discord | P2 | 1 week |
 
 **Deliverables**:
 - CONTRIBUTING.md with clear guidelines
@@ -1884,48 +2020,70 @@ $ diff stage2/bmb stage3/bmb
 
 ### v1.0.0-rc Golden - Release Candidate
 
-**Goal**: Final verification and stability promise
+**Goal**: Final verification, Benchmark Gate #3, stability promise
 
 **Difficulty**: ⭐⭐⭐⭐ (High - Quality gate)
 
 **Duration Estimate**: 4-6 weeks
 
-#### Phase 1.0.1: Stability Verification
+**Prerequisites**: v0.34 Complete (Ecosystem)
+**Exit Criteria**: All gates pass, API frozen, stability promise
+
+#### Phase 1.0.1: Benchmark Gate #3 (Final Verification)
 
 | Task | Description | Priority | Effort |
 |------|-------------|----------|--------|
-| 1.0.1.1 | Run complete test suite | P0 | 1 week |
-| 1.0.1.2 | Verify all benchmarks pass thresholds | P0 | 1 week |
-| 1.0.1.3 | Security audit | P0 | 2 weeks |
-| 1.0.1.4 | Performance regression testing | P0 | 1 week |
+| 1.0.1.1 | Full benchmark suite execution | P0 | 1 week |
+| 1.0.1.2 | Compare with Gate #1, #2 baselines | P0 | 3 days |
+| 1.0.1.3 | Performance regression analysis | P0 | 1 week |
+| 1.0.1.4 | Final optimization pass (if needed) | P0 | 2 weeks |
 
-#### Phase 1.0.2: API Freeze
+**Final Performance Targets**:
+
+| Metric | Requirement | Gate #1 | Gate #2 | Gate #3 |
+|--------|-------------|---------|---------|---------|
+| Compute (vs C -O3) | >= 100% | baseline | >= baseline | >= baseline |
+| Contract-optimized | > 100% | baseline | > baseline | > baseline + 10% |
+| Self-compile time | <= 120% of C | n/a | baseline | <= baseline |
+| Memory usage | <= 110% of Rust | baseline | <= baseline | <= baseline |
+
+#### Phase 1.0.2: Stability Verification
 
 | Task | Description | Priority | Effort |
 |------|-------------|----------|--------|
-| 1.0.2.1 | Document public API stability guarantees | P0 | 1 week |
-| 1.0.2.2 | Mark experimental features | P0 | 1 week |
-| 1.0.2.3 | Create deprecation policy | P0 | 1 week |
+| 1.0.2.1 | Run complete test suite | P0 | 1 week |
+| 1.0.2.2 | Security audit | P0 | 2 weeks |
+| 1.0.2.3 | Cross-platform verification | P0 | 1 week |
 
-#### Phase 1.0.3: Release Preparation
+#### Phase 1.0.3: API Freeze
 
 | Task | Description | Priority | Effort |
 |------|-------------|----------|--------|
-| 1.0.3.1 | Write release notes | P0 | 1 week |
-| 1.0.3.2 | Update all documentation | P0 | 1 week |
-| 1.0.3.3 | Prepare binary distributions | P0 | 1 week |
-| 1.0.3.4 | Set up release automation | P1 | 1 week |
+| 1.0.3.1 | Document public API stability guarantees | P0 | 1 week |
+| 1.0.3.2 | Mark experimental features | P0 | 1 week |
+| 1.0.3.3 | Create deprecation policy | P0 | 1 week |
+
+#### Phase 1.0.4: Release Preparation
+
+| Task | Description | Priority | Effort |
+|------|-------------|----------|--------|
+| 1.0.4.1 | Write release notes | P0 | 1 week |
+| 1.0.4.2 | Update all documentation | P0 | 1 week |
+| 1.0.4.3 | Prepare binary distributions | P0 | 1 week |
+| 1.0.4.4 | Set up release automation | P1 | 1 week |
 
 **v1.0.0-rc Checklist**:
 
-| Criterion | Requirement | Status |
-|-----------|-------------|--------|
-| Self-Hosting | ✅ 0 lines of Rust, BMB-only build | Pending |
-| Performance | ✅ All benchmarks >= C -O3 | Pending |
-| Documentation | ✅ Complete language reference + tutorials | Pending |
-| Ecosystem | ✅ 100+ packages, active community | Pending |
-| Tooling | ✅ fmt, lsp, test, lint, doc complete | Pending |
-| Stability | ✅ No breaking changes after 1.0 | Promise |
+| Criterion | Requirement | Gate | Status |
+|-----------|-------------|------|--------|
+| Stage 3 | 100% (7/7 tests) | Gate #1 | Pending (v0.31) |
+| Self-Hosting | 0 lines of Rust, BMB-only build | Gate #2 | Pending (v0.32) |
+| Performance | All compute benchmarks >= C -O3 | Gate #2 | Pending (v0.32) |
+| Contract Optimization | Contract benchmarks > C -O3 by 10%+ | Gate #3 | Pending (v1.0) |
+| Documentation | Complete language reference + tutorials | - | Pending (v0.33) |
+| Ecosystem | 100+ packages, active community | - | Pending (v0.34) |
+| Tooling | fmt, lsp, test, lint, doc complete | - | ✅ Complete |
+| Stability | No breaking changes after 1.0 | - | Promise |
 
 ---
 
@@ -1933,8 +2091,8 @@ $ diff stage2/bmb stage3/bmb
 
 | Repository | Purpose | Current Language | BMB Porting | Service |
 |------------|---------|------------------|-------------|---------|
-| **lang-bmb** | Main compiler | Rust | v0.30 ★ | - |
-| **gotgan** | Package manager | Rust | v0.30 ★ | gotgan.bmb.dev |
+| **lang-bmb** | Main compiler | Rust | v0.32 ★ | - |
+| **gotgan** | Package manager | Rust | v0.32 ★ | gotgan.bmb.dev |
 | **gotgan-packages** | Additional packages | BMB | v0.26 ✅ | gotgan.bmb.dev |
 | **action-bmb** | GitHub Action | YAML/Shell | Maintain | - |
 | **bmb-samples** | Example programs | BMB | v0.26 ✅ | - |
@@ -1944,7 +2102,7 @@ $ diff stage2/bmb stage3/bmb
 | **vscode-bmb** | VS Code extension | TypeScript | Maintain | Marketplace |
 | **tree-sitter-bmb** | Grammar definition | JavaScript | Maintain | - |
 
-★ = Self-Hosting target (Complete Rust code removal)
+★ = Self-Hosting target (Complete Rust code removal in v0.32 Independence)
 
 ### Repository Classification
 
