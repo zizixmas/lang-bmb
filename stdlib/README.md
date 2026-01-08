@@ -1,6 +1,8 @@
 # BMB Standard Library
 
-> v0.10.15: Foundation for BMB standard library + Testing + Parse utilities
+> v0.33.0: Foundation for BMB standard library + Testing + Parse utilities + I/O + Process
+>
+> **Total: 231 symbols** (212 functions, 2 enums, 17 constants)
 
 ## Design Principles (AI-Native)
 
@@ -20,41 +22,41 @@ stdlib/
 ├── core/
 │   ├── num.bmb        # Numeric operations (10 functions)
 │   ├── bool.bmb       # Boolean operations (9 functions)
-│   ├── option.bmb     # Option type (12 functions)
-│   └── result.bmb     # Result type (17 functions)
+│   ├── option.bmb     # Option type (11 functions + 1 enum)
+│   └── result.bmb     # Result type (15 functions + 1 enum + 5 error constants)
 ├── string/
-│   └── mod.bmb        # String utilities (40+ functions)
+│   └── mod.bmb        # String utilities (44 functions)
 ├── parse/
-│   └── mod.bmb        # Position-based parsing (20+ functions) [v0.10.15]
+│   └── mod.bmb        # Position-based parsing (31 functions) [v0.10.15]
 ├── array/
-│   └── mod.bmb        # Array utilities (25+ functions)
+│   └── mod.bmb        # Array utilities (35 functions)
 ├── io/
-│   └── mod.bmb        # File I/O operations (5 functions) [v0.31.10 - INTERPRETER BUILTINS]
+│   └── mod.bmb        # File I/O (6 functions + 8 error constants + 4 utilities)
 ├── process/
-│   └── mod.bmb        # Process execution (4 functions) [v0.31.11 - INTERPRETER BUILTINS]
+│   └── mod.bmb        # Process execution (4 functions + 4 error constants)
 ├── stringbuilder/
-│   └── (builtins)     # StringBuilder O(1) append (5 functions) [v0.31.13 - INTERPRETER BUILTINS]
+│   └── (builtins)     # StringBuilder O(1) append (5 functions) [INTERPRETER BUILTINS]
 └── test/
-    └── mod.bmb        # Test assertions (40+ functions)
+    └── mod.bmb        # Test assertions (47 functions)
 ```
 
 ## Module Status
 
-| Module | Functions | Version | Description |
+| Module | Symbols | Version | Description |
 |--------|-----------|---------|-------------|
-| core::num | 10 | v0.6.0 | abs, min, max, clamp, sign, in_range, diff, etc. |
-| core::bool | 9 | v0.6.0 | implies, iff, xor, select, etc. |
-| core::option | 12 | v0.6.0 | Option enum + is_some, unwrap, map, etc. |
-| core::result | 17 | v0.6.0 | Result enum + is_ok, safe_divide, etc. |
-| string | 40+ | v0.10.14 | char classification, search, trim, parse, int_to_string |
-| parse | 20+ | v0.10.15 | position-based parsing, field extraction, pattern matching |
-| array | 25+ | v0.6.2 | search, aggregation, predicates, bounds |
-| io | 5 | v0.31.10 | file I/O (read_file, write_file) **[INTERPRETER BUILTINS]** |
-| process | 4 | v0.31.11 | process exec (exec, system) **[INTERPRETER BUILTINS]** |
-| stringbuilder | 5 | v0.31.13 | O(1) string append (sb_new, sb_push, sb_build) **[INTERPRETER BUILTINS]** |
-| test | 40+ | v0.7.2 | test assertions for bmb test runner |
+| core::num | 10 fn | v0.6.0 | abs, min, max, clamp, sign, in_range, diff, etc. |
+| core::bool | 9 fn | v0.6.0 | implies, iff, xor, select, etc. |
+| core::option | 11 fn + 1 enum | v0.6.0 | Option enum + is_some, unwrap, map, etc. |
+| core::result | 15 fn + 1 enum + 5 const | v0.6.0 | Result enum + is_ok, safe_divide, error codes |
+| string | 44 fn | v0.10.14 | char classification, search, trim, parse, int_to_string |
+| parse | 31 fn | v0.10.15 | position-based parsing, field extraction, pattern matching |
+| array | 35 fn | v0.6.2 | search, aggregation, predicates, bounds |
+| io | 6 fn + 8 const + 4 util | v0.33.0 | file I/O + path utilities **[INTERPRETER BUILTINS]** |
+| process | 4 fn + 4 const | v0.31.11 | process exec (exec, system) **[INTERPRETER BUILTINS]** |
+| stringbuilder | 5 fn | v0.31.13 | O(1) string append (sb_new, sb_push, sb_build) **[INTERPRETER BUILTINS]** |
+| test | 47 fn | v0.7.2 | test assertions for bmb test runner |
 
-**Total: 184+ functions with contracts** (184 implemented)
+**Total: 231 symbols** (212 functions, 2 enums, 17 constants)
 
 ## string Module (v0.10.14)
 
@@ -275,6 +277,84 @@ fn index_of_char(s: String, c: i64) -> i64
 fn sum_range(arr: [i64; 8], start: i64, end: i64) -> i64
   pre start >= 0 and end <= 8 and start <= end
 = ...;
+```
+
+## io Module (v0.33.0)
+
+> File I/O operations implemented as interpreter builtins. Requires runtime support.
+
+### File Operations
+```bmb
+read_file(path)         -- Read entire file contents as string
+read_file_result(path)  -- Read file with explicit result code
+write_file(path, content)   -- Write string to file (overwrite)
+append_file(path, content)  -- Append string to file
+file_exists(path)       -- Check if file exists (returns 0/1)
+file_size(path)         -- Get file size in bytes (-1 on error)
+```
+
+### Path Utilities
+```bmb
+is_valid_path(path)     -- Basic path validation (length, format)
+find_extension(path)    -- Find position of file extension ('.')
+find_last_char(s, c)    -- Find last occurrence of character
+find_last_char_from(s, c, pos)  -- Find last char from position
+```
+
+### Error Constants
+```bmb
+IO_SUCCESS()            -- 0: Operation succeeded
+IO_ERROR_NOT_FOUND()    -- -2: File not found (ENOENT)
+IO_ERROR_PERMISSION()   -- -13: Permission denied (EACCES)
+IO_ERROR_EXISTS()       -- -17: File exists (EEXIST)
+IO_ERROR_INVALID()      -- -22: Invalid argument (EINVAL)
+IO_ERROR_NO_SPACE()     -- -28: No space left (ENOSPC)
+IO_ERROR_READ_ONLY()    -- -30: Read-only filesystem (EROFS)
+IO_ERROR_UNKNOWN()      -- -1: Generic error
+```
+
+### Usage Example
+```bmb
+use io::read_file;
+use io::write_file;
+use io::IO_SUCCESS;
+
+fn copy_file(src: String, dst: String) -> i64 =
+    let content = read_file(src);
+    write_file(dst, content);
+```
+
+## process Module (v0.31.11)
+
+> Process execution operations implemented as interpreter builtins.
+
+### Process Execution
+```bmb
+exec(command, args)     -- Execute command with arguments, return exit code
+exec_output(command, args)  -- Execute and capture stdout
+system(command)         -- Execute via system shell
+getenv(name)            -- Get environment variable value
+```
+
+### Exit Code Constants
+```bmb
+PROC_SUCCESS()          -- 0: Success
+PROC_ERROR_NOT_FOUND()  -- -1: Command not found
+PROC_ERROR_PERMISSION() -- -2: Permission denied
+PROC_ERROR_FAILED()     -- -3: Execution failed
+```
+
+### Usage Example
+```bmb
+use process::exec;
+use process::exec_output;
+use process::PROC_SUCCESS;
+
+fn compile_llvm(input: String, output: String) -> i64 =
+    exec("clang", "-O2 " + input + " -o " + output);
+
+fn get_llvm_version() -> String =
+    exec_output("clang", "--version");
 ```
 
 ## test Module (v0.7.2)

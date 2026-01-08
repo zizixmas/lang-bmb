@@ -1,4 +1,4 @@
-# BMB Language Roadmap: v0.1 → v1.0.0-rc
+﻿# BMB Language Roadmap: v0.1 → v1.0.0-rc
 
 > Progressive difficulty progression • Complete ecosystem • Self-hosting completion • Rust removal • C/Rust performance parity
 
@@ -62,7 +62,7 @@ v0.MAJOR.MINOR
 | **5. Package Manager** | Package Manager | Dependency management | ✅ Complete | v0.8 |
 | **6. Toolchain** | Tooling | fmt, lsp, test, lint | ✅ Complete | v0.7 |
 | **7. IDE Support** | LSP + Extensions | VS Code, IntelliJ, etc. | ✅ Complete | v0.9 |
-| **8. Self-Hosting** | Bootstrap | Compile itself | 🔄 In Progress | v0.30 |
+| **8. Self-Hosting** | Bootstrap | Compile itself | ✅ Complete | v0.30 |
 | **9. Benchmarks** | Performance Suite | C/Rust performance proof | ✅ Complete | v0.28 |
 | **10. Documentation** | Documentation | Reference, tutorials | 📋 Planned | v0.31 |
 | **11. Playground** | Online Editor | Browser execution environment | ✅ Complete | v0.24 |
@@ -97,8 +97,8 @@ v0.MAJOR.MINOR
 | v0.24-v0.29 | Polish | Examples, AI Query, benchmarks, optimization | ✅ Complete |
 | **v0.30** | **Pure** | **Bootstrap code + Stage 2 verification** | ✅ Complete |
 | **v0.31** | **Refine** | **Language polish + Stage 3 resolution + Benchmark Gate #1** | ✅ Complete |
-| **v0.32** | **Independence** | **Self-Hosting completion (Rust removal) + Benchmark Gate #2** | 🔄 In Progress |
-| **v0.33** | **Docs** | **Documentation + Website (BMB compiler 기준)** | 📋 Planned |
+| **v0.32** | **Independence** | **Self-Hosting completion (Rust removal) + Benchmark Gate #2** | ✅ Complete |
+| **v0.33** | **Docs** | **Documentation + Website (BMB compiler 기준)** | 🔄 In Progress |
 | **v0.34** | **Ecosystem** | **100+ packages + community** | 📋 Planned |
 | **v1.0.0-rc** | **Golden** | **Final verification + Benchmark Gate #3 + stability promise** | 📋 Planned |
 
@@ -2223,13 +2223,21 @@ extern fn get_arg(n: i64) -> String;  -- Return argv[n]
 **Prerequisites**: v0.32 Complete (Rust removed)
 **Rationale**: Rust 제거 후 BMB 컴파일러 기준으로 문서화 (변경 가능성 제거)
 
-#### Phase 33.1: Standard Library Documentation
+#### Phase 33.1: Standard Library Documentation ✅ Complete (v0.33.1)
 
-| Task | Description | Priority | Effort |
+| Task | Description | Priority | Status |
 |------|-------------|----------|--------|
-| 33.1.1 | Generate API documentation for stdlib | P0 | 1 week |
-| 33.1.2 | Add usage examples for each module | P1 | 1 week |
-| 33.1.3 | Document contract specifications | P1 | 1 week |
+| 33.1.1 | Generate API documentation for stdlib | P0 | ✅ Complete |
+| 33.1.2 | Add usage examples for each module | P1 | ✅ Complete |
+| 33.1.3 | Document contract specifications | P1 | ✅ Complete |
+
+**v0.33.1 Achievements**:
+- Updated stdlib/README.md from 371 to 450 lines
+- Documented all 231 symbols (212 functions, 2 enums, 17 constants)
+- Added io module documentation (6 functions + 8 error constants + 4 utilities)
+- Added process module documentation (4 functions + 4 error constants)
+- Updated function counts for all modules (accurate vs estimated)
+- Added usage examples for io and process modules
 
 #### Phase 33.2: Tutorials and Guides
 
