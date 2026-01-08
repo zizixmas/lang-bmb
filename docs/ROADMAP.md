@@ -2309,12 +2309,29 @@ extern fn get_arg(n: i64) -> String;  -- Return argv[n]
 
 See [RFC-0005](RFC/RFC-0005-BENCHMARK-PACKAGE-ROADMAP.md) for detailed analysis and Phase 33.6 planning.
 
-#### Phase 33.6: Benchmark Enhancement (Proposed)
+#### Phase 33.6: Benchmark Enhancement & RFC Preparation
 
-See [RFC-0005: Benchmark-Driven Package Roadmap](RFC/RFC-0005-BENCHMARK-PACKAGE-ROADMAP.md) for:
-- 33.6.1: String processing optimization (json_parse P0 fix)
-- 33.6.2: Additional benchmark coverage
-- 33.6.3: f64/collections RFC drafts for v0.34
+| Task | Description | Priority | Status |
+|------|-------------|----------|--------|
+| 33.6.1 | String processing optimization (json_parse P0 fix) | P0 | 📋 Requires compiler changes |
+| 33.6.2 | Additional benchmark coverage | P1 | 📋 Planned |
+| 33.6.3 | f64/collections RFC drafts for v0.34 | P1 | ✅ Complete |
+
+**v0.33.6.3 Achievements**:
+- [RFC-0006: f64 Floating-Point Type](RFC/RFC-0006-F64-Type.md) - P0 for v0.34
+- [RFC-0007: Dynamic Collections](RFC/RFC-0007-Dynamic-Collections.md) - P1 for v0.34
+- Comprehensive specifications for LLVM code generation
+- SMT verification strategies documented
+- Performance targets aligned with Rust
+
+**RFC Summary**:
+
+| RFC | Feature | Priority | Target | Benchmarks Enabled |
+|-----|---------|----------|--------|-------------------|
+| RFC-0006 | f64 type | P0 | v0.34.1 | n_body, mandelbrot_fp |
+| RFC-0007 | Vec, HashMap, Box | P1 | v0.34.2 | binary_trees, hash_table |
+
+See [RFC-0005](RFC/RFC-0005-BENCHMARK-PACKAGE-ROADMAP.md) for Phase 33.6 overview
 
 ---
 
