@@ -2485,16 +2485,31 @@ type Vec<T> = struct {
 - `stage3_arith.bmb`: ✅ PASS
 - `stage3_let.bmb`: ✅ PASS (was failing at 86%)
 
-#### Phase 34.4: Benchmark Gate #1 Resolution
+#### Phase 34.4: Benchmark Gate #1.5 ⚠️ Partial Complete
 
 | Task | Description | Priority | Status |
 |------|-------------|----------|--------|
-| 34.4.1 | json_parse optimization (string views) | P0 | 📋 Planned |
+| 34.4.1 | json_parse optimization (string views) | P0 | ⚠️ Identified (2.5x slower) |
 | 34.4.2 | Complete contract benchmarks (bounds_check, etc.) | P1 | 📋 Planned |
-| 34.4.3 | Run full benchmark suite with new features | P0 | 📋 Planned |
-| 34.4.4 | Document Benchmark Gate #1.5 results | P1 | 📋 Planned |
+| 34.4.3 | Run full benchmark suite with new features | P0 | ✅ Complete (v0.34) |
+| 34.4.4 | Document Benchmark Gate #1.5 results | P1 | ✅ Complete (v0.34) |
 
-**Target**: Resolve all P0 Performance violations from Gate #1
+**Benchmark Results** (v0.34, 2026-01-09):
+
+| Benchmark | Rust (ms) | BMB (ms) | Ratio | Status |
+|-----------|-----------|----------|-------|--------|
+| fibonacci | 80 | 74 | 0.93x | ✅ BMB faster |
+| mandelbrot | 42 | 39 | 0.93x | ✅ BMB faster |
+| spectral_norm | 44 | 39 | 0.89x | ✅ BMB faster |
+| purity_opt | 101 | 102 | 1.01x | ⚠️ Parity |
+| json_parse | 104 | 265 | 2.55x | ❌ Needs optimization |
+
+**Blockers Identified**:
+- `sqrt` intrinsic needed for n_body
+- i64→f64 conversion needed for mandelbrot_fp
+- String performance bottleneck in json_parse
+
+**Full results**: `ecosystem/benchmark-bmb/results/2026-01-09_phase34.4_v034.md`
 
 ---
 
