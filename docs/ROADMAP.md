@@ -98,8 +98,9 @@ v0.MAJOR.MINOR
 | **v0.30** | **Pure** | **Bootstrap code + Stage 2 verification** | ✅ Complete |
 | **v0.31** | **Refine** | **Language polish + Stage 3 resolution + Benchmark Gate #1** | ✅ Complete |
 | **v0.32** | **Independence** | **Self-Hosting completion (Rust removal) + Benchmark Gate #2** | ✅ Complete |
-| **v0.33** | **Docs** | **Documentation + Website (BMB compiler 기준)** | 🔄 In Progress |
-| **v0.34** | **Ecosystem** | **100+ packages + community** | 📋 Planned |
+| **v0.33** | **Docs** | **Documentation + Website (BMB compiler 기준)** | ✅ Functional Complete |
+| **v0.34** | **Features** | **f64 + Collections + Stage 3 100% + Website** | 📋 Planned |
+| **v0.35** | **Ecosystem** | **100+ packages + community** | 📋 Planned |
 | **v1.0.0-rc** | **Golden** | **Final verification + Benchmark Gate #3 + stability promise** | 📋 Planned |
 
 ### Restructuring Rationale (v0.31.5)
@@ -2386,7 +2387,113 @@ See [RFC-0005](RFC/RFC-0005-BENCHMARK-PACKAGE-ROADMAP.md) for Phase 33.6 overvie
 
 ---
 
-### v0.34 Ecosystem - Package Ecosystem Growth
+### v0.34 Features - Compiler Feature Completion
+
+**Goal**: f64 type, dynamic collections, Bootstrap Stage 3 100%, website launch
+
+**Difficulty**: ⭐⭐⭐⭐ (High - Core compiler changes)
+
+**Duration Estimate**: 8-10 weeks
+
+**Prerequisites**: v0.33 Complete (Documentation), RFC-0006, RFC-0007
+
+**Decision (2026-01-09)**: User confirmed ALL features to be implemented
+
+#### Phase 34.0: Website Infrastructure (from v0.33.3)
+
+| Task | Description | Priority | Status |
+|------|-------------|----------|--------|
+| 34.0.1 | DNS setup (bmb.dev domain) | P0 | 📋 Planned |
+| 34.0.2 | Hosting infrastructure (Vercel/Netlify) | P0 | 📋 Planned |
+| 34.0.3 | SSL certificate configuration | P0 | 📋 Planned |
+| 34.0.4 | Deploy documentation site | P0 | 📋 Planned |
+| 34.0.5 | Integrate playground (play.bmb.dev) | P1 | 📋 Planned |
+| 34.0.6 | Benchmark dashboard (bench.bmb.dev) | P2 | 📋 Planned |
+
+**Preparatory Work** (local, no infrastructure needed):
+- Content integration from tutorials/ to website
+- API documentation generation
+- Benchmark result visualization
+
+#### Phase 34.1: f64 Floating-Point Type (RFC-0006)
+
+| Task | Description | Priority | Status |
+|------|-------------|----------|--------|
+| 34.1.1 | Lexer: f64 literal tokenization | P0 | 📋 Planned |
+| 34.1.2 | Parser: f64 expression parsing | P0 | 📋 Planned |
+| 34.1.3 | Type checker: f64 type rules | P0 | 📋 Planned |
+| 34.1.4 | MIR: f64 operations (FAdd, FSub, FMul, FDiv, FCmp) | P0 | 📋 Planned |
+| 34.1.5 | LLVM codegen: IEEE 754 double | P0 | 📋 Planned |
+| 34.1.6 | SMT: Z3 Real theory integration | P1 | 📋 Planned |
+| 34.1.7 | stdlib/math/f64.bmb: sqrt, sin, cos, etc. | P1 | 📋 Planned |
+| 34.1.8 | Benchmarks: n_body, mandelbrot_fp | P1 | 📋 Planned |
+
+**Key Implementation Details** (from RFC-0006):
+```llvm
+%result = fadd double %a, %b
+%cmp = fcmp olt double %a, %b
+declare double @llvm.sqrt.f64(double)
+```
+
+**Performance Target**: 1.0x Rust (exact LLVM parity)
+
+#### Phase 34.2: Dynamic Collections (RFC-0007)
+
+| Task | Description | Priority | Status |
+|------|-------------|----------|--------|
+| 34.2.1 | Allocator interface (malloc/free wrappers) | P0 | 📋 Planned |
+| 34.2.2 | Drop trait implementation | P0 | 📋 Planned |
+| 34.2.3 | Box<T>: single heap allocation | P0 | 📋 Planned |
+| 34.2.4 | Vec<T>: growable array | P0 | 📋 Planned |
+| 34.2.5 | Hash trait implementation | P1 | 📋 Planned |
+| 34.2.6 | HashMap<K, V>: Swiss Table | P1 | 📋 Planned |
+| 34.2.7 | HashSet<T>: unique collection | P1 | 📋 Planned |
+| 34.2.8 | Benchmarks: binary_trees, hash_table | P1 | 📋 Planned |
+
+**Key Implementation Details** (from RFC-0007):
+```bmb
+type Vec<T> = struct {
+    ptr: own *T,
+    len: i64,
+    cap: i64
+};
+```
+
+**Memory Management**: Ownership-based (Rust-like, no GC)
+
+#### Phase 34.3: Bootstrap Redesign (Stage 3 100%)
+
+| Task | Description | Priority | Status |
+|------|-------------|----------|--------|
+| 34.3.1 | Analyze let binding memory failure root cause | P0 | 📋 Planned |
+| 34.3.2 | Design trampolining or CPS transformation | P0 | 📋 Planned |
+| 34.3.3 | Implement interpreter memory optimization | P0 | 📋 Planned |
+| 34.3.4 | Verify Stage 3 (7/7 tests) | P0 | 📋 Planned |
+| 34.3.5 | Document Bootstrap architecture changes | P1 | 📋 Planned |
+
+**Current State** (v0.30): 6/7 tests pass (86%)
+**Root Cause**: `lower_let` recursive MIR generation exceeds heap memory
+**Solution Options**:
+- Trampolining (continuation-passing style)
+- Arena allocator for MIR generation
+- Incremental lowering with explicit stack management
+
+**Target**: 100% Stage 3 (binary equivalence with Rust compiler output)
+
+#### Phase 34.4: Benchmark Gate #1 Resolution
+
+| Task | Description | Priority | Status |
+|------|-------------|----------|--------|
+| 34.4.1 | json_parse optimization (string views) | P0 | 📋 Planned |
+| 34.4.2 | Complete contract benchmarks (bounds_check, etc.) | P1 | 📋 Planned |
+| 34.4.3 | Run full benchmark suite with new features | P0 | 📋 Planned |
+| 34.4.4 | Document Benchmark Gate #1.5 results | P1 | 📋 Planned |
+
+**Target**: Resolve all P0 Performance violations from Gate #1
+
+---
+
+### v0.35 Ecosystem - Package Ecosystem Growth
 
 **Goal**: 100+ packages and active community
 
@@ -2394,16 +2501,16 @@ See [RFC-0005](RFC/RFC-0005-BENCHMARK-PACKAGE-ROADMAP.md) for Phase 33.6 overvie
 
 **Duration Estimate**: 6-8 weeks
 
-**Prerequisites**: v0.33 Complete (Documentation)
+**Prerequisites**: v0.34 Complete (f64, Collections, Stage 3 100%)
 
-#### Phase 34.1: Core Package Development
+#### Phase 35.1: Core Package Development
 
 | Task | Description | Priority | Status |
 |------|-------------|----------|--------|
-| 34.1.1 | Develop bmb-json (JSON serialization) | P0 | 1 week |
-| 34.1.2 | Develop bmb-http (HTTP client) | P0 | 2 weeks |
-| 34.1.3 | Develop bmb-regex (Regular expressions) | P0 | 2 weeks |
-| 34.1.4 | Develop bmb-crypto (Cryptography) | P1 | 2 weeks |
+| 35.1.1 | Develop bmb-json (JSON serialization) | P0 | 📋 Planned |
+| 35.1.2 | Develop bmb-http (HTTP client) | P0 | 📋 Planned |
+| 35.1.3 | Develop bmb-regex (Regular expressions) | P0 | 📋 Planned |
+| 35.1.4 | Develop bmb-crypto (Cryptography) | P1 | 📋 Planned |
 
 **Target Package Categories**:
 
@@ -2419,27 +2526,27 @@ See [RFC-0005](RFC/RFC-0005-BENCHMARK-PACKAGE-ROADMAP.md) for Phase 33.6 overvie
 | Database | 10 | bmb-sql, bmb-postgres, bmb-redis |
 | **Total** | **100+** | |
 
-#### Phase 34.2: Rust Library Migration
+#### Phase 35.2: Rust Library Migration
 
 | Task | Description | Priority | Status |
 |------|-------------|----------|--------|
-| 34.2.1 | Port serde patterns to BMB | P0 | 2 weeks |
-| 34.2.2 | Port regex patterns to BMB | P0 | 2 weeks |
-| 34.2.3 | Port clap patterns to BMB | P1 | 1 week |
+| 35.2.1 | Port serde patterns to BMB | P0 | 📋 Planned |
+| 35.2.2 | Port regex patterns to BMB | P0 | 📋 Planned |
+| 35.2.3 | Port clap patterns to BMB | P1 | 📋 Planned |
 
 **Migration Principles**:
 - API compatibility maintained (Rust user familiarity)
 - Active use of BMB contract system (enhanced type safety)
 - Performance parity or improvement goal
 
-#### Phase 34.3: Community Building
+#### Phase 35.3: Community Building
 
 | Task | Description | Priority | Status |
 |------|-------------|----------|--------|
-| 34.3.1 | Set up contribution guidelines | P0 | 1 week |
-| 34.3.2 | Create package submission process | P0 | 1 week |
-| 34.3.3 | Establish quality standards | P1 | 1 week |
-| 34.3.4 | Set up community forum/Discord | P2 | 1 week |
+| 35.3.1 | Set up contribution guidelines | P0 | 📋 Planned |
+| 35.3.2 | Create package submission process | P0 | 📋 Planned |
+| 35.3.3 | Establish quality standards | P1 | 📋 Planned |
+| 35.3.4 | Set up community forum/Discord | P2 | 📋 Planned |
 
 **Deliverables**:
 - CONTRIBUTING.md with clear guidelines
@@ -2456,7 +2563,7 @@ See [RFC-0005](RFC/RFC-0005-BENCHMARK-PACKAGE-ROADMAP.md) for Phase 33.6 overvie
 
 **Duration Estimate**: 4-6 weeks
 
-**Prerequisites**: v0.34 Complete (Ecosystem)
+**Prerequisites**: v0.35 Complete (Ecosystem)
 **Exit Criteria**: All gates pass, API frozen, stability promise
 
 #### Phase 1.0.1: Benchmark Gate #3 (Final Verification)
@@ -2512,8 +2619,9 @@ See [RFC-0005](RFC/RFC-0005-BENCHMARK-PACKAGE-ROADMAP.md) for Phase 33.6 overvie
 | Self-Hosting | 0 lines of Rust, BMB-only build | Gate #2 | Pending (v0.32) |
 | Performance | All compute benchmarks >= C -O3 | Gate #2 | Pending (v0.32) |
 | Contract Optimization | Contract benchmarks > C -O3 by 10%+ | Gate #3 | Pending (v1.0) |
-| Documentation | Complete language reference + tutorials | - | Pending (v0.33) |
-| Ecosystem | 100+ packages, active community | - | Pending (v0.34) |
+| Documentation | Complete language reference + tutorials | - | ✅ Complete (v0.33) |
+| Features | f64, Collections, Stage 3 100% | - | Pending (v0.34) |
+| Ecosystem | 100+ packages, active community | - | Pending (v0.35) |
 | Tooling | fmt, lsp, test, lint, doc complete | - | ✅ Complete |
 | Stability | No breaking changes after 1.0 | - | Promise |
 
