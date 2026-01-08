@@ -243,12 +243,16 @@ fn find_colon(s: String, pos: i64) -> i64 =
 fn parse_atom(src: String, pos: i64) -> String =
     let tok = next_token_raw(src, pos);
     let kind = tok_kind(tok);
-    if kind == TK_INT() then
-        pack_result(tok_end(tok), "(int " + int_to_string(tok_val(tok)) + ")")
-    else if kind == TK_TRUE() then
+    -- v0.32.1: Fix integer literal parsing - check keywords first, then treat small kinds as integers
+    -- Integer tokens have kind = integer value (0-N), not TK_INT (200)
+    -- Must check specific keywords first to avoid collision (e.g., TK_TRUE=105)
+    if kind == TK_TRUE() then
         pack_result(tok_end(tok), "(bool true)")
     else if kind == TK_FALSE() then
         pack_result(tok_end(tok), "(bool false)")
+    else if kind < TK_INT() then
+        -- Any kind < 200 that isn't a keyword is an integer literal
+        pack_result(tok_end(tok), "(int " + int_to_string(tok_val(tok)) + ")")
     else if kind == TK_IDENT() then
         let name = get_ident_text(src, pos, tok);
         let next = next_token_raw(src, tok_end(tok));
@@ -269,6 +273,10 @@ fn parse_atom(src: String, pos: i64) -> String =
         if tok_kind(next) == TK_RPAREN() then
             pack_result(tok_end(next), unpack_ast(re))
         else make_error("paren")
+    -- v0.32.1: Handle large integer literals (kind > highest punctuation token)
+    -- Integer tokens with value >= 414 have kind outside token constant range
+    else if kind > TK_GTEQ() then
+        pack_result(tok_end(tok), "(int " + int_to_string(tok_val(tok)) + ")")
     else make_error("atom");
 
 fn parse_args(src: String, pos: i64, acc: String) -> String =
@@ -571,6 +579,7 @@ fn get_child_at(content: String, pos: i64, idx: i64) -> String =
             let next_pos = p + child.len();
             get_child_at(content, next_pos, idx - 1);
 
+-- v0.32.1: Fixed to distinguish '<' as name start (<n>) vs operator start (<=)
 fn read_sexp_at(s: String, pos: i64) -> String =
     let p = low_skip_ws(s, pos);
     if p >= s.len() then ""
@@ -579,8 +588,15 @@ fn read_sexp_at(s: String, pos: i64) -> String =
             let end = low_find_close_paren(s, p, 0);
             s.slice(p, end + 1)
         else if c == 60 then
-            let end = find_angle_end(s, p);
-            s.slice(p, end)
+            -- '<' could be angle bracket name <n> or operator <=
+            -- Check if next char is identifier start (name) or not (operator)
+            if p + 1 < s.len() and low_is_ident_char(s.char_at(p + 1)) then
+                let end = find_angle_end(s, p);
+                s.slice(p, end)
+            else
+                -- It's an operator like <=, <>, <
+                let end = low_find_op_end(s, p);
+                s.slice(p, end)
         else if is_digit(c) or c == 45 then
             let end = find_number_end(s, p);
             s.slice(p, end)
@@ -1010,10 +1026,11 @@ fn llvm_gen_rhs(line: String, pos: i64, dest: String) -> String =
     else if low_starts_with_at(line, pos, "*") then llvm_gen_binop("mul", line, pos + 1, dest)
     else if low_starts_with_at(line, pos, "/") then llvm_gen_binop("sdiv", line, pos + 1, dest)
     else if low_starts_with_at(line, pos, "%") then llvm_gen_binop("srem", line, pos + 1, dest)
-    else if low_starts_with_at(line, pos, "<") then llvm_gen_cmp("slt", line, pos + 1, dest)
-    else if low_starts_with_at(line, pos, ">") then llvm_gen_cmp("sgt", line, pos + 1, dest)
+    -- v0.32.1: Fix comparison operator order - check longer operators first
     else if low_starts_with_at(line, pos, "<=") then llvm_gen_cmp("sle", line, pos + 2, dest)
     else if low_starts_with_at(line, pos, ">=") then llvm_gen_cmp("sge", line, pos + 2, dest)
+    else if low_starts_with_at(line, pos, "<") then llvm_gen_cmp("slt", line, pos + 1, dest)
+    else if low_starts_with_at(line, pos, ">") then llvm_gen_cmp("sgt", line, pos + 1, dest)
     else if low_starts_with_at(line, pos, "==") then llvm_gen_cmp("eq", line, pos + 2, dest)
     else if low_starts_with_at(line, pos, "!=") then llvm_gen_cmp("ne", line, pos + 2, dest)
     else if low_starts_with_at(line, pos, "and") then llvm_gen_binop("and", line, pos + 3, dest)
@@ -1056,6 +1073,7 @@ fn llvm_gen_neg(line: String, pos: i64, dest: String) -> String =
     let operand = line.slice(p, line.len());
     "  " + dest + " = sub nsw i64 0, " + trim_end(operand);
 
+-- v0.32.1: Fixed phi node to add % prefix to labels
 fn llvm_gen_phi(line: String, pos: i64, dest: String) -> String =
     let bracket_start = find_char(line, pos, 91);
     let first_end = find_char(line, bracket_start, 93);
@@ -1063,16 +1081,34 @@ fn llvm_gen_phi(line: String, pos: i64, dest: String) -> String =
     let second_start = find_char(line, first_end, 91);
     let second_end = find_char(line, second_start, 93);
     let second_content = line.slice(second_start + 1, second_end);
-    "  " + dest + " = phi i64 [" + first_content + "], [" + second_content + "]";
+    -- Format [value, label] to [value, %label] for LLVM IR
+    let first_formatted = format_phi_pair(first_content);
+    let second_formatted = format_phi_pair(second_content);
+    "  " + dest + " = phi i64 [" + first_formatted + "], [" + second_formatted + "]";
 
+-- Format "value, label" to "value, %label"
+fn format_phi_pair(content: String) -> String =
+    let comma_pos = find_char(content, 0, 44);  -- 44 = ','
+    if comma_pos >= content.len() then content
+    else
+        let value_part = content.slice(0, comma_pos);
+        let label_part = trim_start(content.slice(comma_pos + 1, content.len()));
+        value_part + ", %" + label_part;
+
+fn trim_start(s: String) -> String =
+    let pos = low_skip_ws(s, 0);
+    s.slice(pos, s.len());
+
+-- v0.32.1: Rename @main calls to @bmb_user_main for runtime compatibility
 fn llvm_gen_call(line: String, pos: i64, dest: String) -> String =
     let at_pos = find_char(line, pos, 64);
     let paren_pos = find_char(line, at_pos, 40);
     let close_pos = find_char(line, paren_pos, 41);
     let fn_name = line.slice(at_pos, paren_pos);
+    let emitted_fn = if fn_name == "@main" then "@bmb_user_main" else fn_name;
     let args = line.slice(paren_pos + 1, close_pos);
     let formatted_args = format_call_args(args, 0, "");
-    "  " + dest + " = call i64 " + fn_name + "(" + formatted_args + ")";
+    "  " + dest + " = call i64 " + emitted_fn + "(" + formatted_args + ")";
 
 fn format_call_args(args: String, pos: i64, acc: String) -> String =
     let p = low_skip_ws(args, pos);
@@ -1190,6 +1226,7 @@ fn llvm_gen_fn_line(line: String) -> String =
     else llvm_gen_line(line);
 
 -- v0.31.19: Added nounwind attribute for non-main functions
+-- v0.32.1: Rename main to bmb_user_main for runtime compatibility
 fn llvm_gen_fn_header(line: String, pos: i64) -> String =
     let name_start = pos + 3;
     let paren_pos = find_char(line, name_start, 40);
@@ -1201,8 +1238,9 @@ fn llvm_gen_fn_header(line: String, pos: i64) -> String =
     let brace_pos = find_char(line, arrow_pos, 123);
     let ret_type = trim_end(line.slice(arrow_pos + 2, brace_pos - 1));
     let llvm_ret = if ret_type == "bool" then "i1" else "i64";
+    let emitted_name = if fn_name == "main" then "bmb_user_main" else fn_name;
     let attrs = if fn_name == "main" then "" else " nounwind";
-    "define " + llvm_ret + " @" + fn_name + "(" + formatted_params + ")" + attrs + " {";
+    "define " + llvm_ret + " @" + emitted_name + "(" + formatted_params + ")" + attrs + " {";
 
 fn format_fn_params(params: String, pos: i64, acc: String) -> String =
     let p = low_skip_ws(params, pos);

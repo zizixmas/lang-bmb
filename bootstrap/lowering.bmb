@@ -306,11 +306,17 @@ fn skip_children(s: String, pos: i64, n: i64) -> i64 =
             skip_children(s, child_end, n - 1);
 
 -- Find end of current child (handles nested parens)
+-- v0.32.1: Fixed to distinguish '<' as name start (<n>) vs operator start (<=)
 fn find_child_end(s: String, pos: i64) -> i64 =
     if pos >= s.len() then pos
     else let c = s.char_at(pos);
         if c == 40 then find_close_paren(s, pos, 0) + 1  -- '(' - nested expr
-        else if c == 60 then find_name_end(s, pos) + 1  -- '<' - name
+        else if c == 60 then  -- '<' - could be name <n> or operator <=
+            -- Check if next char is identifier (name like <foo>) or operator (like <=)
+            if pos + 1 < s.len() and is_ident_char(s.char_at(pos + 1)) then
+                find_name_end(s, pos) + 1  -- name like <n>
+            else
+                find_op_end(s, pos)  -- operator like <=, <>, <
         else if is_op_char(c) then find_op_end(s, pos)  -- operator symbol
         else find_ident_end(s, pos);  -- identifier/symbol
 

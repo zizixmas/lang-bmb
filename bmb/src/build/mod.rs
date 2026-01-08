@@ -329,6 +329,7 @@ pub fn build(config: &BuildConfig) -> BuildResult<()> {
                 &format!("/OUT:{}", config.output.to_str().unwrap()),
                 "/SUBSYSTEM:CONSOLE",
                 "/ENTRY:mainCRTStartup",
+                "/STACK:16777216",  // 16MB stack for deep recursion in bootstrap compiler
             ]);
 
             // Add Windows SDK and MSVC library paths
