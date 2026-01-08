@@ -2265,6 +2265,57 @@ extern fn get_arg(n: i64) -> String;  -- Return argv[n]
 | 33.3.3 | Set up package registry UI (gotgan.bmb.dev) | P1 | 1 week |
 | 33.3.4 | Set up benchmark dashboard (bench.bmb.dev) | P1 | 1 week |
 
+#### Phase 33.4: Benchmark Infrastructure ✅ Complete (v0.33.4)
+
+| Task | Description | Priority | Status |
+|------|-------------|----------|--------|
+| 33.4.1 | Complete benchmark suite (12 benchmarks) | P0 | ✅ Complete |
+| 33.4.2 | Add Rust comparison baselines | P0 | ✅ Complete |
+| 33.4.3 | Document benchmark methodology | P1 | ✅ Complete |
+
+**v0.33.4 Achievements**:
+- 12 benchmarks implemented (6 compute, 4 contract, 2 real_world)
+- Rust comparison baselines for all benchmarks
+- Benchmark results documented in `ecosystem/benchmark-bmb/results/`
+
+#### Phase 33.5: Benchmark Gate #1 Verification ✅ Complete (v0.33.5)
+
+| Task | Description | Priority | Status |
+|------|-------------|----------|--------|
+| 33.5.1 | Run comprehensive Rust vs BMB comparison | P0 | ✅ Complete |
+| 33.5.2 | Verify compute benchmarks (BMB >= Rust) | P0 | ✅ Complete |
+| 33.5.3 | Verify contract advantage benchmarks | P0 | ✅ Complete |
+| 33.5.4 | Document feature gaps blocking benchmarks | P1 | ✅ Complete |
+
+**v0.33.5 Benchmark Results** (2026-01-08):
+
+| Benchmark | Rust (ms) | BMB (ms) | Ratio | Status |
+|-----------|-----------|----------|-------|--------|
+| fibonacci(35) | 60 | 58 | 0.97x | ✅ BMB 3% faster |
+| mandelbrot | 15 | 14 | 0.93x | ✅ BMB 7% faster |
+| spectral_norm | 9 | 8 | 0.89x | ✅ BMB 11% faster |
+| purity_opt | 9 | 8 | 0.89x | ✅ Contract advantage |
+| json_parse | 8 | 10 | 1.25x | ⚠️ P0 Violation |
+
+**Gate #1 Status**:
+- ✅ **PASSED**: BMB >= Rust in compute-intensive benchmarks (3/3)
+- ✅ **PARTIAL**: Contract advantages demonstrated (purity_opt 11%)
+- ⚠️ **VIOLATION**: json_parse 25% slower (P0 Performance)
+
+**Feature Gaps Identified**:
+- P0: f64 type (blocks n_body, mandelbrot_fp)
+- P1: Dynamic heap allocation (blocks binary_trees full comparison)
+- P2: String optimization (json_parse performance)
+
+See [RFC-0005](RFC/RFC-0005-BENCHMARK-PACKAGE-ROADMAP.md) for detailed analysis and Phase 33.6 planning.
+
+#### Phase 33.6: Benchmark Enhancement (Proposed)
+
+See [RFC-0005: Benchmark-Driven Package Roadmap](RFC/RFC-0005-BENCHMARK-PACKAGE-ROADMAP.md) for:
+- 33.6.1: String processing optimization (json_parse P0 fix)
+- 33.6.2: Additional benchmark coverage
+- 33.6.3: f64/collections RFC drafts for v0.34
+
 ---
 
 ### v0.34 Ecosystem - Package Ecosystem Growth
