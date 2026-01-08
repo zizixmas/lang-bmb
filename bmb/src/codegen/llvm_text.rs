@@ -6,6 +6,7 @@
 //!
 //! The generated IR is compatible with the bootstrap compiler output.
 
+use std::collections::HashMap;
 use std::fmt::Write;
 use thiserror::Error;
 
@@ -80,20 +81,139 @@ impl TextCodeGen {
         writeln!(output, "target triple = \"{}\"", self.target_triple)?;
         writeln!(output)?;
 
+        // Phase 32.3: Collect all string constants from the program
+        let string_table = self.collect_string_constants(program);
+
+        // Phase 32.3: Build function return type map for user-defined functions
+        let fn_return_types: HashMap<String, &'static str> = program
+            .functions
+            .iter()
+            .map(|f| (f.name.clone(), self.mir_type_to_llvm(&f.ret_ty)))
+            .collect();
+
+        // Emit string globals
+        self.emit_string_globals(&mut output, &string_table)?;
+
         // Runtime declarations
         self.emit_runtime_declarations(&mut output)?;
 
-        // Generate functions
+        // Generate functions with string table and function type map
         for func in &program.functions {
-            self.emit_function(&mut output, func)?;
+            self.emit_function_with_strings(&mut output, func, &string_table, &fn_return_types)?;
         }
 
         Ok(output)
     }
 
+    /// Collect all string constants from the program
+    fn collect_string_constants(&self, program: &MirProgram) -> HashMap<String, String> {
+        let mut table = HashMap::new();
+        let mut counter = 0;
+
+        for func in &program.functions {
+            for block in &func.blocks {
+                for inst in &block.instructions {
+                    if let MirInst::Const { value: Constant::String(s), .. } = inst {
+                        if !table.contains_key(s) {
+                            table.insert(s.clone(), format!(".str.{}", counter));
+                            counter += 1;
+                        }
+                    }
+                    // Check for string constants in call arguments
+                    if let MirInst::Call { args, .. } = inst {
+                        for arg in args {
+                            if let Operand::Constant(Constant::String(s)) = arg {
+                                if !table.contains_key(s) {
+                                    table.insert(s.clone(), format!(".str.{}", counter));
+                                    counter += 1;
+                                }
+                            }
+                        }
+                    }
+                    // Check for string constants in phi values
+                    if let MirInst::Phi { values, .. } = inst {
+                        for (val, _label) in values {
+                            if let Operand::Constant(Constant::String(s)) = val {
+                                if !table.contains_key(s) {
+                                    table.insert(s.clone(), format!(".str.{}", counter));
+                                    counter += 1;
+                                }
+                            }
+                        }
+                    }
+                    // Check for string constants in BinOp operands
+                    if let MirInst::BinOp { lhs, rhs, .. } = inst {
+                        for operand in [lhs, rhs] {
+                            if let Operand::Constant(Constant::String(s)) = operand {
+                                if !table.contains_key(s) {
+                                    table.insert(s.clone(), format!(".str.{}", counter));
+                                    counter += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+                // Check for string constants in Return terminator
+                if let Terminator::Return(Some(Operand::Constant(Constant::String(s)))) = &block.terminator {
+                    if !table.contains_key(s) {
+                        table.insert(s.clone(), format!(".str.{}", counter));
+                        counter += 1;
+                    }
+                }
+            }
+        }
+
+        table
+    }
+
+    /// Emit string global constants
+    fn emit_string_globals(&self, out: &mut String, table: &HashMap<String, String>) -> TextCodeGenResult<()> {
+        if table.is_empty() {
+            return Ok(());
+        }
+
+        writeln!(out, "; String constants")?;
+        for (content, name) in table {
+            // Escape the string for LLVM IR
+            let escaped = self.escape_string_for_llvm(content);
+            let len = content.len() + 1; // +1 for null terminator
+            writeln!(out, "@{} = private unnamed_addr constant [{} x i8] c\"{}\\00\"",
+                     name, len, escaped)?;
+        }
+        writeln!(out)?;
+
+        Ok(())
+    }
+
+    /// Escape a string for LLVM IR constant
+    fn escape_string_for_llvm(&self, s: &str) -> String {
+        let mut result = String::new();
+        for c in s.bytes() {
+            match c {
+                // Printable ASCII (except backslash and double-quote)
+                0x20..=0x21 | 0x23..=0x5B | 0x5D..=0x7E => {
+                    result.push(c as char);
+                }
+                // Backslash
+                0x5C => result.push_str("\\5C"),
+                // Double-quote
+                0x22 => result.push_str("\\22"),
+                // Newline
+                0x0A => result.push_str("\\0A"),
+                // Carriage return
+                0x0D => result.push_str("\\0D"),
+                // Tab
+                0x09 => result.push_str("\\09"),
+                // Other characters - hex escape
+                _ => result.push_str(&format!("\\{:02X}", c)),
+            }
+        }
+        result
+    }
+
     /// Emit runtime function declarations
     fn emit_runtime_declarations(&self, out: &mut String) -> TextCodeGenResult<()> {
-        writeln!(out, "; Runtime declarations")?;
+        writeln!(out, "; Runtime declarations - Basic I/O")?;
         writeln!(out, "declare void @println(i64)")?;
         writeln!(out, "declare void @print(i64)")?;
         writeln!(out, "declare i64 @read_int()")?;
@@ -102,11 +222,172 @@ impl TextCodeGen {
         writeln!(out, "declare i64 @min(i64, i64)")?;
         writeln!(out, "declare i64 @max(i64, i64)")?;
         writeln!(out)?;
+
+        // Phase 32.3: String runtime functions
+        writeln!(out, "; Runtime declarations - String operations")?;
+        writeln!(out, "declare ptr @bmb_string_new(ptr, i64)")?;
+        writeln!(out, "declare ptr @bmb_string_from_cstr(ptr)")?;
+        writeln!(out, "declare i64 @bmb_string_len(ptr)")?;
+        writeln!(out, "declare i64 @bmb_string_char_at(ptr, i64)")?;
+        writeln!(out, "declare ptr @bmb_string_slice(ptr, i64, i64)")?;
+        writeln!(out, "declare ptr @bmb_string_concat(ptr, ptr)")?;
+        writeln!(out, "declare i64 @bmb_string_eq(ptr, ptr)")?;
+        writeln!(out, "declare ptr @bmb_chr(i64)")?;
+        writeln!(out, "declare i64 @bmb_ord(ptr)")?;
+        writeln!(out, "declare void @bmb_print_str(ptr)")?;
+        writeln!(out)?;
+
+        // Phase 32.3: File I/O runtime functions
+        writeln!(out, "; Runtime declarations - File I/O")?;
+        writeln!(out, "declare i64 @bmb_file_exists(ptr)")?;
+        writeln!(out, "declare i64 @bmb_file_size(ptr)")?;
+        writeln!(out, "declare ptr @bmb_read_file(ptr)")?;
+        writeln!(out, "declare i64 @bmb_write_file(ptr, ptr)")?;
+        writeln!(out, "declare i64 @bmb_append_file(ptr, ptr)")?;
+        writeln!(out)?;
+
+        // Phase 32.3: StringBuilder runtime functions
+        writeln!(out, "; Runtime declarations - StringBuilder")?;
+        writeln!(out, "declare i64 @bmb_sb_new()")?;
+        writeln!(out, "declare i64 @bmb_sb_push(i64, ptr)")?;
+        writeln!(out, "declare i64 @bmb_sb_len(i64)")?;
+        writeln!(out, "declare ptr @bmb_sb_build(i64)")?;
+        writeln!(out, "declare i64 @bmb_sb_clear(i64)")?;
+        writeln!(out)?;
+
+        // Phase 32.3: Process execution runtime functions
+        writeln!(out, "; Runtime declarations - Process execution")?;
+        writeln!(out, "declare i64 @bmb_system(ptr)")?;
+        writeln!(out, "declare ptr @bmb_getenv(ptr)")?;
+        writeln!(out)?;
+
+        // Phase 32.3: Simple-name wrappers (for method call lowering)
+        // BMB methods like s.len() generate calls to @len
+        writeln!(out, "; Runtime declarations - Method name wrappers")?;
+        writeln!(out, "declare i64 @len(ptr)")?;
+        writeln!(out, "declare i64 @char_at(ptr, i64)")?;
+        writeln!(out, "declare ptr @slice(ptr, i64, i64)")?;
+        writeln!(out, "declare ptr @chr(i64)")?;
+        writeln!(out, "declare i64 @ord(ptr)")?;
+        writeln!(out, "declare void @print_str(ptr)")?;
+        writeln!(out)?;
+
+        // File I/O wrappers
+        writeln!(out, "declare i64 @file_exists(ptr)")?;
+        writeln!(out, "declare i64 @file_size(ptr)")?;
+        writeln!(out, "declare ptr @read_file(ptr)")?;
+        writeln!(out, "declare i64 @write_file(ptr, ptr)")?;
+        writeln!(out, "declare i64 @append_file(ptr, ptr)")?;
+        writeln!(out)?;
+
+        // StringBuilder wrappers
+        writeln!(out, "declare i64 @sb_new()")?;
+        writeln!(out, "declare i64 @sb_push(i64, ptr)")?;
+        writeln!(out, "declare i64 @sb_len(i64)")?;
+        writeln!(out, "declare ptr @sb_build(i64)")?;
+        writeln!(out, "declare i64 @sb_clear(i64)")?;
+        writeln!(out)?;
+
         Ok(())
     }
 
-    /// Emit a function definition
+    /// Emit a function definition (legacy - without string table)
+    #[allow(dead_code)]
     fn emit_function(&self, out: &mut String, func: &MirFunction) -> TextCodeGenResult<()> {
+        let empty_str_table = HashMap::new();
+        let empty_fn_types = HashMap::new();
+        self.emit_function_with_strings(out, func, &empty_str_table, &empty_fn_types)
+    }
+
+    /// Build a map of place names to their types by pre-scanning instructions
+    fn build_place_type_map(
+        &self,
+        func: &MirFunction,
+        fn_return_types: &HashMap<String, &'static str>,
+    ) -> HashMap<String, &'static str> {
+        let mut place_types: HashMap<String, &'static str> = HashMap::new();
+
+        // Add parameters
+        for (name, ty) in &func.params {
+            place_types.insert(name.clone(), self.mir_type_to_llvm(ty));
+        }
+
+        // Add locals
+        for (name, ty) in &func.locals {
+            place_types.insert(name.clone(), self.mir_type_to_llvm(ty));
+        }
+
+        // Scan all instructions to determine temporary types
+        for block in &func.blocks {
+            for inst in &block.instructions {
+                match inst {
+                    MirInst::Const { dest, value } => {
+                        place_types.insert(dest.name.clone(), self.constant_type(value));
+                    }
+                    MirInst::Call { dest: Some(d), func: fn_name, .. } => {
+                        let ret_ty = fn_return_types
+                            .get(fn_name)
+                            .copied()
+                            .unwrap_or_else(|| self.infer_call_return_type(fn_name, func));
+                        place_types.insert(d.name.clone(), ret_ty);
+                    }
+                    MirInst::BinOp { dest, op, lhs, .. } => {
+                        // Determine result type based on operator
+                        let lhs_ty = match lhs {
+                            Operand::Constant(c) => self.constant_type(c),
+                            Operand::Place(p) => place_types.get(&p.name).copied().unwrap_or("i64"),
+                        };
+
+                        let result_ty = match op {
+                            // Comparison operators return i1
+                            MirBinOp::Eq | MirBinOp::Ne | MirBinOp::Lt | MirBinOp::Le
+                            | MirBinOp::Gt | MirBinOp::Ge => "i1",
+                            // String concat returns ptr
+                            MirBinOp::Add if lhs_ty == "ptr" => "ptr",
+                            // Logical ops preserve operand type
+                            MirBinOp::And | MirBinOp::Or => lhs_ty,
+                            // Arithmetic ops preserve operand type
+                            _ => lhs_ty,
+                        };
+                        place_types.insert(dest.name.clone(), result_ty);
+                    }
+                    MirInst::Phi { dest, values } => {
+                        // Use type from first value
+                        if let Some((val, _)) = values.first() {
+                            let ty = match val {
+                                Operand::Constant(c) => self.constant_type(c),
+                                Operand::Place(p) => place_types.get(&p.name).copied().unwrap_or("i64"),
+                            };
+                            place_types.insert(dest.name.clone(), ty);
+                        }
+                    }
+                    MirInst::Copy { dest, src } => {
+                        // Copy inherits type from source
+                        let ty = place_types.get(&src.name).copied().unwrap_or("i64");
+                        place_types.insert(dest.name.clone(), ty);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        place_types
+    }
+
+    /// Emit a function definition with string table support
+    fn emit_function_with_strings(
+        &self,
+        out: &mut String,
+        func: &MirFunction,
+        string_table: &HashMap<String, String>,
+        fn_return_types: &HashMap<String, &'static str>,
+    ) -> TextCodeGenResult<()> {
+        // Pre-scan to build place type map
+        let place_types = self.build_place_type_map(func, fn_return_types);
+
+        // Track defined names to handle SSA violations from MIR
+        let mut name_counts: HashMap<String, u32> = HashMap::new();
+
         // Function signature
         let ret_type = self.mir_type_to_llvm(&func.ret_ty);
         let params: Vec<String> = func
@@ -114,6 +395,11 @@ impl TextCodeGen {
             .iter()
             .map(|(name, ty)| format!("{} %{}", self.mir_type_to_llvm(ty), name))
             .collect();
+
+        // Mark parameters as defined
+        for (name, _) in &func.params {
+            name_counts.insert(name.clone(), 1);
+        }
 
         // Function attributes for optimization:
         // - nounwind: BMB doesn't have exceptions, enables better codegen
@@ -130,9 +416,83 @@ impl TextCodeGen {
             attrs
         )?;
 
-        // Emit basic blocks
+        // Build map of (phi_dest_block, local_name, pred_block) -> load_temp_name
+        // This is needed because phi nodes must reference SSA values, not memory locations
+        // So we emit loads before terminators in predecessor blocks
+        let mut phi_load_map: std::collections::HashMap<(String, String, String), String> =
+            std::collections::HashMap::new();
+
         for block in &func.blocks {
-            self.emit_block(out, block, func)?;
+            for inst in &block.instructions {
+                if let MirInst::Phi { dest: _, values } = inst {
+                    for (val, pred_label) in values {
+                        if let Operand::Place(p) = val {
+                            // Check if this place is a local variable
+                            if func.locals.iter().any(|(n, _)| n == &p.name) {
+                                let key = (block.label.clone(), p.name.clone(), pred_label.clone());
+                                let load_temp = format!("{}.phi.{}", p.name, pred_label);
+                                phi_load_map.insert(key, load_temp);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Build map for string constants in phi nodes
+        // Key: (dest_block, string_value, pred_block) -> temp_name
+        // String constants need to be wrapped with bmb_string_from_cstr before phi
+        let mut phi_string_map: std::collections::HashMap<(String, String, String), String> =
+            std::collections::HashMap::new();
+        let mut string_phi_counter = 0u32;
+
+        for block in &func.blocks {
+            for inst in &block.instructions {
+                if let MirInst::Phi { dest: _, values } = inst {
+                    for (val, pred_label) in values {
+                        if let Operand::Constant(Constant::String(s)) = val {
+                            let key = (block.label.clone(), s.clone(), pred_label.clone());
+                            if !phi_string_map.contains_key(&key) {
+                                let temp_name = format!("_str_phi_{}", string_phi_counter);
+                                string_phi_counter += 1;
+                                phi_string_map.insert(key, temp_name);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Collect local variable names for alloca-based handling
+        // Using alloca avoids SSA dominance issues when locals are assigned in branches
+        // Exclude: void-typed locals (can't allocate)
+        let local_names: std::collections::HashSet<String> = func.locals.iter()
+            .filter(|(_, ty)| self.mir_type_to_llvm(ty) != "void")
+            .map(|(name, _)| name.clone())
+            .collect();
+
+        // Emit entry block with allocas for local variables (excluding phi-referenced ones)
+        // Use "alloca_entry" to avoid conflicts with user variables named "entry"
+        if !local_names.is_empty() {
+            writeln!(out, "alloca_entry:")?;
+            for (name, ty) in &func.locals {
+                if local_names.contains(name) {
+                    let llvm_ty = self.mir_type_to_llvm(ty);
+                    // Skip void types - they can't be allocated
+                    if llvm_ty != "void" {
+                        writeln!(out, "  %{}.addr = alloca {}", name, llvm_ty)?;
+                    }
+                }
+            }
+            // Jump to the actual first block
+            if let Some(first_block) = func.blocks.first() {
+                writeln!(out, "  br label %bb_{}", first_block.label)?;
+            }
+        }
+
+        // Emit basic blocks with place type information
+        for block in &func.blocks {
+            self.emit_block_with_strings(out, block, func, string_table, fn_return_types, &place_types, &mut name_counts, &local_names, &phi_load_map, &phi_string_map)?;
         }
 
         writeln!(out, "}}")?;
@@ -141,100 +501,375 @@ impl TextCodeGen {
         Ok(())
     }
 
-    /// Emit a basic block
+    /// Emit a basic block (legacy - without string table)
+    #[allow(dead_code)]
     fn emit_block(
         &self,
         out: &mut String,
         block: &BasicBlock,
         func: &MirFunction,
     ) -> TextCodeGenResult<()> {
-        writeln!(out, "{}:", block.label)?;
+        let empty_str_table = HashMap::new();
+        let empty_fn_types = HashMap::new();
+        let empty_place_types = HashMap::new();
+        let mut empty_name_counts = HashMap::new();
+        let empty_local_names = std::collections::HashSet::new();
+        let empty_phi_map = std::collections::HashMap::new();
+        let empty_phi_string_map = std::collections::HashMap::new();
+        self.emit_block_with_strings(out, block, func, &empty_str_table, &empty_fn_types, &empty_place_types, &mut empty_name_counts, &empty_local_names, &empty_phi_map, &empty_phi_string_map)
+    }
 
-        // Emit instructions
+    /// Emit a basic block with string table support
+    fn emit_block_with_strings(
+        &self,
+        out: &mut String,
+        block: &BasicBlock,
+        func: &MirFunction,
+        string_table: &HashMap<String, String>,
+        fn_return_types: &HashMap<String, &'static str>,
+        place_types: &HashMap<String, &'static str>,
+        name_counts: &mut HashMap<String, u32>,
+        local_names: &std::collections::HashSet<String>,
+        phi_load_map: &std::collections::HashMap<(String, String, String), String>,
+        phi_string_map: &std::collections::HashMap<(String, String, String), String>,
+    ) -> TextCodeGenResult<()> {
+        // Use bb_ prefix to avoid collision with variable names
+        writeln!(out, "bb_{}:", block.label)?;
+
+        // Emit instructions (pass phi_load_map for phi node handling)
         for inst in &block.instructions {
-            self.emit_instruction(out, inst, func)?;
+            self.emit_instruction_with_strings(out, inst, func, string_table, fn_return_types, place_types, name_counts, local_names, phi_load_map, phi_string_map, &block.label)?;
+        }
+
+        // Emit loads for locals that will be used in phi nodes of successor blocks
+        // This must happen BEFORE the terminator
+        for ((_dest_block, local_name, pred_block), load_temp) in phi_load_map {
+            if pred_block == &block.label {
+                // Use place_types if available (more accurate), fall back to func.locals
+                let llvm_ty = if let Some(ty) = place_types.get(local_name) {
+                    *ty
+                } else if let Some((_, ty)) = func.locals.iter().find(|(n, _)| n == local_name) {
+                    self.mir_type_to_llvm(ty)
+                } else {
+                    "ptr" // Default to ptr for unknown types
+                };
+                writeln!(out, "  %{} = load {}, ptr %{}.addr", load_temp, llvm_ty, local_name)?;
+            }
+        }
+
+        // Emit bmb_string_from_cstr calls for string constants in phi nodes
+        // This must happen BEFORE the terminator
+        for ((_dest_block, string_val, pred_block), temp_name) in phi_string_map {
+            if pred_block == &block.label {
+                // Look up the global string constant name
+                if let Some(global_name) = string_table.get(string_val) {
+                    writeln!(out, "  %{} = call ptr @bmb_string_from_cstr(ptr @{})", temp_name, global_name)?;
+                }
+            }
         }
 
         // Emit terminator
-        self.emit_terminator(out, &block.terminator, func)?;
+        self.emit_terminator(out, &block.terminator, func, string_table, local_names)?;
 
         Ok(())
     }
 
-    /// Emit an instruction
-    fn emit_instruction(
+    /// Get unique name for SSA definition, handling duplicates
+    fn unique_name(&self, name: &str, name_counts: &mut HashMap<String, u32>) -> String {
+        let count = name_counts.entry(name.to_string()).or_insert(0);
+        *count += 1;
+        if *count == 1 {
+            name.to_string()
+        } else {
+            format!("{}_{}", name, *count - 1)
+        }
+    }
+
+    /// Emit an instruction with string table support
+    fn emit_instruction_with_strings(
         &self,
         out: &mut String,
         inst: &MirInst,
         func: &MirFunction,
+        string_table: &HashMap<String, String>,
+        fn_return_types: &HashMap<String, &'static str>,
+        place_types: &HashMap<String, &'static str>,
+        name_counts: &mut HashMap<String, u32>,
+        local_names: &std::collections::HashSet<String>,
+        _phi_load_map: &std::collections::HashMap<(String, String, String), String>,
+        phi_string_map: &std::collections::HashMap<(String, String, String), String>,
+        current_block_label: &str,
     ) -> TextCodeGenResult<()> {
         match inst {
             MirInst::Const { dest, value } => {
                 let ty = self.constant_type(value);
-                // Use add with 0 for integer constants (LLVM IR idiom)
-                match value {
-                    Constant::Int(n) => {
-                        writeln!(out, "  %{} = add {} 0, {}", dest.name, ty, n)?;
+                // Check if destination is a local (uses alloca)
+                if local_names.contains(&dest.name) {
+                    // For locals, emit a temp then store
+                    let temp_name = format!("{}.tmp", dest.name);
+                    match value {
+                        Constant::Int(n) => {
+                            writeln!(out, "  %{} = add {} 0, {}", temp_name, ty, n)?;
+                        }
+                        Constant::Bool(b) => {
+                            let v = if *b { 1 } else { 0 };
+                            writeln!(out, "  %{} = add {} 0, {}", temp_name, ty, v)?;
+                        }
+                        Constant::Float(f) => {
+                            writeln!(out, "  %{} = fadd {} 0.0, {}", temp_name, ty, f)?;
+                        }
+                        Constant::Unit => {
+                            writeln!(out, "  %{} = add i8 0, 0", temp_name)?;
+                        }
+                        Constant::String(s) => {
+                            if let Some(global_name) = string_table.get(s) {
+                                writeln!(out, "  %{} = call ptr @bmb_string_from_cstr(ptr @{})",
+                                         temp_name, global_name)?;
+                            } else {
+                                writeln!(out, "  ; string constant not in table: {}", s)?;
+                                writeln!(out, "  %{} = add ptr null, null", temp_name)?;
+                            }
+                        }
                     }
-                    Constant::Bool(b) => {
-                        let v = if *b { 1 } else { 0 };
-                        writeln!(out, "  %{} = add {} 0, {}", dest.name, ty, v)?;
-                    }
-                    Constant::Float(f) => {
-                        writeln!(out, "  %{} = fadd {} 0.0, {}", dest.name, ty, f)?;
-                    }
-                    Constant::Unit => {
-                        // Unit type - just assign 0
-                        writeln!(out, "  %{} = add i8 0, 0", dest.name)?;
-                    }
-                    Constant::String(_) => {
-                        // String constants require global declarations - simplified for now
-                        writeln!(out, "  ; string constant not supported in bootstrap")?;
+                    writeln!(out, "  store {} %{}, ptr %{}.addr", ty, temp_name, dest.name)?;
+                } else {
+                    let dest_name = self.unique_name(&dest.name, name_counts);
+                    // Use add with 0 for integer constants (LLVM IR idiom)
+                    match value {
+                        Constant::Int(n) => {
+                            writeln!(out, "  %{} = add {} 0, {}", dest_name, ty, n)?;
+                        }
+                        Constant::Bool(b) => {
+                            let v = if *b { 1 } else { 0 };
+                            writeln!(out, "  %{} = add {} 0, {}", dest_name, ty, v)?;
+                        }
+                        Constant::Float(f) => {
+                            writeln!(out, "  %{} = fadd {} 0.0, {}", dest_name, ty, f)?;
+                        }
+                        Constant::Unit => {
+                            // Unit type - just assign 0
+                            writeln!(out, "  %{} = add i8 0, 0", dest_name)?;
+                        }
+                        Constant::String(s) => {
+                            // Phase 32.3: String constants are loaded via bmb_string_from_cstr
+                            if let Some(global_name) = string_table.get(s) {
+                                writeln!(out, "  %{} = call ptr @bmb_string_from_cstr(ptr @{})",
+                                         dest_name, global_name)?;
+                            } else {
+                                // Fallback if string not in table (shouldn't happen)
+                                writeln!(out, "  ; string constant not in table: {}", s)?;
+                            }
+                        }
                     }
                 }
             }
 
             MirInst::Copy { dest, src } => {
-                let ty = self.infer_place_type(src, func);
-                writeln!(out, "  %{} = add {} %{}, 0", dest.name, ty, src.name)?;
+                // Use place_types for accurate type inference
+                let ty = place_types.get(&src.name).copied()
+                    .unwrap_or_else(|| self.infer_place_type(src, func));
+
+                // Load from alloca if source is a local
+                let src_val = if local_names.contains(&src.name) {
+                    let load_name = format!("{}.load", src.name);
+                    writeln!(out, "  %{} = load {}, ptr %{}.addr", load_name, ty, src.name)?;
+                    format!("%{}", load_name)
+                } else {
+                    format!("%{}", src.name)
+                };
+
+                // Store to alloca if destination is a local
+                if local_names.contains(&dest.name) {
+                    writeln!(out, "  store {} {}, ptr %{}.addr", ty, src_val, dest.name)?;
+                } else {
+                    let dest_name = self.unique_name(&dest.name, name_counts);
+                    if ty == "ptr" {
+                        // For pointers, use select with always-true condition
+                        writeln!(out, "  %{} = select i1 true, ptr {}, ptr null", dest_name, src_val)?;
+                    } else if ty == "f64" {
+                        // For floats, use fadd
+                        writeln!(out, "  %{} = fadd {} {}, 0.0", dest_name, ty, src_val)?;
+                    } else {
+                        // For integers, use add
+                        writeln!(out, "  %{} = add {} {}, 0", dest_name, ty, src_val)?;
+                    }
+                }
             }
 
             MirInst::BinOp { dest, op, lhs, rhs } => {
-                let ty = self.infer_operand_type(lhs, func);
-                let lhs_str = self.format_operand(lhs);
-                let rhs_str = self.format_operand(rhs);
+                let dest_name = self.unique_name(&dest.name, name_counts);
+                // Use place_types for accurate type inference
+                let lhs_ty = match lhs {
+                    Operand::Constant(c) => self.constant_type(c),
+                    Operand::Place(p) => place_types.get(&p.name).copied()
+                        .unwrap_or_else(|| self.infer_place_type(p, func)),
+                };
+                let rhs_ty = match rhs {
+                    Operand::Constant(c) => self.constant_type(c),
+                    Operand::Place(p) => place_types.get(&p.name).copied()
+                        .unwrap_or_else(|| self.infer_place_type(p, func)),
+                };
 
-                let (op_str, _preserves_type) = self.binop_to_llvm(*op);
-                // Note: LLVM IR always uses the operand type in the instruction
-                // The result type (i1 for comparisons) is implicit
-                writeln!(out, "  %{} = {} {} {}, {}", dest.name, op_str, ty, lhs_str, rhs_str)?;
+                // Emit loads for local operands (use dest_name for uniqueness)
+                let lhs_str = match lhs {
+                    Operand::Place(p) if local_names.contains(&p.name) => {
+                        let load_name = format!("{}.{}.lhs", dest_name, p.name);
+                        writeln!(out, "  %{} = load {}, ptr %{}.addr", load_name, lhs_ty, p.name)?;
+                        format!("%{}", load_name)
+                    }
+                    _ => self.format_operand_with_strings(lhs, string_table),
+                };
+                let rhs_str = match rhs {
+                    Operand::Place(p) if local_names.contains(&p.name) => {
+                        let load_name = format!("{}.{}.rhs", dest_name, p.name, );
+                        writeln!(out, "  %{} = load {}, ptr %{}.addr", load_name, rhs_ty, p.name)?;
+                        format!("%{}", load_name)
+                    }
+                    _ => self.format_operand_with_strings(rhs, string_table),
+                };
+
+                // String concatenation: either operand is ptr with Add op
+                if (lhs_ty == "ptr" || rhs_ty == "ptr") && *op == MirBinOp::Add {
+                    // Wrap string constant operands with bmb_string_from_cstr
+                    let lhs_final = if let Operand::Constant(Constant::String(s)) = lhs {
+                        if let Some(global_name) = string_table.get(s) {
+                            let wrapper_name = format!("{}.lhs.str", dest_name);
+                            writeln!(out, "  %{} = call ptr @bmb_string_from_cstr(ptr @{})", wrapper_name, global_name)?;
+                            format!("%{}", wrapper_name)
+                        } else { lhs_str.clone() }
+                    } else { lhs_str.clone() };
+                    let rhs_final = if let Operand::Constant(Constant::String(s)) = rhs {
+                        if let Some(global_name) = string_table.get(s) {
+                            let wrapper_name = format!("{}.rhs.str", dest_name);
+                            writeln!(out, "  %{} = call ptr @bmb_string_from_cstr(ptr @{})", wrapper_name, global_name)?;
+                            format!("%{}", wrapper_name)
+                        } else { rhs_str.clone() }
+                    } else { rhs_str.clone() };
+                    // Call bmb_string_concat for string concatenation
+                    writeln!(out, "  %{} = call ptr @bmb_string_concat(ptr {}, ptr {})",
+                             dest_name, lhs_final, rhs_final)?;
+                } else if (lhs_ty == "ptr" || rhs_ty == "ptr") && *op == MirBinOp::Eq {
+                    // Wrap string constant operands with bmb_string_from_cstr
+                    let lhs_final = if let Operand::Constant(Constant::String(s)) = lhs {
+                        if let Some(global_name) = string_table.get(s) {
+                            let wrapper_name = format!("{}.lhs.str", dest_name);
+                            writeln!(out, "  %{} = call ptr @bmb_string_from_cstr(ptr @{})", wrapper_name, global_name)?;
+                            format!("%{}", wrapper_name)
+                        } else { lhs_str.clone() }
+                    } else { lhs_str.clone() };
+                    let rhs_final = if let Operand::Constant(Constant::String(s)) = rhs {
+                        if let Some(global_name) = string_table.get(s) {
+                            let wrapper_name = format!("{}.rhs.str", dest_name);
+                            writeln!(out, "  %{} = call ptr @bmb_string_from_cstr(ptr @{})", wrapper_name, global_name)?;
+                            format!("%{}", wrapper_name)
+                        } else { rhs_str.clone() }
+                    } else { rhs_str.clone() };
+                    // Call bmb_string_eq for string equality comparison
+                    // bmb_string_eq returns i64 (1 for equal, 0 for not equal)
+                    writeln!(out, "  %{}.i64 = call i64 @bmb_string_eq(ptr {}, ptr {})",
+                             dest_name, lhs_final, rhs_final)?;
+                    // Convert i64 to i1 for boolean result
+                    writeln!(out, "  %{} = icmp ne i64 %{}.i64, 0", dest_name, dest_name)?;
+                } else if (lhs_ty == "ptr" || rhs_ty == "ptr") && *op == MirBinOp::Ne {
+                    // Wrap string constant operands with bmb_string_from_cstr
+                    let lhs_final = if let Operand::Constant(Constant::String(s)) = lhs {
+                        if let Some(global_name) = string_table.get(s) {
+                            let wrapper_name = format!("{}.lhs.str", dest_name);
+                            writeln!(out, "  %{} = call ptr @bmb_string_from_cstr(ptr @{})", wrapper_name, global_name)?;
+                            format!("%{}", wrapper_name)
+                        } else { lhs_str.clone() }
+                    } else { lhs_str.clone() };
+                    let rhs_final = if let Operand::Constant(Constant::String(s)) = rhs {
+                        if let Some(global_name) = string_table.get(s) {
+                            let wrapper_name = format!("{}.rhs.str", dest_name);
+                            writeln!(out, "  %{} = call ptr @bmb_string_from_cstr(ptr @{})", wrapper_name, global_name)?;
+                            format!("%{}", wrapper_name)
+                        } else { rhs_str.clone() }
+                    } else { rhs_str.clone() };
+                    // Call bmb_string_eq and negate for string inequality
+                    writeln!(out, "  %{}.i64 = call i64 @bmb_string_eq(ptr {}, ptr {})",
+                             dest_name, lhs_final, rhs_final)?;
+                    // Convert i64 to i1 and negate (0 means not equal, so i64==0 means Ne is true)
+                    writeln!(out, "  %{} = icmp eq i64 %{}.i64, 0", dest_name, dest_name)?;
+                } else {
+                    let (op_str, _preserves_type) = self.binop_to_llvm(*op);
+                    // Note: LLVM IR always uses the operand type in the instruction
+                    // The result type (i1 for comparisons) is implicit
+                    writeln!(out, "  %{} = {} {} {}, {}", dest_name, op_str, lhs_ty, lhs_str, rhs_str)?;
+                }
             }
 
             MirInst::UnaryOp { dest, op, src } => {
+                let dest_name = self.unique_name(&dest.name, name_counts);
                 let ty = self.infer_operand_type(src, func);
-                let src_str = self.format_operand(src);
+
+                // Emit load for local operand (use dest_name for uniqueness)
+                let src_str = match src {
+                    Operand::Place(p) if local_names.contains(&p.name) => {
+                        let load_name = format!("{}.{}.unary", dest_name, p.name);
+                        writeln!(out, "  %{} = load {}, ptr %{}.addr", load_name, ty, p.name)?;
+                        format!("%{}", load_name)
+                    }
+                    _ => self.format_operand(src),
+                };
 
                 match op {
                     MirUnaryOp::Neg => {
-                        writeln!(out, "  %{} = sub {} 0, {}", dest.name, ty, src_str)?;
+                        writeln!(out, "  %{} = sub {} 0, {}", dest_name, ty, src_str)?;
                     }
                     MirUnaryOp::FNeg => {
-                        writeln!(out, "  %{} = fsub {} 0.0, {}", dest.name, ty, src_str)?;
+                        writeln!(out, "  %{} = fsub {} 0.0, {}", dest_name, ty, src_str)?;
                     }
                     MirUnaryOp::Not => {
-                        writeln!(out, "  %{} = xor i1 {}, 1", dest.name, src_str)?;
+                        writeln!(out, "  %{} = xor i1 {}, 1", dest_name, src_str)?;
                     }
                 }
             }
 
             MirInst::Call { dest, func: fn_name, args } => {
-                let ret_ty = self.infer_call_return_type(fn_name, func);
-                let args_str: Vec<String> = args
+                // First check user-defined functions, then fall back to builtins
+                let ret_ty = fn_return_types
+                    .get(fn_name)
+                    .copied()
+                    .unwrap_or_else(|| self.infer_call_return_type(fn_name, func));
+
+                // Generate unique base name for this call instruction
+                let call_base = dest.as_ref().map(|d| d.name.clone()).unwrap_or_else(|| format!("call_{}", fn_name));
+
+                // Emit loads for local variables used as arguments
+                let mut arg_vals: Vec<(String, String)> = Vec::new(); // (type, value)
+                for (i, arg) in args.iter().enumerate() {
+                    let ty = match arg {
+                        Operand::Constant(c) => self.constant_type(c),
+                        Operand::Place(p) => place_types.get(&p.name).copied()
+                            .unwrap_or_else(|| self.infer_place_type(p, func)),
+                    };
+
+                    let val = match arg {
+                        Operand::Place(p) if local_names.contains(&p.name) => {
+                            // Emit load from alloca (use call_base for uniqueness)
+                            let load_name = format!("{}.{}.arg{}", call_base, p.name, i);
+                            writeln!(out, "  %{} = load {}, ptr %{}.addr", load_name, ty, p.name)?;
+                            format!("%{}", load_name)
+                        }
+                        Operand::Constant(Constant::String(s)) => {
+                            // String constants need to be wrapped with bmb_string_from_cstr
+                            if let Some(global_name) = string_table.get(s) {
+                                let wrapper_name = format!("{}.strarg{}", call_base, i);
+                                writeln!(out, "  %{} = call ptr @bmb_string_from_cstr(ptr @{})", wrapper_name, global_name)?;
+                                format!("%{}", wrapper_name)
+                            } else {
+                                self.format_operand_with_strings(arg, string_table)
+                            }
+                        }
+                        _ => self.format_operand_with_strings(arg, string_table),
+                    };
+                    arg_vals.push((ty.to_string(), val));
+                }
+
+                let args_str: Vec<String> = arg_vals
                     .iter()
-                    .map(|arg| {
-                        let ty = self.infer_operand_type(arg, func);
-                        format!("{} {}", ty, self.format_operand(arg))
-                    })
+                    .map(|(ty, val)| format!("{} {}", ty, val))
                     .collect();
 
                 if ret_ty == "void" {
@@ -246,14 +881,29 @@ impl TextCodeGen {
                         args_str.join(", ")
                     )?;
                 } else if let Some(d) = dest {
-                    writeln!(
-                        out,
-                        "  %{} = call {} @{}({})",
-                        d.name,
-                        ret_ty,
-                        fn_name,
-                        args_str.join(", ")
-                    )?;
+                    // Check if destination is a local
+                    if local_names.contains(&d.name) {
+                        let temp_name = format!("{}.call", d.name);
+                        writeln!(
+                            out,
+                            "  %{} = call {} @{}({})",
+                            temp_name,
+                            ret_ty,
+                            fn_name,
+                            args_str.join(", ")
+                        )?;
+                        writeln!(out, "  store {} %{}, ptr %{}.addr", ret_ty, temp_name, d.name)?;
+                    } else {
+                        let dest_name = self.unique_name(&d.name, name_counts);
+                        writeln!(
+                            out,
+                            "  %{} = call {} @{}({})",
+                            dest_name,
+                            ret_ty,
+                            fn_name,
+                            args_str.join(", ")
+                        )?;
+                    }
                 } else {
                     writeln!(
                         out,
@@ -266,25 +916,55 @@ impl TextCodeGen {
             }
 
             MirInst::Phi { dest, values } => {
+                let dest_name = self.unique_name(&dest.name, name_counts);
                 // PHI nodes must come at the start of a basic block
                 // %dest = phi type [ val1, %label1 ], [ val2, %label2 ], ...
                 let ty = if !values.is_empty() {
-                    self.infer_operand_type(&values[0].0, func)
+                    // Use place_types for accurate type inference
+                    match &values[0].0 {
+                        Operand::Constant(c) => self.constant_type(c),
+                        Operand::Place(p) => place_types.get(&p.name).copied()
+                            .unwrap_or_else(|| self.infer_place_type(p, func)),
+                    }
                 } else {
                     "i64" // Default fallback
                 };
 
+                // Find the dest block label by looking at which block contains this phi
+                // We need to check phi_load_map for locals that were pre-loaded
+                // and phi_string_map for string constants that were wrapped
                 let phi_args: Vec<String> = values
                     .iter()
                     .map(|(val, label)| {
-                        format!("[ {}, %{} ]", self.format_operand(val), label)
+                        // Check if this is a local variable that was pre-loaded for phi
+                        let val_str = if let Operand::Place(p) = val {
+                            if local_names.contains(&p.name) {
+                                // This local should have been pre-loaded in the predecessor block
+                                // The load temp name follows the pattern: {local}.phi.{pred_label}
+                                let load_temp = format!("{}.phi.{}", p.name, label);
+                                format!("%{}", load_temp)
+                            } else {
+                                self.format_operand_with_strings(val, string_table)
+                            }
+                        } else if let Operand::Constant(Constant::String(s)) = val {
+                            // Check if this string constant was pre-wrapped for phi
+                            let key = (current_block_label.to_string(), s.clone(), label.clone());
+                            if let Some(temp_name) = phi_string_map.get(&key) {
+                                format!("%{}", temp_name)
+                            } else {
+                                self.format_operand_with_strings(val, string_table)
+                            }
+                        } else {
+                            self.format_operand_with_strings(val, string_table)
+                        };
+                        format!("[ {}, %bb_{} ]", val_str, label)
                     })
                     .collect();
 
                 writeln!(
                     out,
                     "  %{} = phi {} {}",
-                    dest.name,
+                    dest_name,
                     ty,
                     phi_args.join(", ")
                 )?;
@@ -387,6 +1067,8 @@ impl TextCodeGen {
         out: &mut String,
         term: &Terminator,
         func: &MirFunction,
+        string_table: &HashMap<String, String>,
+        local_names: &std::collections::HashSet<String>,
     ) -> TextCodeGenResult<()> {
         match term {
             Terminator::Return(None) => {
@@ -400,18 +1082,49 @@ impl TextCodeGen {
 
             Terminator::Return(Some(val)) => {
                 let ty = self.mir_type_to_llvm(&func.ret_ty);
-                writeln!(out, "  ret {} {}", ty, self.format_operand(val))?;
+                // Special handling for string constant returns
+                if let Operand::Constant(Constant::String(s)) = val {
+                    if let Some(global_name) = string_table.get(s) {
+                        writeln!(out, "  %_ret_str = call ptr @bmb_string_from_cstr(ptr @{})", global_name)?;
+                        writeln!(out, "  ret ptr %_ret_str")?;
+                    } else {
+                        // Fallback - shouldn't happen
+                        writeln!(out, "  ret {} {}", ty, self.format_operand_with_strings(val, string_table))?;
+                    }
+                } else if let Operand::Place(p) = val {
+                    // Check if this is a local that uses alloca
+                    if local_names.contains(&p.name) {
+                        // Load from alloca before returning
+                        writeln!(out, "  %_ret_val = load {}, ptr %{}.addr", ty, p.name)?;
+                        writeln!(out, "  ret {} %_ret_val", ty)?;
+                    } else {
+                        writeln!(out, "  ret {} {}", ty, self.format_operand_with_strings(val, string_table))?;
+                    }
+                } else {
+                    writeln!(out, "  ret {} {}", ty, self.format_operand_with_strings(val, string_table))?;
+                }
             }
 
             Terminator::Goto(label) => {
-                writeln!(out, "  br label %{}", label)?;
+                writeln!(out, "  br label %bb_{}", label)?;
             }
 
             Terminator::Branch { cond, then_label, else_label } => {
-                let cond_str = self.format_operand(cond);
+                // Check if condition is a local that needs loading from alloca
+                let cond_str = if let Operand::Place(p) = cond {
+                    if local_names.contains(&p.name) {
+                        // Load the condition from alloca first (use then_label to make name unique)
+                        writeln!(out, "  %{}.cond_{} = load i1, ptr %{}.addr", p.name, then_label, p.name)?;
+                        format!("%{}.cond_{}", p.name, then_label)
+                    } else {
+                        self.format_operand(cond)
+                    }
+                } else {
+                    self.format_operand(cond)
+                };
                 writeln!(
                     out,
-                    "  br i1 {}, label %{}, label %{}",
+                    "  br i1 {}, label %bb_{}, label %bb_{}",
                     cond_str, then_label, else_label
                 )?;
             }
@@ -422,10 +1135,21 @@ impl TextCodeGen {
 
             // v0.19.2: Switch for pattern matching
             Terminator::Switch { discriminant, cases, default } => {
-                let disc_str = self.format_operand(discriminant);
-                writeln!(out, "  switch i64 {}, label %{} [", disc_str, default)?;
+                // Check if discriminant is a local that needs loading from alloca
+                let disc_str = if let Operand::Place(p) = discriminant {
+                    if local_names.contains(&p.name) {
+                        // Use default label to make name unique
+                        writeln!(out, "  %{}.disc_{} = load i64, ptr %{}.addr", p.name, default, p.name)?;
+                        format!("%{}.disc_{}", p.name, default)
+                    } else {
+                        self.format_operand(discriminant)
+                    }
+                } else {
+                    self.format_operand(discriminant)
+                };
+                writeln!(out, "  switch i64 {}, label %bb_{} [", disc_str, default)?;
                 for (val, label) in cases {
-                    writeln!(out, "    i64 {}, label %{}", val, label)?;
+                    writeln!(out, "    i64 {}, label %bb_{}", val, label)?;
                 }
                 writeln!(out, "  ]")?;
             }
@@ -483,6 +1207,59 @@ impl TextCodeGen {
         }
     }
 
+    /// Format an operand with potential load for local variables
+    /// Returns (needs_load_prefix, formatted_value)
+    /// If needs_load_prefix is Some, caller should emit a load instruction first
+    fn format_operand_with_locals(
+        &self,
+        op: &Operand,
+        string_table: &HashMap<String, String>,
+        local_names: &std::collections::HashSet<String>,
+        load_counter: &mut u32,
+    ) -> (Option<(String, String, &'static str)>, String) {
+        match op {
+            Operand::Place(p) => {
+                if local_names.contains(&p.name) {
+                    // Need to emit load from alloca
+                    *load_counter += 1;
+                    let load_name = format!("{}.ld{}", p.name, *load_counter);
+                    // Return info for caller to emit load
+                    (Some((load_name.clone(), p.name.clone(), "ptr")), format!("%{}", load_name))
+                } else {
+                    (None, format!("%{}", p.name))
+                }
+            }
+            Operand::Constant(c) => match c {
+                Constant::String(s) => {
+                    if let Some(global_name) = string_table.get(s) {
+                        (None, format!("@{}", global_name))
+                    } else {
+                        (None, format!("\"{}\"", s))
+                    }
+                }
+                _ => (None, self.format_constant(c)),
+            },
+        }
+    }
+
+    /// Format an operand with string table for phi instructions
+    fn format_operand_with_strings(&self, op: &Operand, string_table: &HashMap<String, String>) -> String {
+        match op {
+            Operand::Place(p) => format!("%{}", p.name),
+            Operand::Constant(c) => match c {
+                Constant::String(s) => {
+                    if let Some(global_name) = string_table.get(s) {
+                        format!("@{}", global_name)
+                    } else {
+                        // Fallback - shouldn't happen if collect_string_constants is correct
+                        format!("\"{}\"", s)
+                    }
+                }
+                _ => self.format_constant(c),
+            },
+        }
+    }
+
     /// Infer type of a place
     fn infer_place_type(&self, place: &Place, func: &MirFunction) -> &'static str {
         // Check parameters
@@ -513,8 +1290,41 @@ impl TextCodeGen {
     fn infer_call_return_type(&self, fn_name: &str, _current_func: &MirFunction) -> &'static str {
         // Built-in functions
         match fn_name {
-            "println" | "print" | "assert" => "void",
-            "read_int" | "abs" | "min" | "max" => "i64",
+            // Void return
+            "println" | "print" | "assert" | "bmb_print_str" | "print_str" => "void",
+
+            // i64 return - Basic
+            "read_int" | "abs" | "bmb_abs" | "min" | "max" => "i64",
+
+            // i64 return - String operations (both full and wrapper names)
+            "bmb_string_len" | "bmb_string_char_at" | "bmb_string_eq" | "bmb_ord"
+            | "len" | "char_at" | "ord" => "i64",
+
+            // i64 return - File I/O (both full and wrapper names)
+            "bmb_file_exists" | "bmb_file_size" | "bmb_write_file" | "bmb_append_file"
+            | "file_exists" | "file_size" | "write_file" | "append_file" => "i64",
+
+            // i64 return - StringBuilder (handle is i64)
+            "bmb_sb_new" | "bmb_sb_push" | "bmb_sb_len" | "bmb_sb_clear"
+            | "sb_new" | "sb_push" | "sb_len" | "sb_clear" => "i64",
+
+            // i64 return - Process
+            "bmb_system" => "i64",
+
+            // ptr return - String operations (both full and wrapper names)
+            "bmb_string_new" | "bmb_string_from_cstr" | "bmb_string_slice"
+            | "bmb_string_concat" | "bmb_chr"
+            | "slice" | "chr" => "ptr",
+
+            // ptr return - File I/O (both full and wrapper names)
+            "bmb_read_file" | "read_file" => "ptr",
+
+            // ptr return - StringBuilder (both full and wrapper names)
+            "bmb_sb_build" | "sb_build" => "ptr",
+
+            // ptr return - Process
+            "bmb_getenv" => "ptr",
+
             _ => {
                 // For now, assume i64 for unknown functions
                 // In a full implementation, we'd look up the function
