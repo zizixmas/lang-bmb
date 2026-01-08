@@ -110,7 +110,8 @@ pub enum Token {
     TyString,
 
     // Literals
-    #[regex(r"[0-9]+\.[0-9]+", |lex| lex.slice().parse::<f64>().ok())]
+    // v0.34: Extended to support scientific notation (e.g., 3.14e10, 1e-5, 6.022E23)
+    #[regex(r"[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?|[0-9]+[eE][+-]?[0-9]+", |lex| lex.slice().parse::<f64>().ok(), priority = 3)]
     FloatLit(f64),
 
     #[regex(r"[0-9]+", |lex| lex.slice().parse::<i64>().ok(), priority = 2)]
