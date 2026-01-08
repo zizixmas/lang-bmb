@@ -2415,25 +2415,24 @@ See [RFC-0005](RFC/RFC-0005-BENCHMARK-PACKAGE-ROADMAP.md) for Phase 33.6 overvie
 - API documentation generation
 - Benchmark result visualization
 
-#### Phase 34.1: f64 Floating-Point Type (RFC-0006)
+#### Phase 34.1: f64 Floating-Point Type (RFC-0006) ✅ Complete
 
 | Task | Description | Priority | Status |
 |------|-------------|----------|--------|
-| 34.1.1 | Lexer: f64 literal tokenization | P0 | 📋 Planned |
-| 34.1.2 | Parser: f64 expression parsing | P0 | 📋 Planned |
-| 34.1.3 | Type checker: f64 type rules | P0 | 📋 Planned |
-| 34.1.4 | MIR: f64 operations (FAdd, FSub, FMul, FDiv, FCmp) | P0 | 📋 Planned |
-| 34.1.5 | LLVM codegen: IEEE 754 double | P0 | 📋 Planned |
-| 34.1.6 | SMT: Z3 Real theory integration | P1 | 📋 Planned |
-| 34.1.7 | stdlib/math/f64.bmb: sqrt, sin, cos, etc. | P1 | 📋 Planned |
-| 34.1.8 | Benchmarks: n_body, mandelbrot_fp | P1 | 📋 Planned |
+| 34.1.1 | Lexer: f64 literal tokenization | P0 | ✅ Pre-existing |
+| 34.1.2 | Parser: f64 expression parsing | P0 | ✅ Pre-existing |
+| 34.1.3 | Type checker: f64 type rules | P0 | ✅ Pre-existing |
+| 34.1.4 | MIR: f64 operations (FAdd, FSub, FMul, FDiv, FCmp) | P0 | ✅ Pre-existing |
+| 34.1.5 | LLVM codegen: IEEE 754 double | P0 | ✅ Pre-existing |
+| 34.1.6 | Scientific notation (6.022e23, 1e-5) | P0 | ✅ v0.34 |
+| 34.1.7 | SMT: Z3 Real theory integration | P1 | ✅ Pre-existing |
+| 34.1.8 | stdlib/math/f64.bmb: sqrt, sin, cos, etc. | P2 | 📋 Deferred |
+| 34.1.9 | Benchmarks: n_body, mandelbrot_fp | P1 | 📋 Pending |
 
-**Key Implementation Details** (from RFC-0006):
-```llvm
-%result = fadd double %a, %b
-%cmp = fcmp olt double %a, %b
-declare double @llvm.sqrt.f64(double)
-```
+**Implementation Summary** (2026-01-09):
+- Core f64 support was already complete in compiler (lexer, parser, types, MIR, LLVM)
+- v0.34: Added scientific notation support to lexer regex
+- stdlib/math deferred (nice-to-have, not blocking benchmarks)
 
 **Performance Target**: 1.0x Rust (exact LLVM parity)
 
