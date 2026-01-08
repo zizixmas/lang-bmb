@@ -65,6 +65,7 @@ impl Interpreter {
     fn register_builtins(&mut self) {
         self.builtins.insert("print".to_string(), builtin_print);
         self.builtins.insert("println".to_string(), builtin_println);
+        self.builtins.insert("print_str".to_string(), builtin_print_str);
         self.builtins.insert("assert".to_string(), builtin_assert);
         self.builtins.insert("read_int".to_string(), builtin_read_int);
         self.builtins.insert("abs".to_string(), builtin_abs);
@@ -83,12 +84,20 @@ impl Interpreter {
         self.builtins.insert("system".to_string(), builtin_system);
         self.builtins.insert("getenv".to_string(), builtin_getenv);
 
+        // v0.31.22: Command-line argument builtins for Phase 32.3.D CLI Independence
+        self.builtins.insert("arg_count".to_string(), builtin_arg_count);
+        self.builtins.insert("get_arg".to_string(), builtin_get_arg);
+
         // v0.31.13: StringBuilder builtins for Phase 32.0.4 O(n²) fix
         self.builtins.insert("sb_new".to_string(), builtin_sb_new);
         self.builtins.insert("sb_push".to_string(), builtin_sb_push);
         self.builtins.insert("sb_build".to_string(), builtin_sb_build);
         self.builtins.insert("sb_len".to_string(), builtin_sb_len);
         self.builtins.insert("sb_clear".to_string(), builtin_sb_clear);
+
+        // v0.31.21: Character conversion builtins for gotgan string handling
+        self.builtins.insert("chr".to_string(), builtin_chr);
+        self.builtins.insert("ord".to_string(), builtin_ord);
     }
 
     /// v0.30.280: Enable ScopeStack-based evaluation for better memory efficiency
@@ -1119,6 +1128,23 @@ fn builtin_println(args: &[Value]) -> InterpResult<Value> {
     Ok(Value::Unit)
 }
 
+/// print_str(s: String) -> i64
+/// Prints a string without newline. Returns 0 on success.
+/// v0.31.21: Added for gotgan string output
+fn builtin_print_str(args: &[Value]) -> InterpResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::arity_mismatch("print_str", 1, args.len()));
+    }
+    match &args[0] {
+        Value::Str(s) => {
+            print!("{}", s);
+            io::stdout().flush().map_err(|e| RuntimeError::io_error(&e.to_string()))?;
+            Ok(Value::Int(0))
+        }
+        _ => Err(RuntimeError::type_error("String", args[0].type_name())),
+    }
+}
+
 fn builtin_assert(args: &[Value]) -> InterpResult<Value> {
     if args.is_empty() {
         return Err(RuntimeError::arity_mismatch("assert", 1, 0));
@@ -1407,6 +1433,33 @@ fn builtin_getenv(args: &[Value]) -> InterpResult<Value> {
     }
 }
 
+// ============ v0.31.22: Command-line Argument Builtins for Phase 32.3.D ============
+// Provides CLI argument access for standalone BMB compiler
+
+/// arg_count() -> i64
+/// Returns the number of command-line arguments (including program name).
+fn builtin_arg_count(_args: &[Value]) -> InterpResult<Value> {
+    let count = env::args().count() as i64;
+    Ok(Value::Int(count))
+}
+
+/// get_arg(n: i64) -> String
+/// Returns the nth command-line argument (0 = program name).
+/// Returns empty string if index is out of bounds.
+fn builtin_get_arg(args: &[Value]) -> InterpResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::arity_mismatch("get_arg", 1, args.len()));
+    }
+    match &args[0] {
+        Value::Int(n) => {
+            let idx = *n as usize;
+            let arg = env::args().nth(idx).unwrap_or_default();
+            Ok(Value::Str(Rc::new(arg)))
+        }
+        _ => Err(RuntimeError::type_error("integer", args[0].type_name())),
+    }
+}
+
 // ============ v0.31.13: StringBuilder Builtins for Phase 32.0.4 ============
 // Provides O(1) amortized string append operations to fix O(n²) concatenation
 // in Bootstrap compiler's MIR generation.
@@ -1529,6 +1582,49 @@ fn builtin_sb_clear(args: &[Value]) -> InterpResult<Value> {
             })
         }
         _ => Err(RuntimeError::type_error("i64", args[0].type_name())),
+    }
+}
+
+/// chr(code: i64) -> String
+/// Converts an ASCII code to a single-character string.
+/// v0.31.21: Added for gotgan string handling
+fn builtin_chr(args: &[Value]) -> InterpResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::arity_mismatch("chr", 1, args.len()));
+    }
+    match &args[0] {
+        Value::Int(code) => {
+            if *code < 0 || *code > 127 {
+                Err(RuntimeError::io_error(&format!("chr: code {} out of ASCII range (0-127)", code)))
+            } else {
+                Ok(Value::Str(Rc::new(String::from((*code as u8) as char))))
+            }
+        }
+        _ => Err(RuntimeError::type_error("i64", args[0].type_name())),
+    }
+}
+
+/// ord(s: String) -> i64
+/// Returns the ASCII code of the first character in a string.
+/// v0.31.21: Added for gotgan string handling
+fn builtin_ord(args: &[Value]) -> InterpResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::arity_mismatch("ord", 1, args.len()));
+    }
+    match &args[0] {
+        Value::Str(s) => {
+            if s.is_empty() {
+                Err(RuntimeError::io_error("ord: empty string"))
+            } else {
+                let ch = s.chars().next().unwrap();
+                if ch.is_ascii() {
+                    Ok(Value::Int(ch as i64))
+                } else {
+                    Err(RuntimeError::io_error(&format!("ord: non-ASCII character '{}'", ch)))
+                }
+            }
+        }
+        _ => Err(RuntimeError::type_error("String", args[0].type_name())),
     }
 }
 

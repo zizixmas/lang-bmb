@@ -261,6 +261,12 @@ impl TextCodeGen {
         writeln!(out, "declare ptr @bmb_getenv(ptr)")?;
         writeln!(out)?;
 
+        // v0.31.23: Command-line argument builtins for Phase 32.3.G CLI Independence
+        writeln!(out, "; Runtime declarations - CLI arguments")?;
+        writeln!(out, "declare i64 @arg_count()")?;
+        writeln!(out, "declare ptr @get_arg(i64)")?;
+        writeln!(out)?;
+
         // Phase 32.3: Simple-name wrappers (for method call lowering)
         // BMB methods like s.len() generate calls to @len
         writeln!(out, "; Runtime declarations - Method name wrappers")?;
@@ -407,11 +413,15 @@ impl TextCodeGen {
         // - Attributes go AFTER the parameter list in LLVM IR syntax
         let attrs = if func.name == "main" { "" } else { " nounwind" };
 
+        // v0.31.23: Rename BMB main to bmb_user_main so C runtime can provide real main()
+        // This enables argv support through bmb_init_argv called from real main()
+        let emitted_name = if func.name == "main" { "bmb_user_main" } else { &func.name };
+
         writeln!(
             out,
             "define {} @{}({}){} {{",
             ret_type,
-            func.name,
+            emitted_name,
             params.join(", "),
             attrs
         )?;
@@ -668,6 +678,13 @@ impl TextCodeGen {
                 // Use place_types for accurate type inference
                 let ty = place_types.get(&src.name).copied()
                     .unwrap_or_else(|| self.infer_place_type(src, func));
+
+                // v0.31.23: Skip void type copies (result of void-returning function calls)
+                if ty == "void" {
+                    // No-op: void values cannot be copied or stored
+                    // This happens when a let binding captures a void call result
+                    return Ok(());
+                }
 
                 // Load from alloca if source is a local
                 let src_val = if local_names.contains(&src.name) {

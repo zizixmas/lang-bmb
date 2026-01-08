@@ -463,3 +463,46 @@ int64_t sb_clear(int64_t handle) {
 void print_str(BmbString* s) {
     bmb_print_str(s);
 }
+
+// ===================================================
+// Command-line Argument Runtime Functions (v0.31.23)
+// Phase 32.3.G: CLI Independence
+// ===================================================
+
+// Global storage for command-line arguments
+static int bmb_argc = 0;
+static char** bmb_argv = NULL;
+
+// Initialize argv (called from real main() wrapper)
+void bmb_init_argv(int argc, char** argv) {
+    bmb_argc = argc;
+    bmb_argv = argv;
+}
+
+// Get argument count
+int64_t arg_count(void) {
+    return (int64_t)bmb_argc;
+}
+
+// Get argument at index (returns empty string if out of bounds)
+BmbString* get_arg(int64_t idx) {
+    if (idx < 0 || idx >= bmb_argc || !bmb_argv) {
+        return bmb_string_new("", 0);
+    }
+    return bmb_string_from_cstr(bmb_argv[idx]);
+}
+
+// ===================================================
+// Entry Point Wrapper (v0.31.23)
+// BMB's main() is renamed to bmb_user_main() in codegen
+// This wrapper provides the real main() that initializes argv
+// ===================================================
+
+// Forward declaration of BMB user main
+int64_t bmb_user_main(void);
+
+// Real main entry point
+int main(int argc, char** argv) {
+    bmb_init_argv(argc, argv);
+    return (int)bmb_user_main();
+}

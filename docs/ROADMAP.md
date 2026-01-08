@@ -2020,10 +2020,10 @@ Original "porting" tasks were based on incomplete understanding of Bootstrap sta
 | Task | Description | Priority | Effort | Status |
 |------|-------------|----------|--------|--------|
 | 32.2.0 | Extract reusable packages (semver, toml) | P0 | 1 week | ✅ v0.31.21 |
-| 32.2.1 | Port registry client to BMB | P1 | 2 weeks | 📋 Planned |
-| 32.2.2 | Port dependency resolver to BMB | P1 | 2 weeks | 📋 Planned |
-| 32.2.3 | Port build system to BMB | P1 | 3 weeks | 📋 Planned |
-| 32.2.4 | Port CLI and config to BMB | P1 | 1 week | 📋 Planned |
+| 32.2.1 | Port gotgan Core (project, config, CLI) | P1 | 1 week | ✅ v0.31.22 |
+| 32.2.2 | Port dependency resolver to BMB | P1 | 1 week | ✅ v0.31.22 |
+| 32.2.3 | Port build system to BMB | P1 | 1 week | ✅ v0.31.22 |
+| 32.2.4 | Port registry (semver/constraints) to BMB | P1 | 1 week | ✅ v0.31.22 |
 
 **v0.31.21: Reusable Package Extraction**
 - Created `bmb-semver` package (198 LOC):
@@ -2038,23 +2038,85 @@ Original "porting" tasks were based on incomplete understanding of Bootstrap sta
   - High-level API (validate, has_section, has_package)
 - Updated gotgan-packages README with contribution guidelines
 
-#### Phase 32.3: Rust Removal (was 30.4)
+**v0.31.22: gotgan BMB Implementation Complete**
+- Created `bootstrap/gotgan/` directory with full package manager in BMB
+- **project.bmb** (214 LOC): Project structure and discovery
+  - Path utilities (path_join, get_filename, get_dirname)
+  - Project detection (is_bmb_file, find_project_root, has_manifest)
+  - Tests: 3/3 passing
+- **config.bmb** (292 LOC): TOML parsing and manifest handling
+  - Character utilities using chr() builtin
+  - TOML value extraction (skip_ws, find_quote_end, extract_quoted_value)
+  - Section parsing (is_section_header, extract_section_name)
+  - Manifest API (get_package_name, get_package_version, is_valid_manifest)
+  - Dependency counting
+  - Tests: 4/4 passing
+- **resolver.bmb** (390 LOC): Dependency resolution
+  - Dependency sorting (in_degree counting, topological sort)
+  - Simple resolution algorithm
+  - Tests: 4/4 passing
+- **build.bmb** (440 LOC): Build system operations
+  - Command execution helpers (build_cmd, run_bmb_cmd)
+  - Project operations (build_project, run_project, check_project, verify_project, clean_project)
+  - Tests: 4/4 passing
+- **registry.bmb** (328 LOC): Semver and version constraints
+  - Number parsing (parse_number, find_dot)
+  - Semver parsing (parse_major, parse_minor, parse_patch)
+  - Semver comparison (compare_semver, semver_eq/gt/lt/gte/lte)
+  - Constraint operators (^, ~, >, >=, <, <=, =, *)
+  - Constraint matching (matches_caret, matches_tilde, matches_constraint)
+  - Tests: 10/10 passing
+- **gotgan.bmb** (155 LOC): CLI entry point
+  - Command dispatch (build, run, check, verify, clean, help)
+  - Help text display
+- Total: ~1,819 LOC, 25 tests passing
 
-| Task | Description | Priority | Effort |
-|------|-------------|----------|--------|
-| 32.3.1 | Remove bmb/src/*.rs | P0 | 1 week |
-| 32.3.2 | Remove gotgan/src/*.rs | P0 | 1 week |
-| 32.3.3 | Remove Cargo.toml files | P0 | 1 day |
-| 32.3.4 | Update CI/CD for pure BMB | P0 | 1 week |
+**Phase 32.2 Exit Criteria**: ✅ Complete (all modules ported and tested)
 
-**Verification**:
+#### Phase 32.3: Rust Transition (v0.31.23)
+
+**Status**: ✅ CLI Independence Achieved
+
+**Resolved Blockers** (v0.31.23):
+- ✅ argv builtins implemented: `arg_count()`, `get_arg(n)` (v0.31.22)
+- ✅ Native BMB CLI compiles and runs standalone (v0.31.23)
+- ✅ Void type codegen bug fixed (v0.31.23)
+- ✅ File I/O builtins available (v0.31.10)
+- ✅ Process execution available (v0.31.11)
+
+**Phased Approach** (Complete):
+
+| Phase | Task | Description | Priority | Status |
+|-------|------|-------------|----------|--------|
+| 32.3.A | Archive branch | Create `archive/rust-v0.31` | P0 | ✅ Complete |
+| 32.3.B | Deprecation notices | Add notices to Rust sources | P1 | ✅ Complete |
+| 32.3.C | TRANSITION.md | Document migration path | P1 | ✅ Complete |
+| 32.3.D | argv builtin | Add `arg_count()`, `get_arg()` to interpreter | P0 | ✅ Complete |
+| 32.3.E | void codegen fix | Fix void type store bug | P0 | ✅ Complete |
+| 32.3.F | Runtime argv | Add argv to C runtime | P0 | ✅ Complete |
+| 32.3.G | BMB CLI wrapper | Native BMB CLI binary | P0 | ✅ Complete |
+| 32.3.H | Rust removal | Remove bmb/src/*.rs | P2 | 📋 Deferred |
+
+**Native CLI Compilation**:
 ```bash
-$ git ls-files '*.rs' | wc -l
-0
+# Build native BMB CLI
+bmb build bootstrap/bmb_cli.bmb -o bmb_cli
 
-$ git ls-files 'Cargo.toml' | wc -l
-0
+# Run standalone
+./bmb_cli input.bmb          # compile to stdout
+./bmb_cli input.bmb out.ll   # compile to file
 ```
+
+**CLI Independence Builtins** (v0.31.22):
+```bmb
+-- Available in both interpreter and native mode
+extern fn arg_count() -> i64;         -- Return argc
+extern fn get_arg(n: i64) -> String;  -- Return argv[n]
+```
+
+**Note**: Rust CLI still maintained for development convenience. Full Rust removal deferred to future phase.
+
+**Archive Reference**: `git checkout archive/rust-v0.31` for complete Rust implementation
 
 #### Phase 32.4: Benchmark Gate #2 (BMB Compiler 기준)
 

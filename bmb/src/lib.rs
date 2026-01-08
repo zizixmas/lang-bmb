@@ -1,6 +1,27 @@
 //! BMB Compiler Library
 //!
 //! AI-Native programming language with contract-based verification.
+//!
+//! # Deprecation Notice (v0.31.21)
+//!
+//! This Rust implementation is deprecated in favor of the self-hosted BMB bootstrap compiler.
+//! The BMB bootstrap (`bootstrap/*.bmb`) provides feature parity for core compiler components.
+//!
+//! **Archive**: `archive/rust-v0.31` branch preserves this implementation.
+//! **Migration**: See `docs/TRANSITION.md` for the transition roadmap.
+//!
+//! ## Component Status
+//!
+//! | Module | BMB Equivalent | Status |
+//! |--------|----------------|--------|
+//! | `lexer` | `bootstrap/lexer.bmb` | Deprecated |
+//! | `parser` | `bootstrap/parser.bmb` | Deprecated |
+//! | `types` | `bootstrap/types.bmb` | Deprecated |
+//! | `mir` | `bootstrap/mir.bmb` | Deprecated |
+//! | `codegen` | `bootstrap/llvm_ir.bmb` | Deprecated |
+//! | `interp` | N/A | Still Required |
+//! | `repl` | N/A | Still Required |
+//! | `lsp` | N/A | Still Required |
 
 // v0.30.299: Allow clippy false positives
 // - only_used_in_recursion: Tree traversal functions use &self for consistency, not just recursion

@@ -81,6 +81,8 @@ impl TypeChecker {
         functions.insert("print".to_string(), (vec![Type::I64], Type::Unit));
         // println(x) -> Unit
         functions.insert("println".to_string(), (vec![Type::I64], Type::Unit));
+        // v0.31.21: print_str(s: String) -> i64 (for gotgan string output)
+        functions.insert("print_str".to_string(), (vec![Type::String], Type::I64));
         // assert(cond) -> Unit
         functions.insert("assert".to_string(), (vec![Type::Bool], Type::Unit));
         // read_int() -> i64
@@ -114,6 +116,12 @@ impl TypeChecker {
         // getenv(name: String) -> String (env var value)
         functions.insert("getenv".to_string(), (vec![Type::String], Type::String));
 
+        // v0.31.22: Command-line argument builtins for Phase 32.3.D CLI Independence
+        // arg_count() -> i64 (number of arguments including program name)
+        functions.insert("arg_count".to_string(), (vec![], Type::I64));
+        // get_arg(n: i64) -> String (nth argument, 0 = program name)
+        functions.insert("get_arg".to_string(), (vec![Type::I64], Type::String));
+
         // v0.31.13: StringBuilder builtins for Phase 32.0.4 O(n²) fix
         // sb_new() -> i64 (builder ID)
         functions.insert("sb_new".to_string(), (vec![], Type::I64));
@@ -125,6 +133,12 @@ impl TypeChecker {
         functions.insert("sb_len".to_string(), (vec![Type::I64], Type::I64));
         // sb_clear(id: i64) -> i64 (same ID)
         functions.insert("sb_clear".to_string(), (vec![Type::I64], Type::I64));
+
+        // v0.31.21: Character conversion builtins for gotgan string handling
+        // chr(code: i64) -> String (ASCII code to single-char string)
+        functions.insert("chr".to_string(), (vec![Type::I64], Type::String));
+        // ord(s: String) -> i64 (first char to ASCII code)
+        functions.insert("ord".to_string(), (vec![Type::String], Type::I64));
 
         Self {
             env: HashMap::new(),
