@@ -2454,13 +2454,26 @@ See [RFC-0005](RFC/RFC-0005-BENCHMARK-PACKAGE-ROADMAP.md) for Phase 33.6 overvie
 | Task | Description | Priority | Status |
 |------|-------------|----------|--------|
 | 34.2.1 | Allocator interface (malloc/free wrappers) | P0 | ✅ v0.34.21 |
-| 34.2.2 | Box<T>: single heap allocation | P0 | 📋 Planned |
+| 34.2.2 | Box<i64>: heap allocation + store/load | P0 | ✅ v0.34.22 |
 | 34.2.3 | Vec<T>: growable array | P0 | 📋 Planned |
 | 34.2.4 | Drop trait implementation | P0 | 📋 Planned |
 | 34.2.5 | Hash trait implementation | P1 | 📋 Planned |
 | 34.2.6 | HashMap<K, V>: Swiss Table | P1 | 📋 Planned |
 | 34.2.7 | HashSet<T>: unique collection | P1 | 📋 Planned |
 | 34.2.8 | Benchmarks: binary_trees, hash_table | P1 | 📋 Planned |
+
+**Phase 34.2.2 Box<i64> Implementation** (v0.34.22):
+```bmb
+-- Memory operations (low-level)
+fn store_i64(ptr: i64, value: i64) -> ();
+fn load_i64(ptr: i64) -> i64;
+
+-- Box convenience functions
+fn box_new_i64(value: i64) -> i64;   -- allocate + store
+fn box_get_i64(ptr: i64) -> i64;     -- read boxed value
+fn box_set_i64(ptr: i64, value: i64) -> ();  -- update
+fn box_free_i64(ptr: i64) -> ();     -- free memory
+```
 
 **Key Implementation Details** (from RFC-0007):
 ```bmb
