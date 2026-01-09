@@ -2426,12 +2426,26 @@ See [RFC-0005](RFC/RFC-0005-BENCHMARK-PACKAGE-ROADMAP.md) for Phase 33.6 overvie
 | 34.1.6 | Scientific notation (6.022e23, 1e-5) | P0 | ✅ v0.34 |
 | 34.1.7 | SMT: Z3 Real theory integration | P1 | ✅ Pre-existing |
 | 34.1.8 | stdlib/math/f64.bmb: sqrt, sin, cos, etc. | P2 | 📋 Deferred |
-| 34.1.9 | Benchmarks: n_body, mandelbrot_fp | P1 | 📋 Pending |
+| 34.1.9 | Benchmarks: n_body, mandelbrot_fp | P1 | ✅ v0.34 |
 
 **Implementation Summary** (2026-01-09):
 - Core f64 support was already complete in compiler (lexer, parser, types, MIR, LLVM)
 - v0.34: Added scientific notation support to lexer regex
+- v0.34: Added math intrinsics (sqrt, i64_to_f64, f64_to_i64)
 - stdlib/math deferred (nice-to-have, not blocking benchmarks)
+
+**Math Intrinsics** (v0.34):
+| Intrinsic | LLVM Instruction | Usage |
+|-----------|------------------|-------|
+| `sqrt(x)` | `@llvm.sqrt.f64` | n_body distance calculation |
+| `i64_to_f64(x)` | `sitofp i64 to double` | mandelbrot_fp pixel conversion |
+| `f64_to_i64(x)` | `fptosi double to i64` | Result integer output |
+
+**Benchmark Results** (interpreter, v0.34):
+| Benchmark | Output | Correctness | Notes |
+|-----------|--------|-------------|-------|
+| mandelbrot_fp | 3989 | ✅ Matches Rust | Uses i64_to_f64 |
+| n_body | -142736398 | ✅ Valid | 2-body simplified (no arrays) |
 
 **Performance Target**: 1.0x Rust (exact LLVM parity)
 

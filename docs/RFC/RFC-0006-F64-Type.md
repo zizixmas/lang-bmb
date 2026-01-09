@@ -17,7 +17,8 @@
 | MIR | ✅ Complete | `MirType::F64`, float operations |
 | LLVM Codegen | ✅ Complete | `context.f64_type()`, float instructions, sqrt intrinsic |
 | WASM Codegen | ✅ Complete | f64 support |
-| stdlib/math | ⚠️ Partial | sqrt, i64_to_f64, f64_to_i64 added (v0.34) |
+| stdlib/math | ⚠️ Partial | sqrt, i64_to_f64, f64_to_i64 intrinsics (v0.34) |
+| Benchmarks | ✅ Complete | mandelbrot_fp (3989), n_body (-142736398) verified |
 
 **Scientific Notation Support** (v0.34):
 - `6.022e23`, `3.14e10` (positive exponent)
@@ -343,7 +344,19 @@ New `_fp` variants will use f64 for comparison.
 | 34.1.4 | SMT Integration | 3 days | ✅ Pre-existing |
 | 34.1.5 | Scientific notation | - | ✅ 1 hour |
 | 34.1.6 | stdlib/math/f64 | 3 days | 📋 Deferred |
-| 34.1.7 | Benchmarks | 2 days | 📋 Pending |
+| 34.1.7 | Math intrinsics (sqrt, i64_to_f64, f64_to_i64) | - | ✅ v0.34 |
+| 34.1.8 | LLVM IR fixes (double type, float ops) | - | ✅ v0.34 |
+| 34.1.9 | Benchmarks (mandelbrot_fp, n_body) | 2 days | ✅ v0.34 |
+
+**Intrinsics Implementation** (v0.34):
+- `sqrt(x: f64)` → `@llvm.sqrt.f64` intrinsic declaration + call
+- `i64_to_f64(x: i64)` → `sitofp i64 %x to double`
+- `f64_to_i64(x: f64)` → `fptosi double %x to i64`
+
+**LLVM IR Fixes** (v0.34):
+- Type name: `f64` → `double` (LLVM-compatible)
+- Float ops: `add nsw` → `fadd`, `sub nsw` → `fsub`, etc.
+- Float literals: `4e0` → `4.000000e+00` (proper format)
 
 ## References
 

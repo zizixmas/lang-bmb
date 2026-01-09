@@ -814,7 +814,30 @@ impl TextCodeGen {
                     // Convert i64 to i1 and negate (0 means not equal, so i64==0 means Ne is true)
                     writeln!(out, "  %{} = icmp eq i64 %{}.i64, 0", dest_name, dest_name)?;
                 } else {
-                    let (op_str, _preserves_type) = self.binop_to_llvm(*op);
+                    // v0.34: Fix float operations - MIR may use Add/Sub/etc. for f64 due to type inference issues
+                    // Override to float operations when operand type is double/f64
+                    let op_str = if lhs_ty == "double" || lhs_ty == "f64" {
+                        match op {
+                            MirBinOp::Add | MirBinOp::FAdd => "fadd",
+                            MirBinOp::Sub | MirBinOp::FSub => "fsub",
+                            MirBinOp::Mul | MirBinOp::FMul => "fmul",
+                            MirBinOp::Div | MirBinOp::FDiv => "fdiv",
+                            MirBinOp::Mod => "frem",
+                            MirBinOp::Eq | MirBinOp::FEq => "fcmp oeq",
+                            MirBinOp::Ne | MirBinOp::FNe => "fcmp one",
+                            MirBinOp::Lt | MirBinOp::FLt => "fcmp olt",
+                            MirBinOp::Gt | MirBinOp::FGt => "fcmp ogt",
+                            MirBinOp::Le | MirBinOp::FLe => "fcmp ole",
+                            MirBinOp::Ge | MirBinOp::FGe => "fcmp oge",
+                            MirBinOp::And | MirBinOp::Or => {
+                                let (s, _) = self.binop_to_llvm(*op);
+                                s
+                            }
+                        }
+                    } else {
+                        let (s, _) = self.binop_to_llvm(*op);
+                        s
+                    };
                     // Note: LLVM IR always uses the operand type in the instruction
                     // The result type (i1 for comparisons) is implicit
                     writeln!(out, "  %{} = {} {} {}, {}", dest_name, op_str, lhs_ty, lhs_str, rhs_str)?;
@@ -1307,7 +1330,21 @@ impl TextCodeGen {
     fn format_constant(&self, c: &Constant) -> String {
         match c {
             Constant::Int(n) => n.to_string(),
-            Constant::Float(f) => format!("{:e}", f),
+            // v0.34: LLVM requires specific float format (e.g., 4.000000e+00 not 4e0)
+            Constant::Float(f) => {
+                // Use LLVM-compatible scientific notation format
+                if f.is_nan() {
+                    "0x7FF8000000000000".to_string() // NaN bit pattern
+                } else if f.is_infinite() {
+                    if f.is_sign_positive() {
+                        "0x7FF0000000000000".to_string() // +Inf
+                    } else {
+                        "0xFFF0000000000000".to_string() // -Inf
+                    }
+                } else {
+                    format!("{:.6e}", f)
+                }
+            }
             Constant::Bool(b) => if *b { "1" } else { "0" }.to_string(),
             Constant::String(s) => format!("\"{}\"", s),
             Constant::Unit => "0".to_string(),
@@ -1412,7 +1449,7 @@ impl TextCodeGen {
             "read_int" | "abs" | "bmb_abs" | "min" | "max" | "f64_to_i64" => "i64",
 
             // f64 return - Math intrinsics (v0.34)
-            "sqrt" | "i64_to_f64" => "f64",
+            "sqrt" | "i64_to_f64" => "double",
 
             // i64 return - String operations (both full and wrapper names)
             "bmb_string_len" | "bmb_string_char_at" | "bmb_string_eq" | "bmb_ord"
