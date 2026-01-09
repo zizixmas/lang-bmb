@@ -299,6 +299,14 @@ impl TextCodeGen {
         writeln!(out, "declare double @llvm.sqrt.f64(double)")?;
         writeln!(out)?;
 
+        // v0.34.2: Memory allocation for Phase 34.2 Dynamic Collections
+        writeln!(out, "; Runtime declarations - Memory allocation")?;
+        writeln!(out, "declare ptr @malloc(i64)")?;
+        writeln!(out, "declare ptr @realloc(ptr, i64)")?;
+        writeln!(out, "declare void @free(ptr)")?;
+        writeln!(out, "declare ptr @calloc(i64, i64)")?;
+        writeln!(out)?;
+
         Ok(())
     }
 

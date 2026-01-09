@@ -148,6 +148,16 @@ impl TypeChecker {
         // f64_to_i64(x: f64) -> i64 (type conversion, truncates toward zero)
         functions.insert("f64_to_i64".to_string(), (vec![Type::F64], Type::I64));
 
+        // v0.34.2: Memory allocation builtins for Phase 34.2 Dynamic Collections
+        // malloc(size: i64) -> i64 (pointer as integer)
+        functions.insert("malloc".to_string(), (vec![Type::I64], Type::I64));
+        // free(ptr: i64) -> Unit
+        functions.insert("free".to_string(), (vec![Type::I64], Type::Unit));
+        // realloc(ptr: i64, new_size: i64) -> i64 (new pointer)
+        functions.insert("realloc".to_string(), (vec![Type::I64, Type::I64], Type::I64));
+        // calloc(count: i64, size: i64) -> i64 (zeroed memory pointer)
+        functions.insert("calloc".to_string(), (vec![Type::I64, Type::I64], Type::I64));
+
         Self {
             env: HashMap::new(),
             functions,

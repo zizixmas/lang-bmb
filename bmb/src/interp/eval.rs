@@ -103,6 +103,12 @@ impl Interpreter {
         self.builtins.insert("sqrt".to_string(), builtin_sqrt);
         self.builtins.insert("i64_to_f64".to_string(), builtin_i64_to_f64);
         self.builtins.insert("f64_to_i64".to_string(), builtin_f64_to_i64);
+
+        // v0.34.2: Memory allocation for Phase 34.2 Dynamic Collections
+        self.builtins.insert("malloc".to_string(), builtin_malloc);
+        self.builtins.insert("free".to_string(), builtin_free);
+        self.builtins.insert("realloc".to_string(), builtin_realloc);
+        self.builtins.insert("calloc".to_string(), builtin_calloc);
     }
 
     /// v0.30.280: Enable ScopeStack-based evaluation for better memory efficiency
@@ -1245,6 +1251,102 @@ fn builtin_f64_to_i64(args: &[Value]) -> InterpResult<Value> {
     match &args[0] {
         Value::Float(f) => Ok(Value::Int(*f as i64)),
         _ => Err(RuntimeError::type_error("f64", args[0].type_name())),
+    }
+}
+
+// ============ v0.34.2: Memory Allocation Builtins for Phase 34.2 Dynamic Collections ============
+
+/// malloc(size: i64) -> i64 (pointer as integer)
+/// Allocates `size` bytes and returns the pointer as an i64.
+/// In the interpreter, we use Rust's allocator.
+fn builtin_malloc(args: &[Value]) -> InterpResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::arity_mismatch("malloc", 1, args.len()));
+    }
+    match &args[0] {
+        Value::Int(size) => {
+            if *size <= 0 {
+                return Ok(Value::Int(0)); // NULL for invalid size
+            }
+            let layout = std::alloc::Layout::from_size_align(*size as usize, 8)
+                .map_err(|_| RuntimeError::io_error("malloc: invalid allocation size"))?;
+            let ptr = unsafe { std::alloc::alloc(layout) };
+            if ptr.is_null() {
+                Ok(Value::Int(0)) // NULL
+            } else {
+                Ok(Value::Int(ptr as i64))
+            }
+        }
+        _ => Err(RuntimeError::type_error("i64", args[0].type_name())),
+    }
+}
+
+/// free(ptr: i64) -> unit
+/// Frees memory allocated by malloc.
+/// Note: In the interpreter, we intentionally leak memory for safety.
+/// Native compilation uses real libc free.
+fn builtin_free(args: &[Value]) -> InterpResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::arity_mismatch("free", 1, args.len()));
+    }
+    match &args[0] {
+        Value::Int(_ptr) => {
+            // Intentionally do nothing in interpreter for memory safety
+            // Real free happens in native compiled code via libc
+            Ok(Value::Unit)
+        }
+        _ => Err(RuntimeError::type_error("i64", args[0].type_name())),
+    }
+}
+
+/// realloc(ptr: i64, new_size: i64) -> i64
+/// Reallocates memory to new_size. In interpreter, allocates new and leaks old.
+fn builtin_realloc(args: &[Value]) -> InterpResult<Value> {
+    if args.len() != 2 {
+        return Err(RuntimeError::arity_mismatch("realloc", 2, args.len()));
+    }
+    match (&args[0], &args[1]) {
+        (Value::Int(_old_ptr), Value::Int(new_size)) => {
+            // For interpreter simplicity, just allocate new memory
+            // Native compilation uses real libc realloc
+            if *new_size <= 0 {
+                return Ok(Value::Int(0)); // NULL
+            }
+            let layout = std::alloc::Layout::from_size_align(*new_size as usize, 8)
+                .map_err(|_| RuntimeError::io_error("realloc: invalid allocation size"))?;
+            let ptr = unsafe { std::alloc::alloc(layout) };
+            if ptr.is_null() {
+                Ok(Value::Int(0)) // NULL
+            } else {
+                Ok(Value::Int(ptr as i64))
+            }
+        }
+        _ => Err(RuntimeError::type_error("i64, i64", "other")),
+    }
+}
+
+/// calloc(count: i64, size: i64) -> i64
+/// Allocates zeroed memory for count elements of size bytes each.
+fn builtin_calloc(args: &[Value]) -> InterpResult<Value> {
+    if args.len() != 2 {
+        return Err(RuntimeError::arity_mismatch("calloc", 2, args.len()));
+    }
+    match (&args[0], &args[1]) {
+        (Value::Int(count), Value::Int(size)) => {
+            let total = (*count as usize).saturating_mul(*size as usize);
+            if total == 0 {
+                return Ok(Value::Int(0)); // NULL for zero size
+            }
+            let layout = std::alloc::Layout::from_size_align(total, 8)
+                .map_err(|_| RuntimeError::io_error("calloc: invalid allocation size"))?;
+            let ptr = unsafe { std::alloc::alloc_zeroed(layout) };
+            if ptr.is_null() {
+                Ok(Value::Int(0)) // NULL
+            } else {
+                Ok(Value::Int(ptr as i64))
+            }
+        }
+        _ => Err(RuntimeError::type_error("i64, i64", "other")),
     }
 }
 
