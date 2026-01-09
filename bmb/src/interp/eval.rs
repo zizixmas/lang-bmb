@@ -109,6 +109,13 @@ impl Interpreter {
         self.builtins.insert("free".to_string(), builtin_free);
         self.builtins.insert("realloc".to_string(), builtin_realloc);
         self.builtins.insert("calloc".to_string(), builtin_calloc);
+        self.builtins.insert("store_i64".to_string(), builtin_store_i64);
+        self.builtins.insert("load_i64".to_string(), builtin_load_i64);
+        // Box convenience functions
+        self.builtins.insert("box_new_i64".to_string(), builtin_box_new_i64);
+        self.builtins.insert("box_get_i64".to_string(), builtin_load_i64); // alias
+        self.builtins.insert("box_set_i64".to_string(), builtin_store_i64); // alias
+        self.builtins.insert("box_free_i64".to_string(), builtin_free); // alias
     }
 
     /// v0.30.280: Enable ScopeStack-based evaluation for better memory efficiency
@@ -1347,6 +1354,75 @@ fn builtin_calloc(args: &[Value]) -> InterpResult<Value> {
             }
         }
         _ => Err(RuntimeError::type_error("i64, i64", "other")),
+    }
+}
+
+/// store_i64(ptr: i64, value: i64) -> ()
+/// Stores an i64 value at the given memory address.
+fn builtin_store_i64(args: &[Value]) -> InterpResult<Value> {
+    if args.len() != 2 {
+        return Err(RuntimeError::arity_mismatch("store_i64", 2, args.len()));
+    }
+    match (&args[0], &args[1]) {
+        (Value::Int(ptr), Value::Int(value)) => {
+            if *ptr == 0 {
+                return Err(RuntimeError::io_error("store_i64: null pointer dereference"));
+            }
+            unsafe {
+                let p = *ptr as *mut i64;
+                *p = *value;
+            }
+            Ok(Value::Unit)
+        }
+        _ => Err(RuntimeError::type_error("i64, i64", "other")),
+    }
+}
+
+/// load_i64(ptr: i64) -> i64
+/// Loads an i64 value from the given memory address.
+fn builtin_load_i64(args: &[Value]) -> InterpResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::arity_mismatch("load_i64", 1, args.len()));
+    }
+    match &args[0] {
+        Value::Int(ptr) => {
+            if *ptr == 0 {
+                return Err(RuntimeError::io_error("load_i64: null pointer dereference"));
+            }
+            let value = unsafe {
+                let p = *ptr as *const i64;
+                *p
+            };
+            Ok(Value::Int(value))
+        }
+        _ => Err(RuntimeError::type_error("i64", args[0].type_name())),
+    }
+}
+
+/// box_new_i64(value: i64) -> i64
+/// Allocates 8 bytes on the heap, stores the value, and returns the pointer.
+/// This is a convenience wrapper: malloc(8) + store_i64(ptr, value)
+fn builtin_box_new_i64(args: &[Value]) -> InterpResult<Value> {
+    if args.len() != 1 {
+        return Err(RuntimeError::arity_mismatch("box_new_i64", 1, args.len()));
+    }
+    match &args[0] {
+        Value::Int(value) => {
+            // Allocate 8 bytes for one i64
+            let layout = std::alloc::Layout::from_size_align(8, 8)
+                .map_err(|_| RuntimeError::io_error("box_new_i64: invalid allocation size"))?;
+            let ptr = unsafe { std::alloc::alloc(layout) };
+            if ptr.is_null() {
+                return Ok(Value::Int(0)); // NULL
+            }
+            // Store the value
+            unsafe {
+                let p = ptr as *mut i64;
+                *p = *value;
+            }
+            Ok(Value::Int(ptr as i64))
+        }
+        _ => Err(RuntimeError::type_error("i64", args[0].type_name())),
     }
 }
 

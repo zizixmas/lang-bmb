@@ -157,6 +157,19 @@ impl TypeChecker {
         functions.insert("realloc".to_string(), (vec![Type::I64, Type::I64], Type::I64));
         // calloc(count: i64, size: i64) -> i64 (zeroed memory pointer)
         functions.insert("calloc".to_string(), (vec![Type::I64, Type::I64], Type::I64));
+        // store_i64(ptr: i64, value: i64) -> Unit (write to memory)
+        functions.insert("store_i64".to_string(), (vec![Type::I64, Type::I64], Type::Unit));
+        // load_i64(ptr: i64) -> i64 (read from memory)
+        functions.insert("load_i64".to_string(), (vec![Type::I64], Type::I64));
+        // Box convenience functions
+        // box_new_i64(value: i64) -> i64 (allocate + store)
+        functions.insert("box_new_i64".to_string(), (vec![Type::I64], Type::I64));
+        // box_get_i64(ptr: i64) -> i64 (alias for load_i64)
+        functions.insert("box_get_i64".to_string(), (vec![Type::I64], Type::I64));
+        // box_set_i64(ptr: i64, value: i64) -> Unit (alias for store_i64)
+        functions.insert("box_set_i64".to_string(), (vec![Type::I64, Type::I64], Type::Unit));
+        // box_free_i64(ptr: i64) -> Unit (alias for free)
+        functions.insert("box_free_i64".to_string(), (vec![Type::I64], Type::Unit));
 
         Self {
             env: HashMap::new(),

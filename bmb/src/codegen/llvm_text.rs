@@ -973,6 +973,120 @@ impl TextCodeGen {
                     return Ok(());
                 }
 
+                // v0.34.2: box_new_i64(value) -> i64 - allocates 8 bytes and stores value
+                if fn_name == "box_new_i64" && args.len() == 1 {
+                    // Get value argument
+                    let val_val = match &args[0] {
+                        Operand::Place(p) if local_names.contains(&p.name) => {
+                            let load_name = format!("{}.box.val", p.name);
+                            writeln!(out, "  %{} = load i64, ptr %{}.addr", load_name, p.name)?;
+                            format!("%{}", load_name)
+                        }
+                        _ => self.format_operand_with_strings(&args[0], string_table),
+                    };
+                    // Generate unique names for temp values
+                    let box_idx = *name_counts.entry("box_new".to_string()).or_insert(0);
+                    *name_counts.get_mut("box_new").unwrap() += 1;
+                    // Call malloc(8)
+                    let malloc_name = format!("box.ptr.{}", box_idx);
+                    writeln!(out, "  %{} = call ptr @malloc(i64 8)", malloc_name)?;
+                    // Store value at pointer
+                    writeln!(out, "  store i64 {}, ptr %{}", val_val, malloc_name)?;
+                    // Convert ptr to i64 for return
+                    if let Some(d) = dest {
+                        if local_names.contains(&d.name) {
+                            let conv_name = format!("{}.box.conv", d.name);
+                            writeln!(out, "  %{} = ptrtoint ptr %{} to i64", conv_name, malloc_name)?;
+                            writeln!(out, "  store i64 %{}, ptr %{}.addr", conv_name, d.name)?;
+                        } else {
+                            let dest_name = self.unique_name(&d.name, name_counts);
+                            writeln!(out, "  %{} = ptrtoint ptr %{} to i64", dest_name, malloc_name)?;
+                        }
+                    }
+                    return Ok(());
+                }
+
+                // v0.34.2: box_free_i64(ptr) -> Unit - frees memory (alias for free)
+                if fn_name == "box_free_i64" && args.len() == 1 {
+                    // Get pointer argument
+                    let ptr_val = match &args[0] {
+                        Operand::Place(p) if local_names.contains(&p.name) => {
+                            let load_name = format!("{}.free.ptr", p.name);
+                            writeln!(out, "  %{} = load i64, ptr %{}.addr", load_name, p.name)?;
+                            format!("%{}", load_name)
+                        }
+                        _ => self.format_operand_with_strings(&args[0], string_table),
+                    };
+                    // Convert i64 to ptr and call free
+                    let ptr_conv = format!("free_ptr.{}", name_counts.entry("free_ptr".to_string()).or_insert(0));
+                    *name_counts.get_mut("free_ptr").unwrap() += 1;
+                    writeln!(out, "  %{} = inttoptr i64 {} to ptr", ptr_conv, ptr_val)?;
+                    writeln!(out, "  call void @free(ptr %{})", ptr_conv)?;
+                    return Ok(());
+                }
+
+                // v0.34.2: store_i64(ptr, value) -> Unit - writes i64 value to memory
+                // Also handles box_set_i64 as an alias
+                if (fn_name == "store_i64" || fn_name == "box_set_i64") && args.len() == 2 {
+                    // Get unique index for this store operation
+                    let store_idx = *name_counts.entry("store_op".to_string()).or_insert(0);
+                    *name_counts.get_mut("store_op").unwrap() += 1;
+                    // Get pointer argument
+                    let ptr_val = match &args[0] {
+                        Operand::Place(p) if local_names.contains(&p.name) => {
+                            let load_name = format!("{}.store.ptr.{}", p.name, store_idx);
+                            writeln!(out, "  %{} = load i64, ptr %{}.addr", load_name, p.name)?;
+                            format!("%{}", load_name)
+                        }
+                        _ => self.format_operand_with_strings(&args[0], string_table),
+                    };
+                    // Get value argument
+                    let val_val = match &args[1] {
+                        Operand::Place(p) if local_names.contains(&p.name) => {
+                            let load_name = format!("{}.store.val.{}", p.name, store_idx);
+                            writeln!(out, "  %{} = load i64, ptr %{}.addr", load_name, p.name)?;
+                            format!("%{}", load_name)
+                        }
+                        _ => self.format_operand_with_strings(&args[1], string_table),
+                    };
+                    // Convert i64 pointer to ptr type and store
+                    let ptr_conv = format!("store_ptr.{}", store_idx);
+                    writeln!(out, "  %{} = inttoptr i64 {} to ptr", ptr_conv, ptr_val)?;
+                    writeln!(out, "  store i64 {}, ptr %{}", val_val, ptr_conv)?;
+                    return Ok(());
+                }
+
+                // v0.34.2: load_i64(ptr) -> i64 - reads i64 value from memory
+                // Also handles box_get_i64 as an alias
+                if (fn_name == "load_i64" || fn_name == "box_get_i64") && args.len() == 1 {
+                    // Get unique index for this load operation
+                    let load_idx = *name_counts.entry("load_op".to_string()).or_insert(0);
+                    *name_counts.get_mut("load_op").unwrap() += 1;
+                    // Get pointer argument
+                    let ptr_val = match &args[0] {
+                        Operand::Place(p) if local_names.contains(&p.name) => {
+                            let load_name = format!("{}.load.ptr.{}", p.name, load_idx);
+                            writeln!(out, "  %{} = load i64, ptr %{}.addr", load_name, p.name)?;
+                            format!("%{}", load_name)
+                        }
+                        _ => self.format_operand_with_strings(&args[0], string_table),
+                    };
+                    // Convert i64 pointer to ptr type and load
+                    let ptr_conv = format!("load_ptr.{}", load_idx);
+                    writeln!(out, "  %{} = inttoptr i64 {} to ptr", ptr_conv, ptr_val)?;
+                    if let Some(d) = dest {
+                        if local_names.contains(&d.name) {
+                            let temp_name = format!("{}.load.{}", d.name, load_idx);
+                            writeln!(out, "  %{} = load i64, ptr %{}", temp_name, ptr_conv)?;
+                            writeln!(out, "  store i64 %{}, ptr %{}.addr", temp_name, d.name)?;
+                        } else {
+                            let dest_name = self.unique_name(&d.name, name_counts);
+                            writeln!(out, "  %{} = load i64, ptr %{}", dest_name, ptr_conv)?;
+                        }
+                    }
+                    return Ok(());
+                }
+
                 // First check user-defined functions, then fall back to builtins
                 let ret_ty = fn_return_types
                     .get(fn_name)
