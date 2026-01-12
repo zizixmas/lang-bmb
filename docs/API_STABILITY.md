@@ -1,6 +1,6 @@
 # BMB API Stability
 
-**Version**: v0.43
+**Version**: v0.45
 **Date**: 2026-01-12
 **Status**: Frozen for v1.0.0-beta
 
@@ -28,7 +28,7 @@ Features marked as **Stable** will not have breaking changes after v1.0.0:
 | **Contracts** | `pre`, `post`, `invariant`, `where`, `pure`, `@trust` |
 | **Control Flow** | `if`/`else`, `match`, `while`, `for`/`in`, `loop` |
 | **Operators** | All operators in SPECIFICATION.md v0.32 |
-| **CLI Commands** | `run`, `check`, `verify`, `build`, `test`, `parse`, `repl` |
+| **CLI Commands** | `run`, `check`, `verify`, `build`, `test`, `parse`, `repl`, `fmt`, `lint` |
 | **stdlib/core** | `num`, `bool`, `option`, `result` |
 | **stdlib/string** | `String`, `StringBuilder` |
 | **stdlib/array** | `Array<T>`, `Vec<T>` |
@@ -74,6 +74,8 @@ bmb build <file.bmb> -o <out>   # Stable
 bmb test <file.bmb>             # Stable
 bmb parse <file.bmb>            # Stable
 bmb repl                        # Stable
+bmb fmt <file.bmb>              # Stable (v0.9.0)
+bmb lint <file.bmb>             # Stable (v0.45)
 ```
 
 ### 3.2 Stable Flags
@@ -217,4 +219,5 @@ Report stability concerns or request changes:
 
 ## Changelog
 
+- **v0.45 (2026-01-12)**: Added `bmb lint` and `bmb fmt` to stable CLI commands
 - **v0.43 (2026-01-12)**: Initial API stability document

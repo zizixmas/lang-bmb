@@ -39,8 +39,10 @@ bmb parse <file.bmb>            # Dump AST (JSON or S-expr)
 bmb build <file.bmb> -o out     # Native compile (requires LLVM feature)
 bmb build <file.bmb> --emit-mir # Output MIR
 bmb test <file.bmb>             # Run tests in file
-bmb repl                        # Interactive REPL
+bmb repl                        # Interactive REPL (v0.45: multi-type support)
 bmb fmt <file.bmb>              # Format source file
+bmb lint <file.bmb>             # Lint source file (v0.45: warnings check)
+bmb lint <file.bmb> --strict    # Treat warnings as errors
 bmb lsp                         # Start Language Server
 bmb index                       # Generate AI query index (.bmb/index/)
 bmb q <query>                   # Query project index

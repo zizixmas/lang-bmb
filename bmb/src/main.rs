@@ -115,6 +115,17 @@ enum Command {
         #[arg(long)]
         check: bool,
     },
+    /// Lint a BMB source file (v0.45)
+    Lint {
+        /// Source file or directory to lint
+        file: PathBuf,
+        /// Treat warnings as errors (exit 1 if any warnings)
+        #[arg(long)]
+        strict: bool,
+        /// Additional include paths for module resolution
+        #[arg(short = 'I', long = "include", value_name = "PATH")]
+        include_paths: Vec<PathBuf>,
+    },
     /// Start Language Server Protocol server
     Lsp,
     /// Generate project index for AI tools (v0.25)
@@ -318,6 +329,7 @@ fn main() {
         Command::Tokens { file } => tokenize_file(&file),
         Command::Test { file, filter, verbose } => test_file(&file, filter.as_deref(), verbose),
         Command::Fmt { file, check } => fmt_file(&file, check),
+        Command::Lint { file, strict, include_paths } => lint_file(&file, strict, &include_paths),
         Command::Lsp => start_lsp(),
         Command::Index { path, watch, verbose } => index_project(&path, watch, verbose),
         Command::Query { query_type } => run_query(query_type),
@@ -711,6 +723,247 @@ fn check_file_with_includes(path: &PathBuf, include_paths: &[PathBuf]) -> Result
     } else {
         println!(r#"{{"type":"success","file":"{}","warnings":{}}}"#, filename, warnings.len());
     }
+    Ok(())
+}
+
+/// Lint a BMB source file or directory (v0.45)
+/// Collects and reports all warnings from type checking
+fn lint_file(path: &PathBuf, strict: bool, include_paths: &[PathBuf]) -> Result<(), Box<dyn std::error::Error>> {
+    // Handle directory recursively
+    if path.is_dir() {
+        return lint_directory(path, strict, include_paths);
+    }
+
+    let source = std::fs::read_to_string(path)?;
+    let filename = path.display().to_string();
+
+    // Tokenize
+    let tokens = match bmb::lexer::tokenize(&source) {
+        Ok(t) => t,
+        Err(e) => {
+            bmb::error::report_error(&filename, &source, &e);
+            return Err(e.into());
+        }
+    };
+
+    // Parse
+    let ast = match bmb::parser::parse(&filename, &source, tokens) {
+        Ok(a) => a,
+        Err(e) => {
+            bmb::error::report_error(&filename, &source, &e);
+            return Err(e.into());
+        }
+    };
+
+    // Create type checker
+    let mut checker = bmb::types::TypeChecker::new();
+
+    // Resolve use statements and register imported modules
+    let base_dir = path.parent().unwrap_or(std::path::Path::new("."));
+    let mut resolver = bmb::resolver::Resolver::new(base_dir);
+
+    // Try include paths for module resolution
+    for include_path in include_paths {
+        for item in &ast.items {
+            if let bmb::ast::Item::Use(use_stmt) = item
+                && !use_stmt.path.is_empty()
+            {
+                let module_name = &use_stmt.path[0].node;
+                let pkg_dir_name = module_name.replace('_', "-");
+                let module_path = include_path.join(&pkg_dir_name).join("src").join("lib.bmb");
+                if module_path.exists() {
+                    if let Ok(lib_source) = std::fs::read_to_string(&module_path) {
+                        if let Ok(lib_tokens) = bmb::lexer::tokenize(&lib_source) {
+                            if let Ok(lib_ast) = bmb::parser::parse(&module_path.display().to_string(), &lib_source, lib_tokens) {
+                                let module = bmb::resolver::Module {
+                                    name: module_name.clone(),
+                                    path: module_path.clone(),
+                                    program: lib_ast,
+                                    exports: std::collections::HashMap::new(),
+                                };
+                                checker.register_module(&module);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Resolve from file's directory
+    let mut imports = resolver.resolve_uses(&ast)?;
+    for (_, info) in imports.all_imports() {
+        if let Some(module) = resolver.get_module(&info.module) {
+            checker.register_module(module);
+        }
+    }
+
+    // Type check (continue even with errors to collect all warnings)
+    let type_result = checker.check_program_with_imports(&ast, &mut imports);
+
+    // Collect all warnings
+    let mut all_warnings: Vec<bmb::error::CompileWarning> = checker.warnings().to_vec();
+    for (name, span) in imports.get_unused() {
+        all_warnings.push(bmb::error::CompileWarning::unused_import(name, span));
+    }
+
+    // Report type errors if any
+    if let Err(e) = type_result {
+        bmb::error::report_error(&filename, &source, &e);
+        // Still report warnings before returning error
+        if !all_warnings.is_empty() {
+            if is_human_output() {
+                println!("\n  Warnings:");
+                for warning in &all_warnings {
+                    bmb::error::report_warning(&filename, &source, warning);
+                }
+            } else {
+                bmb::error::report_warnings_machine(&filename, &source, &all_warnings);
+            }
+        }
+        return Err(e.into());
+    }
+
+    // Report warnings
+    let warning_count = all_warnings.len();
+    if warning_count > 0 {
+        if is_human_output() {
+            for warning in &all_warnings {
+                bmb::error::report_warning(&filename, &source, warning);
+            }
+            println!("\n  {} warning(s) in {}", warning_count, filename);
+        } else {
+            bmb::error::report_warnings_machine(&filename, &source, &all_warnings);
+        }
+    } else if is_human_output() {
+        println!("✓ {} - no warnings", filename);
+    } else {
+        println!(r#"{{"type":"lint","file":"{}","warnings":0}}"#, filename);
+    }
+
+    // In strict mode, any warning is an error
+    if strict && warning_count > 0 {
+        if is_human_output() {
+            eprintln!("\n  Lint failed: {} warning(s) in strict mode", warning_count);
+        }
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
+
+/// Lint all .bmb files in a directory recursively (v0.45)
+fn lint_directory(dir: &PathBuf, strict: bool, _include_paths: &[PathBuf]) -> Result<(), Box<dyn std::error::Error>> {
+    let mut total_warnings = 0;
+    let mut total_files = 0;
+    let mut failed_files = 0;
+
+    // Collect all .bmb files
+    fn collect_bmb_files(dir: &PathBuf, files: &mut Vec<PathBuf>) {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.filter_map(Result::ok) {
+                let path = entry.path();
+                if path.is_dir() {
+                    collect_bmb_files(&path, files);
+                } else if path.extension().is_some_and(|ext| ext == "bmb") {
+                    files.push(path);
+                }
+            }
+        }
+    }
+
+    let mut files = Vec::new();
+    collect_bmb_files(dir, &mut files);
+    files.sort();
+
+    if is_human_output() {
+        println!("Linting {} files in {}...\n", files.len(), dir.display());
+    }
+
+    for file in &files {
+        total_files += 1;
+
+        let source = match std::fs::read_to_string(file) {
+            Ok(s) => s,
+            Err(_) => {
+                failed_files += 1;
+                continue;
+            }
+        };
+        let filename = file.display().to_string();
+
+        // Tokenize and parse
+        let tokens = match bmb::lexer::tokenize(&source) {
+            Ok(t) => t,
+            Err(_) => {
+                failed_files += 1;
+                continue;
+            }
+        };
+        let ast = match bmb::parser::parse(&filename, &source, tokens) {
+            Ok(a) => a,
+            Err(_) => {
+                failed_files += 1;
+                continue;
+            }
+        };
+
+        // Type check
+        let mut checker = bmb::types::TypeChecker::new();
+        let base_dir = file.parent().unwrap_or(std::path::Path::new("."));
+        let mut resolver = bmb::resolver::Resolver::new(base_dir);
+
+        // Resolve imports
+        if let Ok(mut imports) = resolver.resolve_uses(&ast) {
+            for (_, info) in imports.all_imports() {
+                if let Some(module) = resolver.get_module(&info.module) {
+                    checker.register_module(module);
+                }
+            }
+
+            if checker.check_program_with_imports(&ast, &mut imports).is_ok() {
+                let mut warnings: Vec<bmb::error::CompileWarning> = checker.warnings().to_vec();
+                for (name, span) in imports.get_unused() {
+                    warnings.push(bmb::error::CompileWarning::unused_import(name, span));
+                }
+
+                if !warnings.is_empty() {
+                    total_warnings += warnings.len();
+                    if is_human_output() {
+                        for warning in &warnings {
+                            bmb::error::report_warning(&filename, &source, warning);
+                        }
+                    } else {
+                        bmb::error::report_warnings_machine(&filename, &source, &warnings);
+                    }
+                }
+            } else {
+                failed_files += 1;
+            }
+        }
+    }
+
+    // Summary
+    if is_human_output() {
+        println!("\nLint summary:");
+        println!("  Files checked: {}", total_files);
+        println!("  Total warnings: {}", total_warnings);
+        if failed_files > 0 {
+            println!("  Failed to lint: {}", failed_files);
+        }
+    } else {
+        println!(r#"{{"type":"lint_summary","files":{},"warnings":{},"errors":{}}}"#,
+            total_files, total_warnings, failed_files);
+    }
+
+    // In strict mode, any warning is an error
+    if strict && total_warnings > 0 {
+        if is_human_output() {
+            eprintln!("\nLint failed: {} warning(s) in strict mode", total_warnings);
+        }
+        std::process::exit(1);
+    }
+
     Ok(())
 }
 
