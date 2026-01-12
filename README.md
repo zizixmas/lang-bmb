@@ -2,8 +2,7 @@
 
 A contract-verified systems programming language.
 
-Hard to write. Hard to get wrong.
-And that's what AI prefers.
+**Hard to write. Hard to get wrong. And that's what AI prefers.**
 
 ## Why BMB?
 
@@ -11,83 +10,152 @@ Traditional languages prioritize human convenience—readable syntax, flexible c
 
 BMB takes a different approach. Contracts are mandatory. Specifications are explicit. Invariants are verified at compile time.
 
-**BMB unifies code, documentation, and tests:**
-
 ```bmb
 fn binary_search(arr: &[i64], target: i64) -> i64
   pre is_sorted(arr)
-  post ret == -1 or (0 <= ret and ret < len(arr))
+  post ret == -1 || (0 <= ret && ret < len(arr))
   post ret != -1 implies arr[ret] == target
-  post ret == -1 implies forall i: 0..len(arr). arr[i] != target
 = {
     var lo = 0;
     var hi = len(arr) - 1;
     while lo <= hi
-      invariant 0 <= lo and hi < len(arr)
-      invariant forall i: 0..lo. arr[i] < target
-      invariant forall i: (hi+1)..len(arr). arr[i] > target
+      invariant 0 <= lo && hi < len(arr)
     {
         let mid = lo + (hi - lo) / 2;
-        if arr[mid] == target then mid
-        else if arr[mid] < target then { lo = mid + 1; }
+        if arr[mid] == target { mid }
+        else if arr[mid] < target { lo = mid + 1; }
         else { hi = mid - 1; }
     };
     -1
 };
 ```
 
-## Priorities (P0)
+## Priorities
 
 | Priority | Principle |
 |----------|-----------|
-| P0 | **Performance** — No syntax that constrains optimization. Target: exceed C/Rust. |
-| P0 | **Correctness** — If it can be verified at compile time, it must be. |
+| **P0** | **Performance** — No syntax that constrains optimization. Target: exceed C/Rust. |
+| **P0** | **Correctness** — If it can be verified at compile time, it must be. |
 
 ## Quick Start
 
 ```bash
+# Build
 cargo build --release
+
+# Run
 bmb run examples/hello.bmb
+
+# Type check
 bmb check examples/simple.bmb
-bmb verify examples/verify.bmb   # requires Z3
-bmb build examples/hello.bmb     # requires LLVM
+
+# Contract verification (requires Z3)
+bmb verify examples/contracts.bmb
+
+# Native compile (requires LLVM)
+bmb build examples/hello.bmb -o hello
+
+# REPL
 bmb repl
 ```
 
-## Current Version: v0.100
+## Current Status: v0.44
 
-**P0 Performance Achieved**: BMB matches C -O3 performance.
+| Category | Status |
+|----------|--------|
+| Language Core | ✅ Complete |
+| Type System | ✅ Complete |
+| Contract System | ✅ Complete |
+| Bootstrap Compiler | ✅ 30K LOC |
+| Test Suite | ✅ 1,753 tests |
+| Documentation | ✅ Complete |
+| CI/CD | ✅ Complete |
+| **Rust Removal** | 📋 v0.45 |
+| **v1.0.0-beta** | 🎯 Target |
 
-```
-Benchmark: fib(45)
-C (-O3):   1.65s (100%)
-BMB:       1.63s (99%)
-```
+## Features
 
-See [ROADMAP.md](docs/ROADMAP.md) for detailed progress and planned features.
+### Completed
+
+- **Types**: i8-i128, u8-u128, f64, bool, char, String
+- **Generics**: `<T>`, `<K, V>`, bounds, where clauses
+- **Contracts**: `pre`, `post`, `invariant`, `where`, `pure`, `@trust`
+- **Control Flow**: if-else, match, while, for-in, loop
+- **Operators**: Arithmetic, overflow-safe (`+%`, `+|`, `+?`), bitwise (`band`, `bor`), shift (`<<`, `>>`)
+- **Collections**: Vec, Box, HashMap (stdlib)
+- **Tooling**: Package manager (gotgan), VS Code, formatter, LSP
+
+### In Progress
+
+- Native compilation without Rust dependency
+- Ecosystem packages (Rust crate porting)
+- Performance benchmarks (Gate #3.1)
 
 ## Project Structure
 
 ```
 lang-bmb/
-├── bmb/           # Compiler (Rust)
-├── bootstrap/     # Self-hosted compiler (BMB)
+├── bmb/           # Rust compiler (being replaced)
+├── bootstrap/     # Self-hosted BMB compiler (30K LOC)
 ├── stdlib/        # Standard library
-├── ecosystem/     # Tools, editor support
-└── docs/          # Specification, roadmap
+├── examples/      # Example programs
+├── ecosystem/     # Tools & extensions
+│   ├── gotgan/           # Package manager
+│   ├── vscode-bmb/       # VS Code extension
+│   ├── tree-sitter-bmb/  # Syntax highlighting
+│   ├── playground/       # Online editor
+│   └── benchmark-bmb/    # Performance suite
+└── docs/          # Documentation
 ```
 
 ## Requirements
 
-- Rust 1.70+
-- Z3 (verification)
-- LLVM 18+ (native codegen, optional)
+| Requirement | Purpose | Required |
+|-------------|---------|----------|
+| Rust 1.70+ | Build compiler | Yes (until v0.45) |
+| LLVM 21+ | Native codegen | Optional |
+| Z3 | Contract verification | Optional |
 
 ## Documentation
 
-- [SPECIFICATION.md](docs/SPECIFICATION.md)
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- [ROADMAP.md](docs/ROADMAP.md)
+| Document | Description |
+|----------|-------------|
+| [SPECIFICATION.md](docs/SPECIFICATION.md) | Language specification |
+| [LANGUAGE_REFERENCE.md](docs/LANGUAGE_REFERENCE.md) | Complete reference |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Compiler internals |
+| [ROADMAP.md](docs/ROADMAP.md) | Development roadmap |
+| [API_STABILITY.md](docs/API_STABILITY.md) | API guarantees |
+| [tutorials/](docs/tutorials/) | Getting started guides |
+
+## Roadmap to v1.0.0-beta
+
+```
+v0.44 (Current) ─── Stabilization complete
+     │
+v0.45 ─────────── Rust removal (BMB-only build)
+     │
+v0.46 ─────────── Performance gates (C parity)
+     │
+v0.47 ─────────── Ecosystem (10 core packages)
+     │
+v0.48 ─────────── Samples & scenarios
+     │
+v0.49 ─────────── Final verification
+     │
+v1.0.0-beta ───── Complete programming language ★
+```
+
+See [ROADMAP.md](docs/ROADMAP.md) for detailed phases.
+
+## Performance
+
+```
+Benchmark: fib(45)
+C (-O3):   1.65s (100%)
+BMB:       1.63s (99%)
+
+Self-compile: 0.56s for 30K LOC
+```
 
 ## License
 
