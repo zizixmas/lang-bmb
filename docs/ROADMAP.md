@@ -3059,70 +3059,137 @@ No optimization work needed - performance is ~100x better than target.
 
 ---
 
-### v1.0.0-beta Golden - Release Candidate
+### v0.41 Benchmark Final Verification
 
-**Goal**: Final verification, Benchmark Gate #4, stability promise
+**Goal**: Execute full benchmark suite and verify Gate #4 criteria
 
-**Difficulty**: ⭐⭐⭐⭐ (High - Quality gate)
+**Difficulty**: ⭐⭐⭐ (Medium - Verification)
 
-**Duration Estimate**: 4-6 weeks
+**Duration Estimate**: 2 weeks
 
-**Prerequisites**: v0.39 Complete (CI infrastructure)
+**Prerequisites**: v0.40 Complete (CI Infrastructure) ✅
 
-#### Benchmark Gate #4 (v1.0 Release Criteria)
+#### Phase 41.0: Benchmark Gate #4 Verification
+
+| Task | Description | Priority | Status |
+|------|-------------|----------|--------|
+| 41.0.1 | Full benchmark suite execution | P0 | ✅ Complete |
+| 41.0.2 | Compare with Gate #1, #2 baselines | P0 | ✅ Complete |
+| 41.0.3 | Performance regression analysis | P0 | ✅ Complete |
+| 41.0.4 | Final optimization pass (if needed) | P0 | ⚠️ Blocked |
+
+**Benchmark Results (2026-01-12)**:
+
+**⚠️ IMPORTANT FINDING**: BMB benchmarks currently run in **interpreter mode** (`bmb run`),
+not native compiled mode (`bmb build`). This creates unfair comparison with C/Rust native binaries.
+
+| Category | Benchmark | BMB/C Ratio | Status | Notes |
+|----------|-----------|-------------|--------|-------|
+| Compute | fibonacci | 1.02x | ✓ | Within threshold |
+| Compute | n_body | 0.53x | ★ | 47% faster |
+| Compute | mandelbrot | 3.20x | ✗ | Needs native compile |
+| Compute | spectral_norm | 4.29x | ✗ | Needs native compile |
+| Contract | bounds_check | 2.39x | ✗ | Interpreter overhead |
+| Contract | null_check | 3.40x | ✗ | Interpreter overhead |
+| Contract | purity_opt | 3.00x | ✗ | Interpreter overhead |
+| Contract | aliasing | 3.00x | ✗ | Interpreter overhead |
+
+**Gate #3.1 Result**: ✗ FAILED (4 passed, 6 failed)
+- **Root Cause**: BMB benchmarks run in interpreter mode vs C/Rust native binaries
+- **Solution**: Requires LLVM backend for native compilation (`bmb build`)
+- **Blocker**: LLVM 21 not available in current environment
+
+#### Benchmark Gate #4 Criteria
 
 | Criterion | Target | Status |
 |-----------|--------|--------|
 | All compute benchmarks | == C -O3 median | 📋 Planned |
 | 50% contract benchmarks | > C -O3 | 📋 Planned |
 | Real-world workloads | >= Rust | 📋 Planned |
-| No performance regressions | CI enforced | 📋 Planned |
-| Self-compile | < 60s | 📋 Planned |
+| No performance regressions | CI enforced | ✅ v0.40 |
+| Self-compile | < 60s | ✅ v0.39 (0.56s) |
 
-**Exit Criteria**: All gates pass, API frozen, stability promise
+**Performance Targets**:
 
-#### Phase 1.0.1: Benchmark Gate #3 (Final Verification)
-
-| Task | Description | Priority | Status |
-|------|-------------|----------|--------|
-| 1.0.1.1 | Full benchmark suite execution | P0 | 1 week |
-| 1.0.1.2 | Compare with Gate #1, #2 baselines | P0 | 3 days |
-| 1.0.1.3 | Performance regression analysis | P0 | 1 week |
-| 1.0.1.4 | Final optimization pass (if needed) | P0 | 2 weeks |
-
-**Final Performance Targets**:
-
-| Metric | Requirement | Gate #1 | Gate #2 | Gate #3 |
+| Metric | Requirement | Gate #1 | Gate #2 | Gate #4 |
 |--------|-------------|---------|---------|---------|
 | Compute (vs C -O3) | >= 100% | baseline | >= baseline | >= baseline |
 | Contract-optimized | > 100% | baseline | > baseline | > baseline + 10% |
-| Self-compile time | <= 120% of C | n/a | baseline | <= baseline |
+| Self-compile time | <= 120% of C | n/a | baseline | ✅ 0.56s |
 | Memory usage | <= 110% of Rust | baseline | <= baseline | <= baseline |
 
-#### Phase 1.0.2: Stability Verification
+---
+
+### v0.42 Stability Verification
+
+**Goal**: Comprehensive stability and security verification
+
+**Difficulty**: ⭐⭐⭐ (Medium - Quality assurance)
+
+**Duration Estimate**: 3 weeks
+
+**Prerequisites**: v0.41 Complete (Benchmark Verification)
+
+#### Phase 42.0: Stability & Security
 
 | Task | Description | Priority | Status |
 |------|-------------|----------|--------|
-| 1.0.2.1 | Run complete test suite | P0 | 1 week |
-| 1.0.2.2 | Security audit | P0 | 2 weeks |
-| 1.0.2.3 | Cross-platform verification | P0 | 1 week |
+| 42.0.1 | Run complete test suite | P0 | 📋 Planned |
+| 42.0.2 | Security audit | P0 | 📋 Planned |
+| 42.0.3 | Cross-platform verification | P0 | 📋 Planned |
 
-#### Phase 1.0.3: API Freeze
+---
+
+### v0.43 API Freeze
+
+**Goal**: Freeze public API for v1.0 stability promise
+
+**Difficulty**: ⭐⭐⭐ (Medium - Documentation)
+
+**Duration Estimate**: 2 weeks
+
+**Prerequisites**: v0.42 Complete (Stability Verification)
+
+#### Phase 43.0: API Stabilization
 
 | Task | Description | Priority | Status |
 |------|-------------|----------|--------|
-| 1.0.3.1 | Document public API stability guarantees | P0 | 1 week |
-| 1.0.3.2 | Mark experimental features | P0 | 1 week |
-| 1.0.3.3 | Create deprecation policy | P0 | 1 week |
+| 43.0.1 | Document public API stability guarantees | P0 | 📋 Planned |
+| 43.0.2 | Mark experimental features | P0 | 📋 Planned |
+| 43.0.3 | Create deprecation policy | P0 | 📋 Planned |
 
-#### Phase 1.0.4: Release Preparation
+---
+
+### v0.44 Release Preparation
+
+**Goal**: Final preparation for v1.0.0-beta release
+
+**Difficulty**: ⭐⭐⭐ (Medium - Release engineering)
+
+**Duration Estimate**: 2 weeks
+
+**Prerequisites**: v0.43 Complete (API Freeze)
+
+#### Phase 44.0: Release Engineering
 
 | Task | Description | Priority | Status |
 |------|-------------|----------|--------|
-| 1.0.4.1 | Write release notes | P0 | 1 week |
-| 1.0.4.2 | Update all documentation | P0 | 1 week |
-| 1.0.4.3 | Prepare binary distributions | P0 | 1 week |
-| 1.0.4.4 | Set up release automation | P1 | 1 week |
+| 44.0.1 | Write release notes | P0 | 📋 Planned |
+| 44.0.2 | Update all documentation | P0 | 📋 Planned |
+| 44.0.3 | Prepare binary distributions | P0 | 📋 Planned |
+| 44.0.4 | Set up release automation | P1 | 📋 Planned |
+
+---
+
+### v1.0.0-beta Golden - Release Candidate
+
+**Goal**: All v0.x work complete, ready for beta release
+
+**Status**: 🎯 Target (after v0.44)
+
+**Prerequisites**: v0.44 Complete (All preparation phases)
+
+**Exit Criteria**: All gates pass, API frozen, stability promise
 
 **v1.0.0-beta Checklist**:
 
