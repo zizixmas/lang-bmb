@@ -21,6 +21,7 @@ pub use optimize::{
     OptimizationPass, OptimizationPipeline, OptimizationStats, OptLevel,
     ConstantFolding, DeadCodeElimination, SimplifyBranches,
     CopyPropagation, CommonSubexpressionElimination, ContractBasedOptimization,
+    ContractUnreachableElimination, PureFunctionCSE, ConstFunctionEval,
 };
 
 use std::collections::HashMap;
@@ -65,6 +66,12 @@ pub struct MirFunction {
     pub preconditions: Vec<ContractFact>,
     /// Postconditions guaranteed at function exit (e.g., "ret >= 0")
     pub postconditions: Vec<ContractFact>,
+    /// v0.38.3: Function is marked @pure (no side effects, deterministic)
+    /// Pure functions can be optimized with CSE - duplicate calls eliminated
+    pub is_pure: bool,
+    /// v0.38.4: Function is marked @const (compile-time evaluatable)
+    /// Const functions are pure + can be evaluated at compile time with constant args
+    pub is_const: bool,
 }
 
 /// v0.38: A proven fact from a contract condition

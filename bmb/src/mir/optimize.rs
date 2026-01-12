@@ -94,16 +94,27 @@ impl OptimizationPipeline {
     pub fn optimize(&self, program: &mut MirProgram) -> OptimizationStats {
         let mut stats = OptimizationStats::new();
 
+        // v0.38.3: Create PureFunctionCSE pass with program-level information
+        let pure_cse = PureFunctionCSE::from_program(program);
+
+        // v0.38.4: Create ConstFunctionEval pass with program-level information
+        let const_eval = ConstFunctionEval::from_program(program);
+
         for func in &mut program.functions {
-            let func_stats = self.optimize_function(func);
+            let func_stats = self.optimize_function_with_program_passes(func, &pure_cse, &const_eval);
             stats.merge(&func_stats);
         }
 
         stats
     }
 
-    /// Run all passes on a single function until fixed point
-    fn optimize_function(&self, func: &mut MirFunction) -> OptimizationStats {
+    /// Run all passes on a single function until fixed point (with program-level passes)
+    fn optimize_function_with_program_passes(
+        &self,
+        func: &mut MirFunction,
+        pure_cse: &PureFunctionCSE,
+        const_eval: &ConstFunctionEval,
+    ) -> OptimizationStats {
         let mut stats = OptimizationStats::new();
         let mut iteration = 0;
 
@@ -111,11 +122,24 @@ impl OptimizationPipeline {
             let mut changed = false;
             iteration += 1;
 
+            // Run standard passes
             for pass in &self.passes {
                 if pass.run_on_function(func) {
                     changed = true;
                     stats.record_pass(pass.name());
                 }
+            }
+
+            // v0.38.3: Run pure function CSE
+            if pure_cse.run_on_function(func) {
+                changed = true;
+                stats.record_pass(pure_cse.name());
+            }
+
+            // v0.38.4: Run const function evaluation
+            if const_eval.run_on_function(func) {
+                changed = true;
+                stats.record_pass(const_eval.name());
             }
 
             if !changed || iteration >= self.max_iterations {
@@ -614,6 +638,192 @@ impl OptimizationPass for CommonSubexpressionElimination {
 }
 
 // ============================================================================
+// Pure Function CSE Pass (v0.38.3)
+// ============================================================================
+
+/// Common subexpression elimination for @pure function calls
+///
+/// Pure functions have no side effects and always return the same result
+/// for the same inputs. This allows us to eliminate duplicate calls.
+///
+/// Example:
+/// ```text
+/// @pure fn square(x: i64) -> i64 = x * x;
+///
+/// fn example(n: i64) -> i64 = square(n) + square(n); // second call eliminated
+/// ```
+pub struct PureFunctionCSE {
+    /// Set of function names marked @pure
+    pure_functions: HashSet<String>,
+}
+
+impl PureFunctionCSE {
+    /// Create a new PureFunctionCSE pass with the given pure function set
+    pub fn new(pure_functions: HashSet<String>) -> Self {
+        Self { pure_functions }
+    }
+
+    /// Create from a MirProgram by collecting all @pure functions
+    pub fn from_program(program: &MirProgram) -> Self {
+        let pure_functions: HashSet<String> = program
+            .functions
+            .iter()
+            .filter(|f| f.is_pure || f.is_const) // @const implies @pure
+            .map(|f| f.name.clone())
+            .collect();
+        Self { pure_functions }
+    }
+}
+
+impl OptimizationPass for PureFunctionCSE {
+    fn name(&self) -> &'static str {
+        "pure_function_cse"
+    }
+
+    fn run_on_function(&self, func: &mut MirFunction) -> bool {
+        let mut changed = false;
+        // Map from (func_name, args...) -> result place
+        let mut call_results: HashMap<String, Place> = HashMap::new();
+
+        for block in &mut func.blocks {
+            let mut new_instructions = Vec::new();
+
+            for inst in &block.instructions {
+                if let MirInst::Call { dest: Some(dest), func: called_func, args } = inst {
+                    // Only optimize if the called function is pure
+                    if self.pure_functions.contains(called_func) {
+                        // Create a key from function name and arguments
+                        let key = format!("call:{}:{:?}", called_func, args);
+
+                        if let Some(existing) = call_results.get(&key) {
+                            // Replace with copy from previous result
+                            new_instructions.push(MirInst::Copy {
+                                dest: dest.clone(),
+                                src: existing.clone(),
+                            });
+                            changed = true;
+                            continue;
+                        } else {
+                            // First call - record the result
+                            call_results.insert(key, dest.clone());
+                        }
+                    }
+                }
+                new_instructions.push(inst.clone());
+            }
+
+            block.instructions = new_instructions;
+        }
+
+        changed
+    }
+}
+
+// ============================================================================
+// Const Function Evaluation Pass (v0.38.4)
+// ============================================================================
+
+/// Compile-time evaluation of @const function calls
+///
+/// @const functions are a superset of @pure functions. When a @const function
+/// returns a constant value and is called with constant arguments, the call
+/// can be replaced with the constant result at compile time.
+///
+/// This is a simplified implementation that handles:
+/// 1. @const functions that just return a constant
+/// 2. @const functions with no parameters
+///
+/// Full compile-time evaluation (interpreting function bodies) is deferred
+/// to future enhancements.
+pub struct ConstFunctionEval {
+    /// Map of const function name -> constant return value (if simple)
+    const_values: HashMap<String, Constant>,
+}
+
+impl ConstFunctionEval {
+    /// Create from a MirProgram by analyzing @const functions
+    pub fn from_program(program: &MirProgram) -> Self {
+        let mut const_values = HashMap::new();
+
+        for func in &program.functions {
+            if func.is_const && func.params.is_empty() {
+                // Check if function body is a simple constant return
+                if let Some(value) = Self::extract_constant_return(func) {
+                    const_values.insert(func.name.clone(), value);
+                }
+            }
+        }
+
+        Self { const_values }
+    }
+
+    /// Try to extract a constant return value from a simple @const function
+    fn extract_constant_return(func: &MirFunction) -> Option<Constant> {
+        // Must have exactly one block
+        if func.blocks.len() != 1 {
+            return None;
+        }
+
+        let block = &func.blocks[0];
+
+        // Check if it's a direct return of a constant
+        if let Terminator::Return(Some(Operand::Constant(c))) = &block.terminator {
+            return Some(c.clone());
+        }
+
+        // Check if it's a return of a variable that was set to a constant
+        if let Terminator::Return(Some(Operand::Place(place))) = &block.terminator {
+            // Look for const assignment to this place
+            for inst in &block.instructions {
+                if let MirInst::Const { dest, value } = inst
+                    && dest.name == place.name
+                {
+                    return Some(value.clone());
+                }
+            }
+        }
+
+        None
+    }
+}
+
+impl OptimizationPass for ConstFunctionEval {
+    fn name(&self) -> &'static str {
+        "const_function_eval"
+    }
+
+    fn run_on_function(&self, func: &mut MirFunction) -> bool {
+        let mut changed = false;
+
+        for block in &mut func.blocks {
+            let mut new_instructions = Vec::new();
+
+            for inst in &block.instructions {
+                if let MirInst::Call { dest: Some(dest), func: called_func, args } = inst {
+                    // Only evaluate if function is known const and has no args
+                    if args.is_empty()
+                        && let Some(value) = self.const_values.get(called_func)
+                    {
+                        // Replace call with constant
+                        new_instructions.push(MirInst::Const {
+                            dest: dest.clone(),
+                            value: value.clone(),
+                        });
+                        changed = true;
+                        continue;
+                    }
+                }
+                new_instructions.push(inst.clone());
+            }
+
+            block.instructions = new_instructions;
+        }
+
+        changed
+    }
+}
+
+// ============================================================================
 // Contract-Based Optimization Pass (BMB-specific)
 // ============================================================================
 
@@ -1047,6 +1257,8 @@ mod tests {
             }],
             preconditions: vec![],
             postconditions: vec![],
+            is_pure: false,
+            is_const: false,
         }
     }
 
@@ -1086,6 +1298,8 @@ mod tests {
             }],
             preconditions: vec![],
             postconditions: vec![],
+            is_pure: false,
+            is_const: false,
         };
 
         let pass = DeadCodeElimination;
@@ -1138,6 +1352,8 @@ mod tests {
                 },
             ],
             postconditions: vec![],
+            is_pure: false,
+            is_const: false,
         };
 
         let pass = ContractBasedOptimization;
@@ -1180,6 +1396,8 @@ mod tests {
                 },
             ],
             postconditions: vec![],
+            is_pure: false,
+            is_const: false,
         };
 
         let pass = ContractBasedOptimization;
@@ -1242,6 +1460,8 @@ mod tests {
                 },
             ],
             postconditions: vec![],
+            is_pure: false,
+            is_const: false,
         };
 
         let pass = ContractUnreachableElimination;
@@ -1300,6 +1520,8 @@ mod tests {
             ],
             preconditions: vec![], // No preconditions
             postconditions: vec![],
+            is_pure: false,
+            is_const: false,
         };
 
         let pass = ContractUnreachableElimination;
@@ -1346,6 +1568,8 @@ mod tests {
             ],
             preconditions: vec![],
             postconditions: vec![],
+            is_pure: false,
+            is_const: false,
         };
 
         let pass = ContractUnreachableElimination;
@@ -1356,6 +1580,271 @@ mod tests {
         assert!(
             !func.blocks.iter().any(|b| b.label == "dead"),
             "Dead block should not exist"
+        );
+    }
+
+    #[test]
+    fn test_pure_function_cse() {
+        // Test: duplicate calls to @pure function should be eliminated
+        // %r1 = call square(x)
+        // %r2 = call square(x)  <- should become %r2 = copy %r1
+        let mut func = MirFunction {
+            name: "test_pure_cse".to_string(),
+            params: vec![("x".to_string(), MirType::I64)],
+            ret_ty: MirType::I64,
+            locals: vec![],
+            blocks: vec![BasicBlock {
+                label: "entry".to_string(),
+                instructions: vec![
+                    MirInst::Call {
+                        dest: Some(Place::new("r1")),
+                        func: "square".to_string(),
+                        args: vec![Operand::Place(Place::new("x"))],
+                    },
+                    MirInst::Call {
+                        dest: Some(Place::new("r2")),
+                        func: "square".to_string(),
+                        args: vec![Operand::Place(Place::new("x"))],
+                    },
+                    MirInst::BinOp {
+                        dest: Place::new("result"),
+                        op: MirBinOp::Add,
+                        lhs: Operand::Place(Place::new("r1")),
+                        rhs: Operand::Place(Place::new("r2")),
+                    },
+                ],
+                terminator: Terminator::Return(Some(Operand::Place(Place::new("result")))),
+            }],
+            preconditions: vec![],
+            postconditions: vec![],
+            is_pure: false,
+            is_const: false,
+        };
+
+        // Create a pure function set containing "square"
+        let mut pure_functions = HashSet::new();
+        pure_functions.insert("square".to_string());
+        let pass = PureFunctionCSE::new(pure_functions);
+
+        let changed = pass.run_on_function(&mut func);
+        assert!(changed, "Pure function CSE should have made changes");
+
+        // Second call should be replaced with Copy
+        let second_inst = &func.blocks[0].instructions[1];
+        assert!(
+            matches!(second_inst, MirInst::Copy { dest, src }
+                if dest.name == "r2" && src.name == "r1"),
+            "Second call should be replaced with copy from first result"
+        );
+    }
+
+    #[test]
+    fn test_pure_function_cse_different_args() {
+        // Test: calls with different args should NOT be eliminated
+        let mut func = MirFunction {
+            name: "test_pure_cse_diff".to_string(),
+            params: vec![
+                ("x".to_string(), MirType::I64),
+                ("y".to_string(), MirType::I64),
+            ],
+            ret_ty: MirType::I64,
+            locals: vec![],
+            blocks: vec![BasicBlock {
+                label: "entry".to_string(),
+                instructions: vec![
+                    MirInst::Call {
+                        dest: Some(Place::new("r1")),
+                        func: "square".to_string(),
+                        args: vec![Operand::Place(Place::new("x"))],
+                    },
+                    MirInst::Call {
+                        dest: Some(Place::new("r2")),
+                        func: "square".to_string(),
+                        args: vec![Operand::Place(Place::new("y"))], // Different arg!
+                    },
+                ],
+                terminator: Terminator::Return(Some(Operand::Place(Place::new("r1")))),
+            }],
+            preconditions: vec![],
+            postconditions: vec![],
+            is_pure: false,
+            is_const: false,
+        };
+
+        let mut pure_functions = HashSet::new();
+        pure_functions.insert("square".to_string());
+        let pass = PureFunctionCSE::new(pure_functions);
+
+        let changed = pass.run_on_function(&mut func);
+        assert!(!changed, "Different args should not be eliminated");
+    }
+
+    #[test]
+    fn test_non_pure_function_not_eliminated() {
+        // Test: calls to non-pure functions should NOT be eliminated
+        let mut func = MirFunction {
+            name: "test_non_pure".to_string(),
+            params: vec![("x".to_string(), MirType::I64)],
+            ret_ty: MirType::I64,
+            locals: vec![],
+            blocks: vec![BasicBlock {
+                label: "entry".to_string(),
+                instructions: vec![
+                    MirInst::Call {
+                        dest: Some(Place::new("r1")),
+                        func: "get_random".to_string(), // Not pure
+                        args: vec![Operand::Place(Place::new("x"))],
+                    },
+                    MirInst::Call {
+                        dest: Some(Place::new("r2")),
+                        func: "get_random".to_string(),
+                        args: vec![Operand::Place(Place::new("x"))],
+                    },
+                ],
+                terminator: Terminator::Return(Some(Operand::Place(Place::new("r1")))),
+            }],
+            preconditions: vec![],
+            postconditions: vec![],
+            is_pure: false,
+            is_const: false,
+        };
+
+        // Empty pure function set - no functions are pure
+        let pure_functions = HashSet::new();
+        let pass = PureFunctionCSE::new(pure_functions);
+
+        let changed = pass.run_on_function(&mut func);
+        assert!(!changed, "Non-pure functions should not be eliminated");
+    }
+
+    #[test]
+    fn test_const_function_eval() {
+        // Test: calls to @const functions with constant return values should be inlined
+        // @const fn get_magic() -> i64 = 42;
+        // fn test() -> i64 = get_magic() + 1;  // should become 42 + 1
+        let const_fn = MirFunction {
+            name: "get_magic".to_string(),
+            params: vec![],
+            ret_ty: MirType::I64,
+            locals: vec![],
+            blocks: vec![BasicBlock {
+                label: "entry".to_string(),
+                instructions: vec![],
+                terminator: Terminator::Return(Some(Operand::Constant(Constant::Int(42)))),
+            }],
+            preconditions: vec![],
+            postconditions: vec![],
+            is_pure: true,
+            is_const: true,
+        };
+
+        let mut caller_fn = MirFunction {
+            name: "test_caller".to_string(),
+            params: vec![],
+            ret_ty: MirType::I64,
+            locals: vec![],
+            blocks: vec![BasicBlock {
+                label: "entry".to_string(),
+                instructions: vec![
+                    MirInst::Call {
+                        dest: Some(Place::new("magic")),
+                        func: "get_magic".to_string(),
+                        args: vec![],
+                    },
+                    MirInst::BinOp {
+                        dest: Place::new("result"),
+                        op: MirBinOp::Add,
+                        lhs: Operand::Place(Place::new("magic")),
+                        rhs: Operand::Constant(Constant::Int(1)),
+                    },
+                ],
+                terminator: Terminator::Return(Some(Operand::Place(Place::new("result")))),
+            }],
+            preconditions: vec![],
+            postconditions: vec![],
+            is_pure: false,
+            is_const: false,
+        };
+
+        // Create program with both functions
+        let program = MirProgram {
+            functions: vec![const_fn, caller_fn.clone()],
+            extern_fns: vec![],
+        };
+
+        // Create pass from program
+        let pass = ConstFunctionEval::from_program(&program);
+
+        let changed = pass.run_on_function(&mut caller_fn);
+        assert!(changed, "Const function eval should have made changes");
+
+        // First instruction should now be Const, not Call
+        let first_inst = &caller_fn.blocks[0].instructions[0];
+        assert!(
+            matches!(first_inst, MirInst::Const { dest, value: Constant::Int(42) }
+                if dest.name == "magic"),
+            "Call to const function should be replaced with constant: got {:?}",
+            first_inst
+        );
+    }
+
+    #[test]
+    fn test_const_function_with_args_not_inlined() {
+        // Test: @const functions with arguments should NOT be inlined
+        // @const fn square(x: i64) -> i64 = x * x;
+        // These require compile-time evaluation which is deferred
+        let const_fn = MirFunction {
+            name: "square".to_string(),
+            params: vec![("x".to_string(), MirType::I64)],
+            ret_ty: MirType::I64,
+            locals: vec![],
+            blocks: vec![BasicBlock {
+                label: "entry".to_string(),
+                instructions: vec![MirInst::BinOp {
+                    dest: Place::new("result"),
+                    op: MirBinOp::Mul,
+                    lhs: Operand::Place(Place::new("x")),
+                    rhs: Operand::Place(Place::new("x")),
+                }],
+                terminator: Terminator::Return(Some(Operand::Place(Place::new("result")))),
+            }],
+            preconditions: vec![],
+            postconditions: vec![],
+            is_pure: true,
+            is_const: true,
+        };
+
+        let mut caller_fn = MirFunction {
+            name: "test_caller".to_string(),
+            params: vec![],
+            ret_ty: MirType::I64,
+            locals: vec![],
+            blocks: vec![BasicBlock {
+                label: "entry".to_string(),
+                instructions: vec![MirInst::Call {
+                    dest: Some(Place::new("result")),
+                    func: "square".to_string(),
+                    args: vec![Operand::Constant(Constant::Int(5))],
+                }],
+                terminator: Terminator::Return(Some(Operand::Place(Place::new("result")))),
+            }],
+            preconditions: vec![],
+            postconditions: vec![],
+            is_pure: false,
+            is_const: false,
+        };
+
+        let program = MirProgram {
+            functions: vec![const_fn, caller_fn.clone()],
+            extern_fns: vec![],
+        };
+
+        let pass = ConstFunctionEval::from_program(&program);
+
+        let changed = pass.run_on_function(&mut caller_fn);
+        assert!(
+            !changed,
+            "Const function with args should not be inlined (deferred)"
         );
     }
 }

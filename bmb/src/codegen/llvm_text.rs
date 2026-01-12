@@ -2146,6 +2146,8 @@ mod tests {
                 }],
                 preconditions: vec![],
                 postconditions: vec![],
+                is_pure: false,
+                is_const: false,
             }],
             extern_fns: vec![],
         };

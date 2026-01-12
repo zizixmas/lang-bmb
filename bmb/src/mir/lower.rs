@@ -124,6 +124,10 @@ fn lower_function(fn_def: &FnDef, func_return_types: &std::collections::HashMap<
     let preconditions = extract_contract_facts(fn_def.pre.as_ref());
     let postconditions = extract_contract_facts(fn_def.post.as_ref());
 
+    // v0.38.3: Extract @pure and @const attributes
+    let is_pure = has_attribute(&fn_def.attributes, "pure");
+    let is_const = has_attribute(&fn_def.attributes, "const");
+
     MirFunction {
         name: fn_def.name.node.clone(),
         params,
@@ -132,7 +136,14 @@ fn lower_function(fn_def: &FnDef, func_return_types: &std::collections::HashMap<
         blocks: ctx.blocks,
         preconditions,
         postconditions,
+        is_pure,
+        is_const,
     }
+}
+
+/// v0.38.3: Check if a function has a specific attribute
+fn has_attribute(attrs: &[Attribute], name: &str) -> bool {
+    attrs.iter().any(|attr| attr.name() == name)
 }
 
 /// v0.38: Extract contract facts from a pre/post condition expression

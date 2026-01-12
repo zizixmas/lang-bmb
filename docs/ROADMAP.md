@@ -2864,9 +2864,9 @@ Complete JSON library with position-based parsing:
 |------|-------------|----------|--------|
 | 38.0.1 | Contract-based bounds check elimination | P0 | ✅ Complete |
 | 38.0.2 | Contract-driven unreachable code elimination | P0 | ✅ Complete |
-| 38.0.3 | @pure annotation + CSE enhancement | P1 | 📋 Planned |
-| 38.0.4 | @const compile-time evaluation | P1 | 📋 Planned |
-| 38.0.5 | Contract-based alias hints for LLVM | P2 | 📋 Planned |
+| 38.0.3 | @pure annotation + CSE enhancement | P1 | ✅ Complete |
+| 38.0.4 | @const compile-time evaluation | P1 | ✅ Complete |
+| 38.0.5 | Contract-based alias hints for LLVM | P2 | 🔄 DEFER (LLVM-specific) |
 
 **Rationale** (Critical Review 2026-01-12):
 - Original 38.0.1 "Auto-vectorization with contract proofs" was overly ambitious (LLVM already handles this)
@@ -2903,6 +2903,58 @@ Complete JSON library with position-based parsing:
 - CFG reachability analysis from entry block
 - Branch simplification when preconditions prove condition
 - 3 additional test cases for unreachable elimination
+
+#### Phase 38.0.3: @pure Annotation + CSE Enhancement (v0.38.3)
+
+| Subtask | Description | Status |
+|---------|-------------|--------|
+| 38.0.3.1 | Add `is_pure` and `is_const` fields to MirFunction | ✅ Complete |
+| 38.0.3.2 | Parse @pure/@const attributes in lower.rs | ✅ Complete |
+| 38.0.3.3 | Implement PureFunctionCSE pass | ✅ Complete |
+| 38.0.3.4 | Track duplicate pure function calls with same args | ✅ Complete |
+| 38.0.3.5 | Replace duplicate calls with copy from first result | ✅ Complete |
+| 38.0.3.6 | Tests: 3 test cases (basic CSE, different args, non-pure) | ✅ Complete |
+
+**Implementation Details**:
+- `PureFunctionCSE` struct with `HashSet<String>` of pure function names
+- `from_program()` constructor to analyze `@pure` and `@const` functions
+- Call signature tracking: `(func_name, args...)` → result place
+- Second+ identical calls replaced with `MirInst::Copy`
+- Integrated as program-level pass in `OptimizationPipeline`
+
+**Key Design Decision**: @const functions are a superset of @pure (all @const are @pure)
+
+#### Phase 38.0.4: @const Compile-Time Evaluation (v0.38.4)
+
+| Subtask | Description | Status |
+|---------|-------------|--------|
+| 38.0.4.1 | Implement ConstFunctionEval pass | ✅ Complete |
+| 38.0.4.2 | Extract constant return values from simple @const functions | ✅ Complete |
+| 38.0.4.3 | Replace calls to nullary @const functions with constants | ✅ Complete |
+| 38.0.4.4 | Tests: 2 test cases (basic eval, args not inlined) | ✅ Complete |
+
+**Implementation Details**:
+- `ConstFunctionEval` struct with `HashMap<String, Constant>`
+- `from_program()` analyzes @const functions with no parameters
+- `extract_constant_return()` detects simple constant-returning functions
+- Replaces `call @const_fn()` with `const <value>`
+- Full compile-time interpretation of complex @const functions deferred
+
+**Scope Limitation**: Only handles trivial @const functions that directly return constants.
+Full compile-time evaluation (e.g., `@const fn fib(n) = ...` with constant arg) requires
+a const interpreter and is deferred to future work.
+
+#### Phase 38.0.5: Contract-Based Alias Hints for LLVM (DEFERRED)
+
+**Status**: 🔄 DEFER - P2 priority, LLVM-specific
+
+**Rationale for Deferral**:
+- Requires LLVM metadata emission (`!noalias`, `!restrict`)
+- High complexity with limited cross-platform benefit
+- BMB targets multiple backends (WASM, LLVM)
+- Focus on MIR-level optimizations first
+
+**Future Work**: Consider when LLVM-native performance gap becomes critical.
 
 ---
 
