@@ -71,30 +71,40 @@ fn main() -> i64 =
     let argc = arg_count();
     // Native mode: argv[0]=program, argv[1]=input, argv[2]=output
     // argc=1 means no user args, argc=2 means one user arg (input file)
-    if argc < 2 { let x = show_usage() };
+    if argc < 2 {
+        let x = show_usage();
         let y = print_str("Error: argc=");
         let z = println(argc);
         1
-    else
+    } else {
         let input_file = get_arg(1);
-        if ends_with(input_file, ".bmb") == false { let x = print_str_nl("Error: Input file must have .bmb extension") };
+        if ends_with(input_file, ".bmb") == false {
+            let x = print_str_nl("Error: Input file must have .bmb extension");
             2
-        else
+        } else {
             let source = read_file(input_file);
-            if source == "" { let x = print_str("Error: Cannot read file: ") };
+            if source == "" {
+                let x = print_str("Error: Cannot read file: ");
                 let y = print_str_nl(input_file);
                 3
-            else
+            } else {
                 let output = compile_demo(source);
-                if argc >= 3 { let output_file = get_arg(2) };
+                if argc >= 3 {
+                    let output_file = get_arg(2);
                     let w = write_file(output_file, output);
-                    if w == 0 { let x = print_str("Compiled to: ") };
+                    if w == 0 {
+                        let x = print_str("Compiled to: ");
                         let y = print_str_nl(output_file);
                         0
-                    else
+                    } else {
                         let x = print_str("Error: Cannot write to: ");
                         let y = print_str_nl(output_file);
                         4
-                else
+                    }
+                } else {
                     let x = print_str(output);
-                    0;
+                    0
+                }
+            }
+        }
+    };

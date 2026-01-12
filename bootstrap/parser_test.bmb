@@ -70,13 +70,13 @@ fn is_alnum_or_underscore(c: i64) -> bool = is_alpha(c) or is_digit(c) or c == 9
 fn is_ident_start(c: i64) -> bool = is_alpha(c) or c == 95;
 
 fn skip_ws(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if is_whitespace(s.char_at(pos)) { skip_ws(s, pos + 1) } else { pos };
+    if pos >= s.len() { pos } else if is_whitespace(s.byte_at(pos)) { skip_ws(s, pos + 1) } else { pos };
 
 fn skip_to_eol(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if s.char_at(pos) == 10 { pos } else { skip_to_eol(s, pos + 1) };
+    if pos >= s.len() { pos } else if s.byte_at(pos) == 10 { pos } else { skip_to_eol(s, pos + 1) };
 
 fn skip_comment(s: String, pos: i64) -> i64 =
-    if pos + 1 < s.len() and s.char_at(pos) == 45 and s.char_at(pos + 1) == 45 { skip_to_eol(s, pos + 2) } else { pos };
+    if pos + 1 < s.len() and s.byte_at(pos) == 45 and s.byte_at(pos + 1) == 45 { skip_to_eol(s, pos + 2) } else { pos };
 
 fn skip_all(s: String, pos: i64) -> i64 =
     let p1 = skip_ws(s, pos);
@@ -84,10 +84,10 @@ fn skip_all(s: String, pos: i64) -> i64 =
     if p2 == pos { pos } else { skip_all(s, p2) };
 
 fn find_ident_end(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if is_alnum_or_underscore(s.char_at(pos)) { find_ident_end(s, pos + 1) } else { pos };
+    if pos >= s.len() { pos } else if is_alnum_or_underscore(s.byte_at(pos)) { find_ident_end(s, pos + 1) } else { pos };
 
 fn find_number_end(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if is_digit(s.char_at(pos)) { find_number_end(s, pos + 1) } else { pos };
+    if pos >= s.len() { pos } else if is_digit(s.byte_at(pos)) { find_number_end(s, pos + 1) } else { pos };
 
 fn lookup_keyword(w: String) -> i64 =
     if w == "fn" { 100 } else if w == "let" { 101 } else if w == "if" { 102 } else if w == "then" { 103 } else if w == "else" { 104 } else if w == "true" { 105 } else if w == "false" { 106 } else if w == "and" { 107 } else if w == "or" { 108 } else if w == "not" { 109 } else if w == "pre" { 110 } else if w == "post" { 111 } else if w == "mut" { 117 } else if w == "i32" { 150 } else if w == "i64" { 151 } else if w == "f64" { 152 } else if w == "bool" { 153 } else if w == "String" { 154 } else { 201 };
@@ -96,13 +96,13 @@ fn symbol_code(c: i64) -> i64 =
     if c == 58 { 300 } else if c == 46 { 301 } else if c == 61 { 302 } else if c == 59 { 303 } else if c == 44 { 304 } else if c == 40 { 305 } else if c == 41 { 306 } else if c == 123 { 307 } else if c == 125 { 308 } else if c == 43 { 400 } else if c == 45 { 401 } else if c == 42 { 402 } else if c == 47 { 403 } else if c == 37 { 404 } else if c == 60 { 405 } else if c == 62 { 406 } else { 999 };
 
 fn check_two_char(s: String, pos: i64) -> i64 =
-    if pos + 1 >= s.len() { 0 } else { let c1 = s.char_at(pos) };
-        let c2 = s.char_at(pos + 1);
+    if pos + 1 >= s.len() { 0 } else { let c1 = s.byte_at(pos) };
+        let c2 = s.byte_at(pos + 1);
         if c1 == 45 and c2 == 62 { 3212 } else if c1 == 61 and c2 == 61 { 4102 } else if c1 == 33 and c2 == 61 { 4112 } else if c1 == 60 and c2 == 61 { 4122 } else if c1 == 62 and c2 == 61 { 4132 } else if c1 == 46 and c2 == 46 { 3232 } else { 0 };
 
 fn next_token_raw(s: String, pos: i64) -> i64 =
     let p = skip_all(s, pos);
-    if p >= s.len() { 900 * 1000000 + p } else { let c = s.char_at(p) };
+    if p >= s.len() { 900 * 1000000 + p } else { let c = s.byte_at(p) };
         if is_ident_start(c) { let end = find_ident_end(s, p + 1) };
             let word = s.slice(p, end);
             let kind = lookup_keyword(word);
@@ -138,10 +138,10 @@ fn unpack_ast(result: String) -> String =
     if colon_pos < 0 { result } else { result.slice(colon_pos + 1, result.len()) };
 
 fn find_colon(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { 0 - 1 } else if s.char_at(pos) == 58 { pos } else { find_colon(s, pos + 1) };
+    if pos >= s.len() { 0 - 1 } else if s.byte_at(pos) == 58 { pos } else { find_colon(s, pos + 1) };
 
 fn parse_int_prefix(s: String, pos: i64, acc: i64) -> i64 =
-    if pos >= s.len() { acc } else { let c = s.char_at(pos) };
+    if pos >= s.len() { acc } else { let c = s.byte_at(pos) };
         if is_digit(c) { parse_int_prefix(s, pos + 1, acc * 10 + (c - 48)) } else { acc };
 
 fn int_to_string(n: i64) -> String =

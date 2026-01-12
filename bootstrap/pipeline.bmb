@@ -72,13 +72,13 @@ fn is_alnum_or_underscore(c: i64) -> bool = is_alpha(c) or is_digit(c) or c == 9
 fn is_ident_start(c: i64) -> bool = is_alpha(c) or c == 95;
 
 fn skip_ws(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if is_whitespace(s.char_at(pos)) { skip_ws(s, pos + 1) } else { pos };
+    if pos >= s.len() { pos } else if is_whitespace(s.byte_at(pos)) { skip_ws(s, pos + 1) } else { pos };
 
 fn skip_to_eol(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if s.char_at(pos) == 10 { pos } else { skip_to_eol(s, pos + 1) };
+    if pos >= s.len() { pos } else if s.byte_at(pos) == 10 { pos } else { skip_to_eol(s, pos + 1) };
 
 fn skip_comment(s: String, pos: i64) -> i64 =
-    if pos + 1 < s.len() and s.char_at(pos) == 45 and s.char_at(pos + 1) == 45 { skip_to_eol(s, pos + 2) } else { pos };
+    if pos + 1 < s.len() and s.byte_at(pos) == 45 and s.byte_at(pos + 1) == 45 { skip_to_eol(s, pos + 2) } else { pos };
 
 fn skip_all(s: String, pos: i64) -> i64 =
     let p1 = skip_ws(s, pos);
@@ -86,10 +86,10 @@ fn skip_all(s: String, pos: i64) -> i64 =
     if p2 == pos { pos } else { skip_all(s, p2) };
 
 fn find_ident_end(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if is_alnum_or_underscore(s.char_at(pos)) { find_ident_end(s, pos + 1) } else { pos };
+    if pos >= s.len() { pos } else if is_alnum_or_underscore(s.byte_at(pos)) { find_ident_end(s, pos + 1) } else { pos };
 
 fn find_number_end(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if is_digit(s.char_at(pos)) { find_number_end(s, pos + 1) } else { pos };
+    if pos >= s.len() { pos } else if is_digit(s.byte_at(pos)) { find_number_end(s, pos + 1) } else { pos };
 
 fn lookup_keyword(w: String) -> i64 =
     if w == "fn" { 100 } else if w == "let" { 101 } else if w == "if" { 102 } else if w == "then" { 103 } else if w == "else" { 104 } else if w == "true" { 105 } else if w == "false" { 106 } else if w == "and" { 107 } else if w == "or" { 108 } else if w == "not" { 109 } else if w == "pre" { 110 } else if w == "post" { 111 } else if w == "mut" { 117 } else if w == "i32" { 150 } else if w == "i64" { 151 } else if w == "f64" { 152 } else if w == "bool" { 153 } else if w == "String" { 154 } else { 201 };
@@ -100,10 +100,10 @@ fn tok_end(tok: i64) -> i64 = tok - (tok / 1000000) * 1000000;
 
 fn next_token_raw(s: String, pos: i64) -> i64 =
     let p = skip_all(s, pos);
-    if p >= s.len() { make_tok(TK_EOF(), p) } else { let c = s.char_at(p) };
+    if p >= s.len() { make_tok(TK_EOF(), p) } else { let c = s.byte_at(p) };
         if is_digit(c) { make_tok(TK_INT(), find_number_end(s, p)) } else if is_ident_start(c) { let end = find_ident_end(s, p) };
             make_tok(lookup_keyword(s.slice(p, end)), end)
-        else if c == 40 { make_tok(TK_LPAREN(), p + 1) } else if c == 41 { make_tok(TK_RPAREN(), p + 1) } else if c == 58 { make_tok(TK_COLON(), p + 1) } else if c == 59 { make_tok(TK_SEMI(), p + 1) } else if c == 44 { make_tok(TK_COMMA(), p + 1) } else if c == 43 { make_tok(TK_PLUS(), p + 1) } else if c == 42 { make_tok(TK_STAR(), p + 1) } else if c == 47 { make_tok(TK_SLASH(), p + 1) } else if c == 37 { make_tok(TK_PERCENT(), p + 1) } else if c == 45 { if p + 1 < s.len() and s.char_at(p + 1) == 62 { make_tok(TK_ARROW(), p + 2) } else { make_tok(TK_MINUS(), p + 1) } } else if c == 61 { if p + 1 < s.len() and s.char_at(p + 1) == 61 { make_tok(TK_EQEQ(), p + 2) } else { make_tok(TK_EQ(), p + 1) } } else if c == 33 { if p + 1 < s.len() and s.char_at(p + 1) == 61 { make_tok(TK_NEQ(), p + 2) } else { make_tok(TK_EOF(), p) } } else if c == 60 { if p + 1 < s.len() and s.char_at(p + 1) == 61 { make_tok(TK_LTEQ(), p + 2) } else { make_tok(TK_LT(), p + 1) } } else if c == 62 { if p + 1 < s.len() and s.char_at(p + 1) == 61 { make_tok(TK_GTEQ(), p + 2) } else { make_tok(TK_GT(), p + 1) } } else if c == 46 { if p + 1 < s.len() and s.char_at(p + 1) == 46 { make_tok(TK_DOTDOT(), p + 2) } else { make_tok(TK_EOF(), p) } } else { make_tok(TK_EOF(), p) };
+        else if c == 40 { make_tok(TK_LPAREN(), p + 1) } else if c == 41 { make_tok(TK_RPAREN(), p + 1) } else if c == 58 { make_tok(TK_COLON(), p + 1) } else if c == 59 { make_tok(TK_SEMI(), p + 1) } else if c == 44 { make_tok(TK_COMMA(), p + 1) } else if c == 43 { make_tok(TK_PLUS(), p + 1) } else if c == 42 { make_tok(TK_STAR(), p + 1) } else if c == 47 { make_tok(TK_SLASH(), p + 1) } else if c == 37 { make_tok(TK_PERCENT(), p + 1) } else if c == 45 { if p + 1 < s.len() and s.byte_at(p + 1) == 62 { make_tok(TK_ARROW(), p + 2) } else { make_tok(TK_MINUS(), p + 1) } } else if c == 61 { if p + 1 < s.len() and s.byte_at(p + 1) == 61 { make_tok(TK_EQEQ(), p + 2) } else { make_tok(TK_EQ(), p + 1) } } else if c == 33 { if p + 1 < s.len() and s.byte_at(p + 1) == 61 { make_tok(TK_NEQ(), p + 2) } else { make_tok(TK_EOF(), p) } } else if c == 60 { if p + 1 < s.len() and s.byte_at(p + 1) == 61 { make_tok(TK_LTEQ(), p + 2) } else { make_tok(TK_LT(), p + 1) } } else if c == 62 { if p + 1 < s.len() and s.byte_at(p + 1) == 61 { make_tok(TK_GTEQ(), p + 2) } else { make_tok(TK_GT(), p + 1) } } else if c == 46 { if p + 1 < s.len() and s.byte_at(p + 1) == 46 { make_tok(TK_DOTDOT(), p + 2) } else { make_tok(TK_EOF(), p) } } else { make_tok(TK_EOF(), p) };
 
 // ============================================================================
 // SECTION 3: Parser Utilities
@@ -119,10 +119,10 @@ fn pack_result(pos: i64, ast: String) -> String =
     int_to_string(pos) + ":" + ast;
 
 fn find_colon(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if s.char_at(pos) == 58 { pos } else { find_colon(s, pos + 1) };
+    if pos >= s.len() { pos } else if s.byte_at(pos) == 58 { pos } else { find_colon(s, pos + 1) };
 
 fn parse_int_prefix(s: String, pos: i64, acc: i64) -> i64 =
-    if pos >= s.len() { acc } else { let c = s.char_at(pos) };
+    if pos >= s.len() { acc } else { let c = s.byte_at(pos) };
         if c >= 48 and c <= 57 { parse_int_prefix(s, pos + 1, acc * 10 + (c - 48)) } else { acc };
 
 fn unpack_pos(r: String) -> i64 = parse_int_prefix(r, 0, 0);
@@ -274,7 +274,7 @@ fn parse_source(src: String) -> String = parse_program(src, 0, "");
 fn low_is_whitespace(c: i64) -> bool = c == 32 or c == 9 or c == 10 or c == 13;
 
 fn low_skip_ws(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if low_is_whitespace(s.char_at(pos)) { low_skip_ws(s, pos + 1) } else { pos };
+    if pos >= s.len() { pos } else if low_is_whitespace(s.byte_at(pos)) { low_skip_ws(s, pos + 1) } else { pos };
 
 fn low_is_ident_char(c: i64) -> bool =
     (c >= 65 and c <= 90) or (c >= 97 and c <= 122) or
@@ -285,20 +285,20 @@ fn low_is_op_char(c: i64) -> bool =
     c == 60 or c == 62 or c == 61 or c == 33;
 
 fn low_find_ident_end(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if low_is_ident_char(s.char_at(pos)) { low_find_ident_end(s, pos + 1) } else { pos };
+    if pos >= s.len() { pos } else if low_is_ident_char(s.byte_at(pos)) { low_find_ident_end(s, pos + 1) } else { pos };
 
 fn low_find_op_end(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if low_is_op_char(s.char_at(pos)) { low_find_op_end(s, pos + 1) } else { pos };
+    if pos >= s.len() { pos } else if low_is_op_char(s.byte_at(pos)) { low_find_op_end(s, pos + 1) } else { pos };
 
 fn starts_with_at(s: String, pos: i64, prefix: String) -> bool =
     if pos + prefix.len() > s.len() { false } else { s.slice(pos, pos + prefix.len()) == prefix };
 
 fn find_close_paren(s: String, pos: i64, depth: i64) -> i64 =
-    if pos >= s.len() { pos } else { let c = s.char_at(pos) };
+    if pos >= s.len() { pos } else { let c = s.byte_at(pos) };
         if c == 40 { find_close_paren(s, pos + 1, depth + 1) } else if c == 41 { if depth == 1 { pos } else { find_close_paren(s, pos + 1, depth - 1) } } else { find_close_paren(s, pos + 1, depth) };
 
 fn extract_paren_content(s: String) -> String =
-    if s.len() < 2 { s } else if s.char_at(0) == 40 { let close = find_close_paren(s, 0, 0) };
+    if s.len() < 2 { s } else if s.byte_at(0) == 40 { let close = find_close_paren(s, 0, 0) };
         s.slice(1, close)
     else s;
 
@@ -321,17 +321,17 @@ fn is_fn_node(ast: String) -> bool = get_node_type(ast) == "fn";
 fn is_program_node(ast: String) -> bool = get_node_type(ast) == "program";
 
 fn find_name_end(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if s.char_at(pos) == 62 { pos } else { find_name_end(s, pos + 1) };
+    if pos >= s.len() { pos } else if s.byte_at(pos) == 62 { pos } else { find_name_end(s, pos + 1) };
 
 fn low_find_int_end(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else { let c = s.char_at(pos) };
+    if pos >= s.len() { pos } else { let c = s.byte_at(pos) };
         if c >= 48 and c <= 57 { low_find_int_end(s, pos + 1) } else { pos };
 
 fn find_child_end(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else { let c = s.char_at(pos) };
+    if pos >= s.len() { pos } else { let c = s.byte_at(pos) };
         if c == 40 { find_close_paren(s, pos, 0) + 1
         // v0.30.54: Check if < is start of <name> or operator
-        // <name> pattern: < followed by identifier char } else if c == 60 and pos + 1 < s.len() and low_is_ident_char(s.char_at(pos + 1)) { find_name_end(s, pos) + 1 } else if low_is_op_char(c) { low_find_op_end(s, pos) } else { low_find_ident_end(s, pos) };
+        // <name> pattern: < followed by identifier char } else if c == 60 and pos + 1 < s.len() and low_is_ident_char(s.byte_at(pos + 1)) { find_name_end(s, pos) + 1 } else if low_is_op_char(c) { low_find_op_end(s, pos) } else { low_find_ident_end(s, pos) };
 
 fn extract_int_value(ast: String) -> i64 =
     let content = extract_paren_content(ast);
@@ -342,7 +342,7 @@ fn extract_int_value(ast: String) -> i64 =
 
 fn extract_name(s: String, pos: i64) -> String =
     let p = low_skip_ws(s, pos);
-    if p >= s.len() { "" } else if s.char_at(p) == 60 { let end = find_name_end(s, p + 1) };
+    if p >= s.len() { "" } else if s.byte_at(p) == 60 { let end = find_name_end(s, p + 1) };
         s.slice(p + 1, end)
     else "";
 
@@ -400,7 +400,7 @@ fn pack_lower_result(temp: i64, block: i64, result: String, text: String) -> Str
 fn unpack_result_temp(r: String) -> i64 = parse_int_prefix(r, 0, 0);
 
 fn find_nth_colon(s: String, pos: i64, n: i64) -> i64 =
-    if pos >= s.len() { pos } else if s.char_at(pos) == 58 { if n <= 1 { pos } else { find_nth_colon(s, pos + 1, n - 1) } } else { find_nth_colon(s, pos + 1, n) };
+    if pos >= s.len() { pos } else if s.byte_at(pos) == 58 { if n <= 1 { pos } else { find_nth_colon(s, pos + 1, n - 1) } } else { find_nth_colon(s, pos + 1, n) };
 
 fn unpack_result_block(r: String) -> i64 =
     let c1 = find_nth_colon(r, 0, 1);

@@ -45,10 +45,10 @@ fn is_alnum(c: i64) -> bool = is_alpha(c) or is_digit(c) or c == 95;
 // ============================================================================
 
 fn skip_ws(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if s.char_at(pos) == 32 { skip_ws(s, pos + 1) } else { pos };
+    if pos >= s.len() { pos } else if s.byte_at(pos) == 32 { skip_ws(s, pos + 1) } else { pos };
 
 fn find_char(s: String, c: i64, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if s.char_at(pos) == c { pos } else { find_char(s, c, pos + 1) };
+    if pos >= s.len() { pos } else if s.byte_at(pos) == c { pos } else { find_char(s, c, pos + 1) };
 
 fn find_pipe(s: String, pos: i64) -> i64 = find_char(s, 124, pos);
 
@@ -56,17 +56,19 @@ fn starts_with(s: String, prefix: String, pos: i64) -> bool =
     starts_with_at(s, prefix, pos, 0);
 
 fn starts_with_at(s: String, prefix: String, pos: i64, i: i64) -> bool =
-    if i >= prefix.len() { true } else if pos + i >= s.len() { false } else if s.char_at(pos + i) != prefix.char_at(i) { false } else { starts_with_at(s, prefix, pos, i + 1) };
+    if i >= prefix.len() { true } else if pos + i >= s.len() { false } else if s.byte_at(pos + i) != prefix.byte_at(i) { false } else { starts_with_at(s, prefix, pos, i + 1) };
 
 fn read_until_ws(s: String, pos: i64) -> String =
     read_until_ws_acc(s, pos, "");
 
 fn read_until_ws_acc(s: String, pos: i64, acc: String) -> String =
-    if pos >= s.len() { acc } else { let c = s.char_at(pos) };
-        if c == 32 or c == 44 or c == 40 or c == 41 or c == 124 { acc } else { read_until_ws_acc(s, pos + 1, acc + char_to_string(c)) };
+    if pos >= s.len() { acc } else {
+        let c = s.byte_at(pos);
+        if c == 32 or c == 44 or c == 40 or c == 41 or c == 124 { acc } else { read_until_ws_acc(s, pos + 1, acc + char_to_string(c)) }
+    };
 
 fn strip_trailing_colon(s: String) -> String =
-    if s.len() == 0 { "" } else if s.char_at(s.len() - 1) == 58 { s.slice(0, s.len() - 1) } else { s };
+    if s.len() == 0 { "" } else if s.byte_at(s.len() - 1) == 58 { s.slice(0, s.len() - 1) } else { s };
 
 fn char_to_string(c: i64) -> String =
     if c == 32 { " " } else if c == 33 { "!" } else if c == 37 { "%" } else if c == 38 { "&" } else if c == 40 { "(" } else if c == 41 { ")" } else if c == 42 { "*" } else if c == 43 { "+" } else if c == 44 { "," } else if c == 45 { "-" } else if c == 46 { "." } else if c == 47 { "/" } else if c == 58 { ":" } else if c == 59 { ";" } else if c == 60 { "<" } else if c == 61 { "=" } else if c == 62 { ">" } else if c == 91 { "[" } else if c == 93 { "]" } else if c == 95 { "_" } else if c == 123 { "{" } else if c == 124 { "|" } else if c == 125 { "}" } else if c >= 48 and c <= 57 { digit_char(c - 48) } else if c >= 65 and c <= 90 { char_upper(c) } else if c >= 97 and c <= 122 { char_lower(c) } else { "?" };
@@ -110,8 +112,9 @@ fn gen_const_string(dest: String, content: String) -> String =
     "; string: " + content + "|" + dest + " = inttoptr i64 0 to i8*";
 
 // Parse constant value from MIR format: I:42 or B:1 or S:hello
+// 'I'=73=int, 'B'=66=bool, 'U'=85=unit, 'S'=83=string
 fn parse_const_type(val: String) -> String =
-    if val.len() < 2 { "unknown" } else if val.char_at(0) == 73 { "int"     // 'I' } else if val.char_at(0) == 66 { "bool"    // 'B' } else if val.char_at(0) == 85 { "unit"    // 'U' } else if val.char_at(0) == 83 { "string"  // 'S' (v0.30.51) } else { "unknown" };
+    if val.len() < 2 { "unknown" } else if val.byte_at(0) == 73 { "int" } else if val.byte_at(0) == 66 { "bool" } else if val.byte_at(0) == 85 { "unit" } else if val.byte_at(0) == 83 { "string" } else { "unknown" };
 
 fn parse_const_value(val: String) -> i64 =
     if val.len() < 3 { 0 } else { parse_int_from(val, 2, 0) };
@@ -121,8 +124,10 @@ fn parse_const_string(val: String) -> String =
     if val.len() < 3 { "" } else { val.slice(2, val.len()) };
 
 fn parse_int_from(s: String, pos: i64, acc: i64) -> i64 =
-    if pos >= s.len() { acc } else { let c = s.char_at(pos) };
-        if is_digit(c) { parse_int_from(s, pos + 1, acc * 10 + (c - 48)) } else { acc };
+    if pos >= s.len() { acc } else {
+        let c = s.byte_at(pos);
+        if is_digit(c) { parse_int_from(s, pos + 1, acc * 10 + (c - 48)) } else { acc }
+    };
 
 // ============================================================================
 // SECTION 5: LLVM IR Arithmetic Operations
@@ -297,21 +302,31 @@ fn gen_struct_init_fields(dest: String, struct_name: String, fields_str: String)
 
 fn gen_struct_init_fields_acc(dest: String, struct_name: String, fields_str: String, idx: i64, base: String, acc: String) -> String =
     let field_pair = get_next_field_pair(fields_str, idx);
-    if field_pair == "" { if acc == "" { dest + " = add i64 0, 0"  // No fields case } else { acc } } else { let field_val = extract_field_value(field_pair) };
+    if field_pair == "" {
+        if acc == "" { dest + " = add i64 0, 0" } else { acc }  // No fields case
+    } else {
+        let field_val = extract_field_value(field_pair);
         let temp_dest = if get_next_field_pair(fields_str, idx + 1) == "" { dest } else { dest + "_" + int_to_string(idx) };
         let insert_ir = gen_insertvalue(temp_dest, struct_name, base, field_val, idx);
         let new_acc = if acc == "" { insert_ir } else { acc + "|" + insert_ir };
-        gen_struct_init_fields_acc(dest, struct_name, fields_str, idx + 1, temp_dest, new_acc);
+        gen_struct_init_fields_acc(dest, struct_name, fields_str, idx + 1, temp_dest, new_acc)
+    };
 
 // Get nth field pair from "field: value, field2: value2"
 fn get_next_field_pair(s: String, n: i64) -> String =
     get_next_field_pair_acc(s, 0, n, 0);
 
 fn get_next_field_pair_acc(s: String, pos: i64, target: i64, current: i64) -> String =
-    if pos >= s.len() { if current == target { "" } else { "" } } else { let pos1 = skip_ws(s, pos) };
-        if pos1 >= s.len() { "" } else { let comma_pos = find_char(s, 44, pos1) };  // ','
+    if pos >= s.len() {
+        if current == target { "" } else { "" }
+    } else {
+        let pos1 = skip_ws(s, pos);
+        if pos1 >= s.len() { "" } else {
+            let comma_pos = find_char(s, 44, pos1);  // ','
             let pair_end = if comma_pos >= s.len() { s.len() } else { comma_pos };
-            if current == target { s.slice(pos1, pair_end) } else if comma_pos >= s.len() { "" } else { get_next_field_pair_acc(s, comma_pos + 1, target, current + 1) };
+            if current == target { s.slice(pos1, pair_end) } else if comma_pos >= s.len() { "" } else { get_next_field_pair_acc(s, comma_pos + 1, target, current + 1) }
+        }
+    };
 
 // Extract value from "field: value" -> "value"
 fn extract_field_value(pair: String) -> String =
@@ -366,10 +381,14 @@ fn gen_instr_enum_variant(line: String) -> String =
     let variant_full = extract_field(parsed, 1);
     let discriminant = extract_field(parsed, 2);
     let arg = extract_field(parsed, 3);
-    if arg == "" or arg.len() == 0 { dest + " = add i64 " + discriminant + ", 0" } else { let temp = dest + "_d" };
+    if arg == "" or arg.len() == 0 {
+        dest + " = add i64 " + discriminant + ", 0"
+    } else {
+        let temp = dest + "_d";
         let ir1 = gen_insertvalue(temp, "EnumData", "%EnumData zeroinitializer", discriminant, 0);
         let ir2 = gen_insertvalue(dest, "EnumData", temp, arg, 1);
-        ir1 + "|" + ir2;
+        ir1 + "|" + ir2
+    };
 
 // Parse enum-variant line
 // Input: "  %_t0 = enum-variant Status::Active 1 %_t1"
@@ -419,29 +438,37 @@ fn convert_switch_cases(cases_str: String) -> String =
     convert_switch_cases_acc(cases_str, 0, "");
 
 fn convert_switch_cases_acc(s: String, pos: i64, acc: String) -> String =
-    if pos >= s.len() { acc } else { let pos1 = skip_ws(s, pos) };
-        if pos1 >= s.len() { acc } else { let disc = read_until_ws(s, pos1) };
+    if pos >= s.len() { acc } else {
+        let pos1 = skip_ws(s, pos);
+        if pos1 >= s.len() { acc } else {
+            let disc = read_until_ws(s, pos1);
             // Find '->'
             let arrow_pos = find_arrow(s, pos1);
-            if arrow_pos >= s.len() { acc } else { let label_pos = skip_ws(s, arrow_pos + 2) };
+            if arrow_pos >= s.len() { acc } else {
+                let label_pos = skip_ws(s, arrow_pos + 2);
                 let label = read_switch_label(s, label_pos);
                 let case_ir = "i64 " + disc + ", label %" + label;
                 let new_acc = if acc == "" { case_ir } else { acc + " " + case_ir };
                 // Find next case (after comma)
                 let comma_pos = find_char(s, 44, label_pos);
-                if comma_pos >= s.len() { new_acc } else { convert_switch_cases_acc(s, comma_pos + 1, new_acc) };
+                if comma_pos >= s.len() { new_acc } else { convert_switch_cases_acc(s, comma_pos + 1, new_acc) }
+            }
+        }
+    };
 
-// Find '->' in string
+// Find '->' in string (45='-', 62='>')
 fn find_arrow(s: String, pos: i64) -> i64 =
-    if pos + 1 >= s.len() { s.len() } else if s.char_at(pos) == 45 and s.char_at(pos + 1) == 62 { pos  // '->' } else { find_arrow(s, pos + 1) };
+    if pos + 1 >= s.len() { s.len() } else if s.byte_at(pos) == 45 and s.byte_at(pos + 1) == 62 { pos } else { find_arrow(s, pos + 1) };
 
 // Read label until comma or end
 fn read_switch_label(s: String, pos: i64) -> String =
     read_switch_label_acc(s, pos, "");
 
 fn read_switch_label_acc(s: String, pos: i64, acc: String) -> String =
-    if pos >= s.len() { acc } else { let c = s.char_at(pos) };
-        if c == 44 or c == 32 or c == 93 { acc  // comma, space, or ']' } else { read_switch_label_acc(s, pos + 1, acc + char_to_string(c)) };
+    if pos >= s.len() { acc } else {
+        let c = s.byte_at(pos);
+        if c == 44 or c == 32 or c == 93 { acc } else { read_switch_label_acc(s, pos + 1, acc + char_to_string(c)) }  // comma, space, or ']'
+    };
 
 // ============================================================================
 // SECTION 9: MIR Instruction Parsing
@@ -458,7 +485,8 @@ fn read_switch_label_acc(s: String, pos: i64, acc: String) -> String =
 
 fn gen_instruction(line: String) -> String =
     let pos0 = skip_ws(line, 0);
-    if pos0 >= line.len() { "" } else { let dest = read_until_ws(line, pos0) };
+    if pos0 >= line.len() { "" } else {
+        let dest = read_until_ws(line, pos0);
         let pos1 = skip_ws(line, pos0 + dest.len());
         // Skip '='
         let pos2 = skip_ws(line, pos1 + 1);
@@ -466,10 +494,12 @@ fn gen_instruction(line: String) -> String =
         let op = read_until_ws(line, pos2);
         let pos3 = skip_ws(line, pos2 + op.len());
         // Dispatch based on operation
-        gen_instr_dispatch(dest, op, line, pos3);
+        gen_instr_dispatch(dest, op, line, pos3)
+    };
 
+// Instruction dispatch: UNIT/BREAK/CONTINUE v0.30.48, CLOSURE v0.30.52, Array v0.30.71, Index v0.30.72
 fn gen_instr_dispatch(dest: String, op: String, line: String, pos: i64) -> String =
-    if op == "const" { gen_instr_const(dest, line, pos) } else if op == "neg" { gen_instr_neg(dest, line, pos) } else if op == "not" { gen_instr_not(dest, line, pos) } else if op == "copy" { gen_instr_copy(dest, line, pos) } else if op == "UNIT" { gen_instr_unit(dest)  // v0.30.48 } else if op == "BREAK" { gen_instr_break(dest)  // v0.30.48 } else if op == "CONTINUE" { gen_instr_continue(dest)  // v0.30.48 } else if is_closure_op(op) { gen_instr_closure(dest, parse_closure_id(op))  // v0.30.52 } else if op == "Array" { gen_instr_array(dest, line, pos)  // v0.30.71 } else if op == "Index" { gen_instr_index(dest, line, pos)  // v0.30.72 } else { gen_instr_binop(dest, op, line, pos) };
+    if op == "const" { gen_instr_const(dest, line, pos) } else if op == "neg" { gen_instr_neg(dest, line, pos) } else if op == "not" { gen_instr_not(dest, line, pos) } else if op == "copy" { gen_instr_copy(dest, line, pos) } else if op == "UNIT" { gen_instr_unit(dest) } else if op == "BREAK" { gen_instr_break(dest) } else if op == "CONTINUE" { gen_instr_continue(dest) } else if is_closure_op(op) { gen_instr_closure(dest, parse_closure_id(op)) } else if op == "Array" { gen_instr_array(dest, line, pos) } else if op == "Index" { gen_instr_index(dest, line, pos) } else { gen_instr_binop(dest, op, line, pos) };
 
 // const I:42 or const B:1 or const S:hello (v0.30.51)
 fn gen_instr_const(dest: String, line: String, pos: i64) -> String =
@@ -512,15 +542,15 @@ fn gen_instr_continue(dest: String) -> String =
 fn gen_instr_closure(dest: String, closure_id: String) -> String =
     "; closure: " + closure_id + "|" + dest + " = inttoptr i64 0 to i8*";
 
-// Parse closure ID from CLOSURE:42 format
+// Parse closure ID from CLOSURE:42 format ("CLOSURE:" is 8 chars)
 fn parse_closure_id(op_arg: String) -> String =
-    if op_arg.len() < 9 { ""  // "CLOSURE:" is 8 chars } else { op_arg.slice(8, op_arg.len()) };
+    if op_arg.len() < 9 { "" } else { op_arg.slice(8, op_arg.len()) };
 
-// Check if operation is CLOSURE
+// Check if operation is CLOSURE (67,76,79,83,85,82,69 = "CLOSURE")
 fn is_closure_op(op: String) -> bool =
-    if op.len() < 7 { false } else { op.char_at(0) == 67 and op.char_at(1) == 76 and op.char_at(2) == 79 and
-         op.char_at(3) == 83 and op.char_at(4) == 85 and op.char_at(5) == 82 and
-         op.char_at(6) == 69 };  // "CLOSURE"
+    if op.len() < 7 { false } else { op.byte_at(0) == 67 and op.byte_at(1) == 76 and op.byte_at(2) == 79 and
+         op.byte_at(3) == 83 and op.byte_at(4) == 85 and op.byte_at(5) == 82 and
+         op.byte_at(6) == 69 };
 
 // ============================================================================
 // SECTION 11c: Closure Capture Infrastructure (v0.30.97)
@@ -550,15 +580,17 @@ fn find_capture_pos(s: String, pos: i64) -> i64 =
 // Extract nth comma-separated argument
 fn extract_capture_arg(s: String, pos: i64, n: i64) -> String =
     let trimmed = skip_ws(s, pos);
-    if n == 0 { extract_until_comma_or_end(s, trimmed) } else { let comma = find_char(s, 44, trimmed) };
-        if comma < 0 { "" } else { extract_capture_arg(s, comma + 1, n - 1) };
+    if n == 0 { extract_until_comma_or_end(s, trimmed) } else {
+        let comma = find_char(s, 44, trimmed);
+        if comma < 0 { "" } else { extract_capture_arg(s, comma + 1, n - 1) }
+    };
 
 fn extract_until_comma_or_end(s: String, pos: i64) -> String =
     let comma = find_char(s, 44, pos);
     if comma < 0 { trim_ws(s.slice(pos, s.len())) } else { trim_ws(s.slice(pos, comma)) };
 
 fn skip_ws(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if s.char_at(pos) == 32 { skip_ws(s, pos + 1) } else { pos };
+    if pos >= s.len() { pos } else if s.byte_at(pos) == 32 { skip_ws(s, pos + 1) } else { pos };
 
 // Parse captured variable from Capture %closure, %var, idx
 fn parse_capture_var(line: String) -> String =
@@ -662,8 +694,10 @@ fn find_call_closure_pos(s: String, pos: i64) -> i64 =
 // Parse CallClosure arguments (comma-separated after closure)
 fn parse_call_closure_args(line: String) -> String =
     let cc_pos = find_call_closure_pos(line, 0);
-    if cc_pos < 0 { "" } else { let comma = find_char(line, 44, cc_pos + 12) };
-        if comma < 0 { "" } else { trim_ws(line.slice(comma + 1, line.len())) };
+    if cc_pos < 0 { "" } else {
+        let comma = find_char(line, 44, cc_pos + 12);
+        if comma < 0 { "" } else { trim_ws(line.slice(comma + 1, line.len())) }
+    };
 
 // Generate LLVM IR for closure invocation
 // Closure struct: { i64 fn_ptr, i64* env }
@@ -707,40 +741,46 @@ fn gen_instr_array(dest: String, line: String, pos: i64) -> String =
     // Find [ and ] to extract elements
     let bracket_start = find_char(line, 91, pos);  // '['
     let bracket_end = find_char(line, 93, bracket_start);  // ']'
-    if bracket_start < 0 or bracket_end < 0 { "; array: invalid format" } else { let elems_str = line.slice(bracket_start + 1, bracket_end) };
+    if bracket_start < 0 or bracket_end < 0 { "; array: invalid format" } else {
+        let elems_str = line.slice(bracket_start + 1, bracket_end);
         let count = count_array_elems(elems_str);
-        if count == 0 { dest + " = alloca [0 x i64]" } else { let alloc = dest + " = alloca [" + int_to_string(count) + " x i64]" };
+        if count == 0 { dest + " = alloca [0 x i64]" } else {
+            let alloc = dest + " = alloca [" + int_to_string(count) + " x i64]";
             let stores = gen_array_stores(dest, elems_str, count, 0);
-            alloc + "|" + stores;
+            alloc + "|" + stores
+        }
+    };
 
 // Count comma-separated elements
 fn count_array_elems(s: String) -> i64 =
     if s.len() == 0 { 0 } else { count_commas(s, 0) + 1 };
 
 fn count_commas(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { 0 } else if s.char_at(pos) == 44 { 1 + count_commas(s, pos + 1)  // ',' } else { count_commas(s, pos + 1) };
+    if pos >= s.len() { 0 } else if s.byte_at(pos) == 44 { 1 + count_commas(s, pos + 1) } else { count_commas(s, pos + 1) };  // 44=','
 
 // Generate store instructions for array elements
 fn gen_array_stores(arr: String, elems: String, count: i64, idx: i64) -> String =
-    if idx >= count { "" } else { let elem = extract_array_elem(elems, idx) };
+    if idx >= count { "" } else {
+        let elem = extract_array_elem(elems, idx);
         let ptr = arr + "_ptr" + int_to_string(idx);
         let gep = ptr + " = getelementptr [" + int_to_string(count) + " x i64], [" + int_to_string(count) + " x i64]* " + arr + ", i32 0, i32 " + int_to_string(idx);
         let store = "store i64 " + elem + ", i64* " + ptr;
         let rest = gen_array_stores(arr, elems, count, idx + 1);
-        if rest.len() > 0 { gep + "|" + store + "|" + rest } else { gep + "|" + store };
+        if rest.len() > 0 { gep + "|" + store + "|" + rest } else { gep + "|" + store }
+    };
 
 // Extract element at index from comma-separated list
 fn extract_array_elem(s: String, idx: i64) -> String =
     extract_array_elem_rec(s, idx, 0, 0);
 
 fn extract_array_elem_rec(s: String, target: i64, current: i64, pos: i64) -> String =
-    if pos >= s.len() { if current == target { trim_ws(s.slice(find_elem_start(s, current), s.len())) } else { "" } } else if s.char_at(pos) == 44 { if current == target { trim_ws(s.slice(find_elem_start(s, current), pos)) } else { extract_array_elem_rec(s, target, current + 1, pos + 1) } } else { extract_array_elem_rec(s, target, current, pos + 1) };
+    if pos >= s.len() { if current == target { trim_ws(s.slice(find_elem_start(s, current), s.len())) } else { "" } } else if s.byte_at(pos) == 44 { if current == target { trim_ws(s.slice(find_elem_start(s, current), pos)) } else { extract_array_elem_rec(s, target, current + 1, pos + 1) } } else { extract_array_elem_rec(s, target, current, pos + 1) };
 
 fn find_elem_start(s: String, idx: i64) -> i64 =
     find_elem_start_rec(s, idx, 0, 0);
 
 fn find_elem_start_rec(s: String, target: i64, current: i64, pos: i64) -> i64 =
-    if current == target { skip_ws(s, pos) } else if pos >= s.len() { pos } else if s.char_at(pos) == 44 { find_elem_start_rec(s, target, current + 1, pos + 1) } else { find_elem_start_rec(s, target, current, pos + 1) };
+    if current == target { skip_ws(s, pos) } else if pos >= s.len() { pos } else if s.byte_at(pos) == 44 { find_elem_start_rec(s, target, current + 1, pos + 1) } else { find_elem_start_rec(s, target, current, pos + 1) };
 
 fn trim_ws(s: String) -> String =
     let start = skip_ws(s, 0);
@@ -748,7 +788,7 @@ fn trim_ws(s: String) -> String =
     if start >= end { "" } else { s.slice(start, end) };
 
 fn trim_end_ws(s: String, pos: i64) -> i64 =
-    if pos <= 0 { 0 } else if s.char_at(pos - 1) == 32 { trim_end_ws(s, pos - 1)  // ' ' } else { pos };
+    if pos <= 0 { 0 } else if s.byte_at(pos - 1) == 32 { trim_end_ws(s, pos - 1) } else { pos };  // 32=' '
 
 // ============================================================================
 // v0.30.72: Index Expression IR Generation
@@ -771,24 +811,24 @@ fn read_until_bracket(s: String, pos: i64) -> String =
     read_until_bracket_rec(s, pos, "");
 
 fn read_until_bracket_rec(s: String, pos: i64, acc: String) -> String =
-    if pos >= s.len() { acc } else if s.char_at(pos) == 91 { acc  // '[' } else { read_until_bracket_rec(s, pos + 1, acc + char_to_string(s.char_at(pos))) };
+    if pos >= s.len() { acc } else if s.byte_at(pos) == 91 { acc } else { read_until_bracket_rec(s, pos + 1, acc + char_to_string(s.byte_at(pos))) };  // 91='['
 
 fn extract_index_expr(s: String, pos: i64) -> String =
     // Skip '[' and extract until ']'
-    let start = if pos < s.len() and s.char_at(pos) == 91 { pos + 1 } else { pos };
+    let start = if pos < s.len() and s.byte_at(pos) == 91 { pos + 1 } else { pos };
     extract_until_close_bracket(s, start, "");
 
 fn extract_until_close_bracket(s: String, pos: i64, acc: String) -> String =
-    if pos >= s.len() { acc } else if s.char_at(pos) == 93 { acc  // ']' } else { extract_until_close_bracket(s, pos + 1, acc + char_to_string(s.char_at(pos))) };
+    if pos >= s.len() { acc } else if s.byte_at(pos) == 93 { acc } else { extract_until_close_bracket(s, pos + 1, acc + char_to_string(s.byte_at(pos))) };  // 93=']'
 
 // Binary operations: + %a, %b or == %a, %b or and %a, %b
+// v0.30.70: Range operator support
 fn gen_instr_binop(dest: String, op: String, line: String, pos: i64) -> String =
     let lhs = read_until_ws(line, pos);
     let pos2 = find_char(line, 44, pos);  // find comma
     let pos3 = skip_ws(line, pos2 + 1);
     let rhs = read_until_ws(line, pos3);
-    if is_arith_op(op) { gen_binop_arith(dest, op, lhs, rhs, "i64") } else if is_cmp_op(op) { gen_binop_cmp(dest, op, lhs, rhs, "i64") } else if is_logic_op(op) { gen_binop_logic(dest, op, lhs, rhs, "i1")
-    // v0.30.70: Range operator support } else if is_range_op(op) { gen_binop_range(dest, op, lhs, rhs) } else { "; unknown op: " + op };
+    if is_arith_op(op) { gen_binop_arith(dest, op, lhs, rhs, "i64") } else if is_cmp_op(op) { gen_binop_cmp(dest, op, lhs, rhs, "i64") } else if is_logic_op(op) { gen_binop_logic(dest, op, lhs, rhs, "i1") } else if is_range_op(op) { gen_binop_range(dest, op, lhs, rhs) } else { "; unknown op: " + op };
 
 // ============================================================================
 // SECTION 10: LLVM IR Control Flow (v0.10.6)
@@ -864,13 +904,13 @@ fn is_label_line(line: String) -> bool =
     has_trailing_colon(word) and not has_equals(line);
 
 fn has_trailing_colon(s: String) -> bool =
-    if s.len() == 0 { false } else { s.char_at(s.len() - 1) == 58 };
+    if s.len() == 0 { false } else { s.byte_at(s.len() - 1) == 58 };
 
 fn has_equals(s: String) -> bool =
     has_equals_acc(s, 0);
 
 fn has_equals_acc(s: String, pos: i64) -> bool =
-    if pos >= s.len() { false } else if s.char_at(pos) == 61 { true } else { has_equals_acc(s, pos + 1) };
+    if pos >= s.len() { false } else if s.byte_at(pos) == 61 { true } else { has_equals_acc(s, pos + 1) };
 
 // Check if line is a terminator
 fn is_terminator_line(line: String) -> bool =
@@ -944,10 +984,9 @@ fn read_until_char(s: String, pos: i64, c: i64) -> String =
     read_until_char_acc(s, pos, c, "");
 
 fn read_until_char_acc(s: String, pos: i64, c: i64, acc: String) -> String =
-    if pos >= s.len() { acc } else if s.char_at(pos) == c { acc } else { read_until_char_acc(s, pos + 1, c, acc + char_to_string(s.char_at(pos))) };
+    if pos >= s.len() { acc } else if s.byte_at(pos) == c { acc } else { read_until_char_acc(s, pos + 1, c, acc + char_to_string(s.byte_at(pos))) };
 
-fn find_arrow(s: String, pos: i64) -> i64 =
-    if pos + 1 >= s.len() { s.len() } else if s.char_at(pos) == 45 and s.char_at(pos + 1) == 62 { pos  // '->' } else { find_arrow(s, pos + 1) };
+// find_arrow already defined above (45='-', 62='>')
 
 // Convert MIR parameter list to LLVM IR format
 // "a: i64, b: i64" -> "i64 %a, i64 %b"
@@ -955,14 +994,22 @@ fn convert_params(params_str: String) -> String =
     if params_str.len() == 0 { "" } else { convert_params_acc(params_str, 0, "") };
 
 fn convert_params_acc(s: String, pos: i64, acc: String) -> String =
-    if pos >= s.len() { acc } else { let pos1 = skip_ws(s, pos) };
-        if pos1 >= s.len() { acc } else { let param_name = read_until_char(s, pos1, 58) };  // ':'
+    if pos >= s.len() { acc } else {
+        let pos1 = skip_ws(s, pos);
+        if pos1 >= s.len() { acc } else {
+            let param_name = read_until_char(s, pos1, 58);  // ':'
             let pos2 = skip_ws(s, pos1 + param_name.len() + 1);
             let param_type = read_until_ws(s, pos2);
             let new_param = gen_param(param_type, param_name);
             let next_pos = find_char(s, 44, pos2);  // ','
-            if next_pos >= s.len() { if acc == "" { new_param } else { acc + ", " + new_param } } else { let new_acc = if acc == "" { new_param } else { acc + ", " + new_param } };
-                convert_params_acc(s, next_pos + 1, new_acc);
+            if next_pos >= s.len() {
+                if acc == "" { new_param } else { acc + ", " + new_param }
+            } else {
+                let new_acc = if acc == "" { new_param } else { acc + ", " + new_param };
+                convert_params_acc(s, next_pos + 1, new_acc)
+            }
+        }
+    };
 
 // Parse MIR call instruction
 // %_t0 = call foo(%a, %b)
@@ -986,12 +1033,20 @@ fn convert_call_args(args_str: String) -> String =
     if args_str.len() == 0 { "" } else { convert_call_args_acc(args_str, 0, "") };
 
 fn convert_call_args_acc(s: String, pos: i64, acc: String) -> String =
-    if pos >= s.len() { acc } else { let pos1 = skip_ws(s, pos) };
-        if pos1 >= s.len() { acc } else { let arg = read_until_ws(s, pos1) };
+    if pos >= s.len() { acc } else {
+        let pos1 = skip_ws(s, pos);
+        if pos1 >= s.len() { acc } else {
+            let arg = read_until_ws(s, pos1);
             let new_arg = gen_call_arg("i64", arg);
             let next_pos = find_char(s, 44, pos1);  // ','
-            if next_pos >= s.len() { if acc == "" { new_arg } else { acc + ", " + new_arg } } else { let new_acc = if acc == "" { new_arg } else { acc + ", " + new_arg } };
-                convert_call_args_acc(s, next_pos + 1, new_acc);
+            if next_pos >= s.len() {
+                if acc == "" { new_arg } else { acc + ", " + new_arg }
+            } else {
+                let new_acc = if acc == "" { new_arg } else { acc + ", " + new_arg };
+                convert_call_args_acc(s, next_pos + 1, new_acc)
+            }
+        }
+    };
 
 // Generate LLVM IR call instruction from MIR
 fn gen_instr_call(line: String) -> String =
@@ -1007,7 +1062,7 @@ fn extract_field(s: String, index: i64) -> String =
     extract_field_acc(s, 0, index, 0, "");
 
 fn extract_field_acc(s: String, pos: i64, target: i64, current: i64, acc: String) -> String =
-    if pos >= s.len() { if current == target { acc } else { "" } } else if s.char_at(pos) == 124 { if current == target { acc } else { extract_field_acc(s, pos + 1, target, current + 1, "") } } else if current == target { extract_field_acc(s, pos + 1, target, current, acc + char_to_string(s.char_at(pos))) } else { extract_field_acc(s, pos + 1, target, current, acc) };
+    if pos >= s.len() { if current == target { acc } else { "" } } else if s.byte_at(pos) == 124 { if current == target { acc } else { extract_field_acc(s, pos + 1, target, current + 1, "") } } else if current == target { extract_field_acc(s, pos + 1, target, current, acc + char_to_string(s.byte_at(pos))) } else { extract_field_acc(s, pos + 1, target, current, acc) };
 
 // Generate complete function from MIR
 // Input: MIR function text with | separators
@@ -1020,20 +1075,24 @@ fn gen_function(mir: String) -> String =
 // v0.30.56: Extract return type from MIR function header
 fn extract_return_type(mir: String) -> String =
     let arrow_pos = find_arrow(mir, 0);
-    if arrow_pos < 0 { "i64" } else { let pos1 = arrow_pos + 2 };
+    if arrow_pos < 0 { "i64" } else {
+        let pos1 = arrow_pos + 2;
         let pos2 = skip_ws(mir, pos1);
-        read_until_ws(mir, pos2);
+        read_until_ws(mir, pos2)
+    };
 
 fn gen_function_lines(mir: String, pos: i64, acc: String) -> String =
     gen_function_lines_typed(mir, pos, acc, "i64");
 
 // v0.30.56: Function generation with return type tracking
 fn gen_function_lines_typed(mir: String, pos: i64, acc: String, ret_type: String) -> String =
-    if pos >= mir.len() { acc } else { let line_end = find_pipe(mir, pos) };
+    if pos >= mir.len() { acc } else {
+        let line_end = find_pipe(mir, pos);
         let line = mir.slice(pos, line_end);
         let llvm_line = gen_mir_line_typed(line, ret_type);
         let new_acc = if acc == "" { llvm_line } else { acc + "|" + llvm_line };
-        if line_end >= mir.len() { new_acc } else { gen_function_lines_typed(mir, line_end + 1, new_acc, ret_type) };
+        if line_end >= mir.len() { new_acc } else { gen_function_lines_typed(mir, line_end + 1, new_acc, ret_type) }
+    };
 
 // Dispatch for any MIR line
 fn gen_mir_line(line: String) -> String =
@@ -1042,14 +1101,16 @@ fn gen_mir_line(line: String) -> String =
 // v0.30.56: MIR line dispatch with return type context
 fn gen_mir_line_typed(line: String, ret_type: String) -> String =
     let pos = skip_ws(line, 0);
-    if pos >= line.len() { "" } else { let word = read_until_ws(line, pos) };
-        if word == "fn" { gen_mir_fn_header(line) } else if word == "}" { gen_fn_footer() } else if is_label_line(line) { gen_label_line(line) } else if is_terminator_line(line) { gen_terminator_typed(line, ret_type) } else if is_call_line(line) { gen_instr_call(line)
-        // v0.21.0: Struct support } else if is_struct_init_line(line) { gen_instr_struct_init(line) } else if is_field_access_line(line) { gen_instr_field_access(line)
-        // v0.21.1: Enum support } else if is_enum_variant_line(line) { gen_instr_enum_variant(line) } else if is_switch_line(line) { gen_instr_switch(line)
-        // v0.30.73: Method call support } else if is_method_call_line(line) { gen_instr_method_call(line)
-        // v0.30.105: Capture/LoadCapture support } else if is_capture_line(line) { gen_instr_capture(line) } else if is_load_capture_line(line) { gen_instr_load_capture(line)
-        // v0.30.108: Closure invocation support } else if is_call_closure_line(line) { gen_instr_call_closure(line)
-        // v0.30.113: TraitCall support } else if is_trait_call_line(line) { gen_instr_trait_call(line) } else { gen_instruction(line) };
+    if pos >= line.len() { "" } else {
+        let word = read_until_ws(line, pos);
+        // v0.21.0: Struct support
+        // v0.21.1: Enum support
+        // v0.30.73: Method call support
+        // v0.30.105: Capture/LoadCapture support
+        // v0.30.108: Closure invocation support
+        // v0.30.113: TraitCall support
+        if word == "fn" { gen_mir_fn_header(line) } else if word == "}" { gen_fn_footer() } else if is_label_line(line) { gen_label_line(line) } else if is_terminator_line(line) { gen_terminator_typed(line, ret_type) } else if is_call_line(line) { gen_instr_call(line) } else if is_struct_init_line(line) { gen_instr_struct_init(line) } else if is_field_access_line(line) { gen_instr_field_access(line) } else if is_enum_variant_line(line) { gen_instr_enum_variant(line) } else if is_switch_line(line) { gen_instr_switch(line) } else if is_method_call_line(line) { gen_instr_method_call(line) } else if is_capture_line(line) { gen_instr_capture(line) } else if is_load_capture_line(line) { gen_instr_load_capture(line) } else if is_call_closure_line(line) { gen_instr_call_closure(line) } else if is_trait_call_line(line) { gen_instr_trait_call(line) } else { gen_instruction(line) }
+    };
 
 // Check if line is a call instruction
 fn is_call_line(line: String) -> bool =
@@ -1072,7 +1133,7 @@ fn has_method_call_keyword(s: String, pos: i64) -> bool =
 
 // Generate LLVM IR for method call
 // Input: %_t1 = MethodCall %_t0.len()
-// Input: %_t2 = MethodCall %_t0.char_at(%_t1)
+// Input: %_t2 = MethodCall %_t0.byte_at(%_t1)
 // Input: %_t3 = MethodCall %_t0.slice(%_t1, %_t2)
 fn gen_instr_method_call(line: String) -> String =
     let dest = parse_method_call_dest(line);
@@ -1096,7 +1157,7 @@ fn read_until_dot(s: String, pos: i64) -> String =
     read_until_dot_acc(s, pos, "");
 
 fn read_until_dot_acc(s: String, pos: i64, acc: String) -> String =
-    if pos >= s.len() { acc } else if s.char_at(pos) == 46 { acc  // '.' } else { read_until_dot_acc(s, pos + 1, acc + char_to_string(s.char_at(pos))) };
+    if pos >= s.len() { acc } else if s.byte_at(pos) == 46 { acc } else { read_until_dot_acc(s, pos + 1, acc + char_to_string(s.byte_at(pos))) };  // 46='.'
 
 // Parse method name: "... %recv.method(...)" -> "method"
 fn parse_method_call_method(line: String) -> String =
@@ -1112,7 +1173,7 @@ fn read_until_paren(s: String, pos: i64) -> String =
     read_until_paren_acc(s, pos, "");
 
 fn read_until_paren_acc(s: String, pos: i64, acc: String) -> String =
-    if pos >= s.len() { acc } else if s.char_at(pos) == 40 { acc  // '(' } else { read_until_paren_acc(s, pos + 1, acc + char_to_string(s.char_at(pos))) };
+    if pos >= s.len() { acc } else if s.byte_at(pos) == 40 { acc } else { read_until_paren_acc(s, pos + 1, acc + char_to_string(s.byte_at(pos))) };  // 40='('
 
 // Parse args from method call: "...method(args)" -> "args"
 fn parse_method_call_args(line: String) -> String =
@@ -1120,13 +1181,13 @@ fn parse_method_call_args(line: String) -> String =
     if paren_pos < 0 { "" } else { extract_paren_content(line, paren_pos) };
 
 fn find_open_paren(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { 0 - 1 } else if s.char_at(pos) == 40 { pos  // '(' } else { find_open_paren(s, pos + 1) };
+    if pos >= s.len() { 0 - 1 } else if s.byte_at(pos) == 40 { pos } else { find_open_paren(s, pos + 1) };  // 40='('
 
 fn extract_paren_content(s: String, pos: i64) -> String =
-    if pos >= s.len() or s.char_at(pos) != 40 { "" } else { extract_until_close_paren(s, pos + 1, "") };
+    if pos >= s.len() or s.byte_at(pos) != 40 { "" } else { extract_until_close_paren(s, pos + 1, "") };
 
 fn extract_until_close_paren(s: String, pos: i64, acc: String) -> String =
-    if pos >= s.len() { acc } else if s.char_at(pos) == 41 { acc  // ')' } else { extract_until_close_paren(s, pos + 1, acc + char_to_string(s.char_at(pos))) };
+    if pos >= s.len() { acc } else if s.byte_at(pos) == 41 { acc } else { extract_until_close_paren(s, pos + 1, acc + char_to_string(s.byte_at(pos))) };  // 41=')'
 
 fn find_method_call_pos(s: String, pos: i64) -> i64 =
     if pos + 10 >= s.len() { 0 - 1 } else if starts_with(s, "MethodCall", pos) { pos } else { find_method_call_pos(s, pos + 1) };
@@ -1135,16 +1196,14 @@ fn find_method_call_pos(s: String, pos: i64) -> i64 =
 // v0.30.78: Added array_len, array_get, array_set for explicit array operations
 // v0.30.80: Added array_push, array_pop, array_clear for array mutation
 fn gen_method_dispatch(dest: String, recv: String, method: String, args: String) -> String =
-    // String methods
-    if method == "len" { gen_method_len(dest, recv) } else if method == "char_at" { gen_method_char_at(dest, recv, args) } else if method == "slice" { gen_method_slice(dest, recv, args) } else if method == "concat" { gen_method_concat(dest, recv, args) } else if method == "eq" { gen_method_eq(dest, recv, args)
-    // Array methods (v0.30.78) } else if method == "array_len" { gen_method_array_len(dest, recv) } else if method == "array_get" { gen_method_array_get(dest, recv, args) } else if method == "array_set" { gen_method_array_set(dest, recv, args)
-    // Array mutation methods (v0.30.80) } else if method == "array_push" { gen_method_array_push(dest, recv, args) } else if method == "array_pop" { gen_method_array_pop(dest, recv) } else if method == "array_clear" { gen_method_array_clear(dest, recv) } else { "; unsupported method: " + method };
+    // String methods, then Array methods (v0.30.78), then Array mutation methods (v0.30.80)
+    if method == "len" { gen_method_len(dest, recv) } else if method == "char_at" { gen_method_char_at(dest, recv, args) } else if method == "slice" { gen_method_slice(dest, recv, args) } else if method == "concat" { gen_method_concat(dest, recv, args) } else if method == "eq" { gen_method_eq(dest, recv, args) } else if method == "array_len" { gen_method_array_len(dest, recv) } else if method == "array_get" { gen_method_array_get(dest, recv, args) } else if method == "array_set" { gen_method_array_set(dest, recv, args) } else if method == "array_push" { gen_method_array_push(dest, recv, args) } else if method == "array_pop" { gen_method_array_pop(dest, recv) } else if method == "array_clear" { gen_method_array_clear(dest, recv) } else { "; unsupported method: " + method };
 
 // v0.30.74: String.len() -> call @bmb_string_len
 fn gen_method_len(dest: String, recv: String) -> String =
     dest + " = call i64 @bmb_string_len(i8* " + recv + ")";
 
-// v0.30.75: String.char_at(idx) -> getelementptr + load
+// v0.30.75: String.byte_at(idx) -> getelementptr + load
 fn gen_method_char_at(dest: String, recv: String, args: String) -> String =
     let idx = trim_ws(args);
     let ptr = dest + "_ptr";
@@ -1239,7 +1298,7 @@ fn extract_trait_name(s: String, pos: i64) -> String =
     if end <= pos { "" } else { s.slice(pos, end) };
 
 fn find_colon_colon(s: String, pos: i64) -> i64 =
-    if pos + 1 >= s.len() { 0 - 1 } else if s.char_at(pos) == 58 and s.char_at(pos + 1) == 58 { pos  // '::' } else { find_colon_colon(s, pos + 1) };
+    if pos + 1 >= s.len() { 0 - 1 } else if s.byte_at(pos) == 58 and s.byte_at(pos + 1) == 58 { pos } else { find_colon_colon(s, pos + 1) };  // 58,58='::'
 
 // Parse method name from TraitCall (e.g., "show" from "TraitCall Display::show")
 fn parse_trait_call_method(line: String) -> String =
@@ -1278,10 +1337,14 @@ fn parse_trait_call_recv(line: String) -> String =
 
 fn parse_trait_call_args(line: String) -> String =
     let paren_pos = find_char(line, 40, 0);
-    if paren_pos < 0 { "" } else { let close_pos = find_closing_paren(line, paren_pos) };
-        if close_pos <= paren_pos + 1 { "" } else { let inner = line.slice(paren_pos + 1, close_pos) };
+    if paren_pos < 0 { "" } else {
+        let close_pos = find_closing_paren(line, paren_pos);
+        if close_pos <= paren_pos + 1 { "" } else {
+            let inner = line.slice(paren_pos + 1, close_pos);
             let comma_pos = find_char(inner, 44, 0);
-            if comma_pos < 0 { "" } else if comma_pos + 1 >= inner.len() { "" } else { trim_ws(inner.slice(comma_pos + 1, inner.len())) };
+            if comma_pos < 0 { "" } else if comma_pos + 1 >= inner.len() { "" } else { trim_ws(inner.slice(comma_pos + 1, inner.len())) }
+        }
+    };
 
 fn find_closing_paren(s: String, start: i64) -> i64 =
     find_char(s, 41, start);  // ')'
@@ -1305,14 +1368,16 @@ fn gen_program(mir: String) -> String =
     gen_program_acc(mir, 0, "");
 
 fn gen_program_acc(mir: String, pos: i64, acc: String) -> String =
-    if pos >= mir.len() { acc } else { let fn_end = find_double_pipe(mir, pos) };
+    if pos >= mir.len() { acc } else {
+        let fn_end = find_double_pipe(mir, pos);
         let fn_mir = mir.slice(pos, fn_end);
         let fn_llvm = gen_function(fn_mir);
         let new_acc = if acc == "" { fn_llvm } else { acc + "||" + fn_llvm };
-        if fn_end + 2 >= mir.len() { new_acc } else { gen_program_acc(mir, fn_end + 2, new_acc) };
+        if fn_end + 2 >= mir.len() { new_acc } else { gen_program_acc(mir, fn_end + 2, new_acc) }
+    };
 
 fn find_double_pipe(s: String, pos: i64) -> i64 =
-    if pos + 1 >= s.len() { s.len() } else if s.char_at(pos) == 124 and s.char_at(pos + 1) == 124 { pos } else { find_double_pipe(s, pos + 1) };
+    if pos + 1 >= s.len() { s.len() } else if s.byte_at(pos) == 124 and s.byte_at(pos + 1) == 124 { pos } else { find_double_pipe(s, pos + 1) };
 
 // Generate LLVM module header with target specification
 // Note: LLVM target triple would use quotes, but BMB cannot have quotes in strings
@@ -1461,7 +1526,7 @@ fn str_contains_rec(s: String, sub: String, pos: i64) -> bool =
 fn str_match_at(s: String, sub: String, pos: i64) -> bool =
     str_match_at_idx(s, sub, pos, 0);
 fn str_match_at_idx(s: String, sub: String, pos: i64, idx: i64) -> bool =
-    if idx >= sub.len() { true } else if pos + idx >= s.len() { false } else if s.char_at(pos + idx) != sub.char_at(idx) { false } else { str_match_at_idx(s, sub, pos, idx + 1) };
+    if idx >= sub.len() { true } else if pos + idx >= s.len() { false } else if s.byte_at(pos + idx) != sub.byte_at(idx) { false } else { str_match_at_idx(s, sub, pos, idx + 1) };
 
 // v0.31.19: Updated to expect nsw flags for add/sub/mul
 fn test_arith_ops() -> i64 =
@@ -2639,7 +2704,7 @@ fn test_method_chaining() -> i64 =
     let t4 = if has_pattern(m3, "@bmb_string_concat", 0) { 1 } else { 0 };
 
     // Test 5: Triple chain simulation (char_at on slice result)
-    let m4 = gen_instr_method_call("  %_t3 = MethodCall %_t2.char_at(%idx)");
+    let m4 = gen_instr_method_call("  %_t3 = MethodCall %_t2.byte_at(%idx)");
     let t5 = if has_pattern(m4, "getelementptr", 0) { 1 } else { 0 };
 
     // Test 6: Method dispatch maintains type consistency
@@ -3084,7 +3149,7 @@ fn main() -> i64 =
     let r31 = test_extractvalue_gen();
     let u31 = println(r31);
     let r32 = test_field_name_to_idx();
-    let u32 = println(r32);
+    let uu32 = println(r32);
     let r33 = test_field_access_ir();
     let u33 = println(r33);
     // v0.21.1 enum support tests
@@ -3176,7 +3241,7 @@ fn main() -> i64 =
     let u63 = println(r63);
     // v0.30.121 edge case IR tests
     let r64 = test_edge_cases_ir();
-    let u64 = println(r64);
+    let uu64 = println(r64);
     // v0.30.122 cross-module IR tests
     let r65 = test_cross_module_ir();
     let u65 = println(r65);

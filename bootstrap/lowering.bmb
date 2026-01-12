@@ -33,13 +33,17 @@ fn is_whitespace(c: i64) -> bool = c == 32 or c == 9 or c == 10 or c == 13;
 
 // Parse integer from string position
 fn parse_int_at(s: String, pos: i64, acc: i64) -> i64 =
-    if pos >= s.len() { acc } else { let c = s.char_at(pos) };
-        if c >= 48 and c <= 57 { parse_int_at(s, pos + 1, acc * 10 + (c - 48)) } else { acc };
+    if pos >= s.len() { acc } else {
+        let c = s.byte_at(pos);
+        if c >= 48 and c <= 57 { parse_int_at(s, pos + 1, acc * 10 + (c - 48)) } else { acc }
+    };
 
 // Find end of integer in string
 fn find_int_end(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else { let c = s.char_at(pos) };
-        if c >= 48 and c <= 57 { find_int_end(s, pos + 1) } else { pos };
+    if pos >= s.len() { pos } else {
+        let c = s.byte_at(pos);
+        if c >= 48 and c <= 57 { find_int_end(s, pos + 1) } else { pos }
+    };
 
 // ============================================================================
 // S-Expression Parser Utilities
@@ -47,7 +51,7 @@ fn find_int_end(s: String, pos: i64) -> i64 =
 
 // Skip whitespace
 fn skip_ws(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if is_whitespace(s.char_at(pos)) { skip_ws(s, pos + 1) } else { pos };
+    if pos >= s.len() { pos } else if is_whitespace(s.byte_at(pos)) { skip_ws(s, pos + 1) } else { pos };
 
 // Check if char is identifier char
 fn is_ident_char(c: i64) -> bool =
@@ -62,35 +66,41 @@ fn is_op_char(c: i64) -> bool =
 
 // Find end of identifier/symbol
 fn find_ident_end(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if is_ident_char(s.char_at(pos)) { find_ident_end(s, pos + 1) } else { pos };
+    if pos >= s.len() { pos } else if is_ident_char(s.byte_at(pos)) { find_ident_end(s, pos + 1) } else { pos };
 
 // Find end of operator symbol (like +, ==, !=, <=, >=)
 fn find_op_end(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if is_op_char(s.char_at(pos)) { find_op_end(s, pos + 1) } else { pos };
+    if pos >= s.len() { pos } else if is_op_char(s.byte_at(pos)) { find_op_end(s, pos + 1) } else { pos };
 
 // Check if string starts with prefix at position
 fn starts_with_at(s: String, pos: i64, prefix: String) -> bool =
     if pos + prefix.len() > s.len() { false } else { s.slice(pos, pos + prefix.len()) == prefix };
 
 // Find matching close paren, handling nesting
+// '(' = 40, ')' = 41
 fn find_close_paren(s: String, pos: i64, depth: i64) -> i64 =
-    if pos >= s.len() { pos } else { let c = s.char_at(pos) };
-        if c == 40 { find_close_paren(s, pos + 1, depth + 1)  // '(' } else if c == 41 { if depth == 1 { pos } else { find_close_paren(s, pos + 1, depth - 1) } } else { find_close_paren(s, pos + 1, depth) };
+    if pos >= s.len() { pos } else {
+        let c = s.byte_at(pos);
+        if c == 40 { find_close_paren(s, pos + 1, depth + 1) } else if c == 41 { if depth == 1 { pos } else { find_close_paren(s, pos + 1, depth - 1) } } else { find_close_paren(s, pos + 1, depth) }
+    };
 
 // Extract content between parens: "(content)" -> "content"
 fn extract_paren_content(s: String) -> String =
-    if s.len() < 2 { s } else if s.char_at(0) == 40 and s.char_at(s.len() - 1) == 41 { s.slice(1, s.len() - 1) } else { s };
+    if s.len() < 2 { s } else if s.byte_at(0) == 40 and s.byte_at(s.len() - 1) == 41 { s.slice(1, s.len() - 1) } else { s };
 
 // ============================================================================
 // AST Node Type Detection
 // ============================================================================
 
 // Get node type from S-expression: "(type ...)" -> "type"
+// '(' = 40
 fn get_node_type(s: String) -> String =
     let trimmed = skip_ws(s, 0);
-    if trimmed >= s.len() { "empty" } else if s.char_at(trimmed) != 40 { "atom"  // Not '(' } else { let start = skip_ws(s, trimmed + 1) };
+    if trimmed >= s.len() { "empty" } else if s.byte_at(trimmed) != 40 { "atom" } else {
+        let start = skip_ws(s, trimmed + 1);
         let send = find_ident_end(s, start);
-        if send == start { "unknown" } else { s.slice(start, send) };
+        if send == start { "unknown" } else { s.slice(start, send) }
+    };
 
 // Check AST node types
 fn is_int_node(s: String) -> bool = get_node_type(s) == "int";
@@ -118,83 +128,95 @@ fn is_enum_variant_node(s: String) -> bool =
 
 // v0.30.33: String literal support
 fn is_string_node(s: String) -> bool =
-    if s.len() < 2 { false } else { s.char_at(0) == 34 };  // starts with quote
+    if s.len() < 2 { false } else { s.byte_at(0) == 34 };  // starts with quote
 
 // v0.30.34: Lambda/closure support
 // Lambda format: (fn |params| body) or (fn |params| -> type body)
+// '(' = 40, 'f' = 102, 'n' = 110, ' ' = 32, '|' = 124
 fn is_lambda_node(s: String) -> bool =
-    if s.len() < 6 { false  // minimum: "(fn ||" } else { let c0 = s.char_at(0) };  // '('
-        let c1 = s.char_at(1);  // 'f'
-        let c2 = s.char_at(2);  // 'n'
-        let c3 = s.char_at(3);  // ' '
-        let c4 = s.char_at(4);  // '|'
-        c0 == 40 and c1 == 102 and c2 == 110 and c3 == 32 and c4 == 124;
+    if s.len() < 6 { false } else {
+        let c0 = s.byte_at(0);
+        let c1 = s.byte_at(1);
+        let c2 = s.byte_at(2);
+        let c3 = s.byte_at(3);
+        let c4 = s.byte_at(4);
+        c0 == 40 and c1 == 102 and c2 == 110 and c3 == 32 and c4 == 124
+    };
 
 // v0.30.36: Block expression support
 // Block format: (block inner_expr)
+// '(' = 40, 'b' = 98, 'l' = 108, 'o' = 111, 'c' = 99, 'k' = 107, ' ' = 32
 fn is_block_node(s: String) -> bool =
-    if s.len() < 9 { false  // minimum: "(block x)" } else { let c0 = s.char_at(0) };  // '('
-        let c1 = s.char_at(1);  // 'b'
-        let c2 = s.char_at(2);  // 'l'
-        let c3 = s.char_at(3);  // 'o'
-        let c4 = s.char_at(4);  // 'c'
-        let c5 = s.char_at(5);  // 'k'
-        let c6 = s.char_at(6);  // ' '
-        c0 == 40 and c1 == 98 and c2 == 108 and c3 == 111 and c4 == 99 and c5 == 107 and c6 == 32;
+    if s.len() < 9 { false } else {
+        let c0 = s.byte_at(0);
+        let c1 = s.byte_at(1);
+        let c2 = s.byte_at(2);
+        let c3 = s.byte_at(3);
+        let c4 = s.byte_at(4);
+        let c5 = s.byte_at(5);
+        let c6 = s.byte_at(6);
+        c0 == 40 and c1 == 98 and c2 == 108 and c3 == 111 and c4 == 99 and c5 == 107 and c6 == 32
+    };
 
 // v0.30.36: Unit expression support
 // Unit format: exactly "()"
 fn is_unit_node(s: String) -> bool =
-    s.len() == 2 and s.char_at(0) == 40 and s.char_at(1) == 41;
+    s.len() == 2 and s.byte_at(0) == 40 and s.byte_at(1) == 41;
 
 // v0.30.38: While expression support
 // While format: (while cond body)
+// '(' = 40, 'w' = 119, 'h' = 104, 'i' = 105, 'l' = 108, 'e' = 101, ' ' = 32
 fn is_while_node(s: String) -> bool =
-    if s.len() < 10 { false  // minimum: "(while x y)" } else { let c0 = s.char_at(0) };  // '('
-        let c1 = s.char_at(1);  // 'w'
-        let c2 = s.char_at(2);  // 'h'
-        let c3 = s.char_at(3);  // 'i'
-        let c4 = s.char_at(4);  // 'l'
-        let c5 = s.char_at(5);  // 'e'
-        let c6 = s.char_at(6);  // ' '
-        c0 == 40 and c1 == 119 and c2 == 104 and c3 == 105 and c4 == 108 and c5 == 101 and c6 == 32;
+    if s.len() < 10 { false } else {
+        let c0 = s.byte_at(0);
+        let c1 = s.byte_at(1);
+        let c2 = s.byte_at(2);
+        let c3 = s.byte_at(3);
+        let c4 = s.byte_at(4);
+        let c5 = s.byte_at(5);
+        let c6 = s.byte_at(6);
+        c0 == 40 and c1 == 119 and c2 == 104 and c3 == 105 and c4 == 108 and c5 == 101 and c6 == 32
+    };
 
 // v0.30.40: For expression support
 // For format: (for <var> iter body)
+// '(' = 40, 'f' = 102, 'o' = 111, 'r' = 114, ' ' = 32
 fn is_for_node(s: String) -> bool =
-    if s.len() < 12 { false  // minimum: "(for <x> y z)" } else { let c0 = s.char_at(0) };  // '('
-        let c1 = s.char_at(1);  // 'f'
-        let c2 = s.char_at(2);  // 'o'
-        let c3 = s.char_at(3);  // 'r'
-        let c4 = s.char_at(4);  // ' '
-        c0 == 40 and c1 == 102 and c2 == 111 and c3 == 114 and c4 == 32;
+    if s.len() < 12 { false } else {
+        let c0 = s.byte_at(0);
+        let c1 = s.byte_at(1);
+        let c2 = s.byte_at(2);
+        let c3 = s.byte_at(3);
+        let c4 = s.byte_at(4);
+        c0 == 40 and c1 == 102 and c2 == 111 and c3 == 114 and c4 == 32
+    };
 
 // v0.30.43: Break expression support
 // Break format: exactly "(break)"
 fn is_break_node(s: String) -> bool =
     s.len() == 7 and
-    s.char_at(0) == 40 and   // '('
-    s.char_at(1) == 98 and   // 'b'
-    s.char_at(2) == 114 and  // 'r'
-    s.char_at(3) == 101 and  // 'e'
-    s.char_at(4) == 97 and   // 'a'
-    s.char_at(5) == 107 and  // 'k'
-    s.char_at(6) == 41;      // ')'
+    s.byte_at(0) == 40 and   // '('
+    s.byte_at(1) == 98 and   // 'b'
+    s.byte_at(2) == 114 and  // 'r'
+    s.byte_at(3) == 101 and  // 'e'
+    s.byte_at(4) == 97 and   // 'a'
+    s.byte_at(5) == 107 and  // 'k'
+    s.byte_at(6) == 41;      // ')'
 
 // v0.30.43: Continue expression support
 // Continue format: exactly "(continue)"
 fn is_continue_node(s: String) -> bool =
     s.len() == 10 and
-    s.char_at(0) == 40 and   // '('
-    s.char_at(1) == 99 and   // 'c'
-    s.char_at(2) == 111 and  // 'o'
-    s.char_at(3) == 110 and  // 'n'
-    s.char_at(4) == 116 and  // 't'
-    s.char_at(5) == 105 and  // 'i'
-    s.char_at(6) == 110 and  // 'n'
-    s.char_at(7) == 117 and  // 'u'
-    s.char_at(8) == 101 and  // 'e'
-    s.char_at(9) == 41;      // ')'
+    s.byte_at(0) == 40 and   // '('
+    s.byte_at(1) == 99 and   // 'c'
+    s.byte_at(2) == 111 and  // 'o'
+    s.byte_at(3) == 110 and  // 'n'
+    s.byte_at(4) == 116 and  // 't'
+    s.byte_at(5) == 105 and  // 'i'
+    s.byte_at(6) == 110 and  // 'n'
+    s.byte_at(7) == 117 and  // 'u'
+    s.byte_at(8) == 101 and  // 'e'
+    s.byte_at(9) == 41;      // ')'
 
 // v0.30.64: Array literal node detection - (array elem1 elem2 ...)
 fn is_array_node(s: String) -> bool = get_node_type(s) == "array";
@@ -206,7 +228,7 @@ fn is_index_node(s: String) -> bool = get_node_type(s) == "index";
 fn is_method_call_node(s: String) -> bool = get_node_type(s) == "method_call";
 
 fn has_double_colon(s: String, pos: i64) -> bool =
-    if pos + 1 >= s.len() { false } else if s.char_at(pos) == 58 and s.char_at(pos + 1) == 58 { true  // '::' } else { has_double_colon(s, pos + 1) };
+    if pos + 1 >= s.len() { false } else if s.byte_at(pos) == 58 and s.byte_at(pos + 1) == 58 { true  // '::' } else { has_double_colon(s, pos + 1) };
 
 // ============================================================================
 // AST Content Extraction
@@ -216,12 +238,12 @@ fn has_double_colon(s: String, pos: i64) -> bool =
 fn extract_name(s: String) -> String =
     let start = 0;
     let pos = skip_ws(s, start);
-    if pos >= s.len() { "" } else if s.char_at(pos) != 60 { ""  // '<' } else { let nstart = pos + 1 };
+    if pos >= s.len() { "" } else if s.byte_at(pos) != 60 { ""  // '<' } else { let nstart = pos + 1 };
         let nend = find_name_end(s, nstart);
         s.slice(nstart, nend);
 
 fn find_name_end(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if s.char_at(pos) == 62 { pos  // '>' } else { find_name_end(s, pos + 1) };
+    if pos >= s.len() { pos } else if s.byte_at(pos) == 62 { pos  // '>' } else { find_name_end(s, pos + 1) };
 
 // Extract integer value from "(int 42)" -> 42
 fn extract_int_value(s: String) -> i64 =
@@ -229,7 +251,7 @@ fn extract_int_value(s: String) -> i64 =
     let pos = skip_ws(content, 0);
     let pos2 = find_ident_end(content, pos);  // skip "int"
     let pos3 = skip_ws(content, pos2);
-    let is_neg = pos3 < content.len() and content.char_at(pos3) == 45;  // '-'
+    let is_neg = pos3 < content.len() and content.byte_at(pos3) == 45;  // '-'
     let num_start = if is_neg { pos3 + 1 } else { pos3 };
     let value = parse_int_at(content, num_start, 0);
     if is_neg { 0 - value } else { value };
@@ -263,8 +285,8 @@ fn skip_children(s: String, pos: i64, n: i64) -> i64 =
 // Find end of current child (handles nested parens)
 // v0.32.1: Fixed to distinguish '<' as name start (<n>) vs operator start (<=)
 fn find_child_end(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else { let c = s.char_at(pos) };
-        if c == 40 { find_close_paren(s, pos, 0) + 1  // '(' - nested expr } else if c == 60 { if pos + 1 < s.len() and is_ident_char(s.char_at(pos + 1)) { find_name_end(s, pos) + 1  // name like <n> } else { find_op_end(s, pos)  // operator like <=, <>, < } } else if is_op_char(c) { find_op_end(s, pos)  // operator symbol } else { find_ident_end(s, pos) };  // identifier/symbol
+    if pos >= s.len() { pos } else { let c = s.byte_at(pos) };
+        if c == 40 { find_close_paren(s, pos, 0) + 1  // '(' - nested expr } else if c == 60 { if pos + 1 < s.len() and is_ident_char(s.byte_at(pos + 1)) { find_name_end(s, pos) + 1  // name like <n> } else { find_op_end(s, pos)  // operator like <=, <>, < } } else if is_op_char(c) { find_op_end(s, pos)  // operator symbol } else { find_ident_end(s, pos) };  // identifier/symbol
 
 // Get nth child (0-indexed) from S-expression content
 fn get_child(s: String, n: i64) -> String =
@@ -304,7 +326,7 @@ fn get_for_body(s: String) -> String = get_child(s, 2);
 
 // v0.30.40: Extract let mut name from "<varname>" format
 fn extract_for_varname(s: String) -> String =
-    if s.len() < 3 { ""  // Minimum: "<x>" } else if s.char_at(0) != 60 { ""  // Must start with '<' } else { s.slice(1, s.len() - 1) };  // Strip < and >
+    if s.len() < 3 { ""  // Minimum: "<x>" } else if s.byte_at(0) != 60 { ""  // Must start with '<' } else { s.slice(1, s.len() - 1) };  // Strip < and >
 
 // Get let name/value/body
 fn get_let_name(s: String) -> String =
@@ -354,14 +376,14 @@ fn get_enum_name_from_variant(variant: String) -> String =
     get_enum_name_from_variant_acc(variant, 0);
 
 fn get_enum_name_from_variant_acc(s: String, pos: i64) -> String =
-    if pos + 1 >= s.len() { s } else if s.char_at(pos) == 58 and s.char_at(pos + 1) == 58 { s.slice(0, pos) } else { get_enum_name_from_variant_acc(s, pos + 1) };
+    if pos + 1 >= s.len() { s } else if s.byte_at(pos) == 58 and s.byte_at(pos + 1) == 58 { s.slice(0, pos) } else { get_enum_name_from_variant_acc(s, pos + 1) };
 
 // "Status::Active" -> "Active"
 fn get_variant_name_only(variant: String) -> String =
     get_variant_name_only_acc(variant, 0);
 
 fn get_variant_name_only_acc(s: String, pos: i64) -> String =
-    if pos + 1 >= s.len() { s } else if s.char_at(pos) == 58 and s.char_at(pos + 1) == 58 { s.slice(pos + 2, s.len()) } else { get_variant_name_only_acc(s, pos + 1) };
+    if pos + 1 >= s.len() { s } else if s.byte_at(pos) == 58 and s.byte_at(pos + 1) == 58 { s.slice(pos + 2, s.len()) } else { get_variant_name_only_acc(s, pos + 1) };
 
 // Get enum variant argument from "(Status::Active 42)" -> "(int 42)" or just "42"
 fn get_enum_variant_arg(s: String) -> String = get_child(s, 0);
@@ -491,7 +513,7 @@ fn pack_lower_result(temp: i64, block: i64, result: String, text: String) -> Str
 fn unpack_temp(r: String) -> i64 = parse_int_at(r, 0, 0);
 
 fn find_nth_colon(s: String, pos: i64, n: i64) -> i64 =
-    if pos >= s.len() { pos } else if s.char_at(pos) == 58 { if n == 0 { pos } else { find_nth_colon(s, pos + 1, n - 1) } } else { find_nth_colon(s, pos + 1, n) };
+    if pos >= s.len() { pos } else if s.byte_at(pos) == 58 { if n == 0 { pos } else { find_nth_colon(s, pos + 1, n - 1) } } else { find_nth_colon(s, pos + 1, n) };
 
 fn unpack_block(r: String) -> i64 =
     let colon1 = find_nth_colon(r, 0, 0);
@@ -721,12 +743,12 @@ fn lower_string(ast: String, temp: i64, block: i64) -> String =
 
 // Find closing pipe | position (starting after opening pipe at pos 4)
 fn lambda_find_pipe(ast: String, pos: i64) -> i64 =
-    if pos >= ast.len() { pos } else if ast.char_at(pos) == 124 { pos  // '|' } else { lambda_find_pipe(ast, pos + 1) };
+    if pos >= ast.len() { pos } else if ast.byte_at(pos) == 124 { pos  // '|' } else { lambda_find_pipe(ast, pos + 1) };
 
 // Check if there's "-> type" after the pipe (skip whitespace)
 fn lambda_has_arrow(ast: String, pos: i64) -> bool =
     let p = skip_ws(ast, pos);
-    if p + 1 >= ast.len() { false } else { ast.char_at(p) == 45 and ast.char_at(p + 1) == 62 };  // '->'
+    if p + 1 >= ast.len() { false } else { ast.byte_at(p) == 45 and ast.byte_at(p + 1) == 62 };  // '->'
 
 // Skip return type after "-> " to find body start
 fn lambda_skip_return_type(ast: String, pos: i64) -> i64 =
@@ -734,7 +756,7 @@ fn lambda_skip_return_type(ast: String, pos: i64) -> i64 =
     lambda_skip_type_chars(ast, p);
 
 fn lambda_skip_type_chars(ast: String, pos: i64) -> i64 =
-    if pos >= ast.len() { pos } else { let c = ast.char_at(pos) };
+    if pos >= ast.len() { pos } else { let c = ast.byte_at(pos) };
         if c == 40 { pos  // '(' starts body } else { lambda_skip_type_chars(ast, pos + 1) };
 
 // Find where lambda body starts
@@ -765,7 +787,7 @@ fn lambda_extract_params(ast: String) -> String =
 
 // Strip surrounding parens from "(x: i64)" → "x: i64"
 fn strip_param_parens(s: String) -> String =
-    if s.len() < 2 { s } else if s.char_at(0) == 40 and s.char_at(s.len() - 1) == 41 { s.slice(1, s.len() - 1) } else { s };
+    if s.len() < 2 { s } else if s.byte_at(0) == 40 and s.byte_at(s.len() - 1) == 41 { s.slice(1, s.len() - 1) } else { s };
 
 // Extract parameter name from "name: type" or just "name"
 fn param_extract_name(param: String) -> String =
@@ -773,7 +795,7 @@ fn param_extract_name(param: String) -> String =
     if colon < 0 { trim_whitespace(param) } else { trim_whitespace(param.slice(0, colon)) };
 
 fn find_colon_in(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { 0 - 1 } else if s.char_at(pos) == 58 { pos  // ':' } else { find_colon_in(s, pos + 1) };
+    if pos >= s.len() { 0 - 1 } else if s.byte_at(pos) == 58 { pos  // ':' } else { find_colon_in(s, pos + 1) };
 
 fn trim_whitespace(s: String) -> String =
     let start = skip_leading_ws(s, 0);
@@ -781,10 +803,10 @@ fn trim_whitespace(s: String) -> String =
     if start >= end { "" } else { s.slice(start, end) };
 
 fn skip_leading_ws(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if is_whitespace(s.char_at(pos)) { skip_leading_ws(s, pos + 1) } else { pos };
+    if pos >= s.len() { pos } else if is_whitespace(s.byte_at(pos)) { skip_leading_ws(s, pos + 1) } else { pos };
 
 fn skip_trailing_ws(s: String, pos: i64) -> i64 =
-    if pos <= 0 { 0 } else if is_whitespace(s.char_at(pos - 1)) { skip_trailing_ws(s, pos - 1) } else { pos };
+    if pos <= 0 { 0 } else if is_whitespace(s.byte_at(pos - 1)) { skip_trailing_ws(s, pos - 1) } else { pos };
 
 // Collect parameter names as comma-separated string: "x,y,z"
 fn collect_param_names(params: String) -> String =
@@ -798,7 +820,7 @@ fn collect_param_names_at(params: String, pos: i64, acc: String) -> String =
         if comma < 0 { new_acc } else { collect_param_names_at(params, comma + 1, new_acc) };
 
 fn find_comma_at(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { 0 - 1 } else if s.char_at(pos) == 44 { pos  // ',' } else { find_comma_at(s, pos + 1) };
+    if pos >= s.len() { 0 - 1 } else if s.byte_at(pos) == 44 { pos  // ',' } else { find_comma_at(s, pos + 1) };
 
 // Check if name is in comma-separated list
 fn is_in_names(name: String, names: String) -> bool =
@@ -824,12 +846,12 @@ fn collect_var_refs_at(ast: String, pos: i64, acc: String) -> String =
                 collect_var_refs_at(ast, name_end + 1, new_acc);
 
 fn find_var_pattern(ast: String, pos: i64) -> i64 =
-    if pos + 5 >= ast.len() { 0 - 1 } else if ast.char_at(pos) == 40 and ast.char_at(pos+1) == 118 and
-            ast.char_at(pos+2) == 97 and ast.char_at(pos+3) == 114 and
-            ast.char_at(pos+4) == 32 and ast.char_at(pos+5) == 60 { pos  // "(let mut <" } else { find_var_pattern(ast, pos + 1) };
+    if pos + 5 >= ast.len() { 0 - 1 } else if ast.byte_at(pos) == 40 and ast.byte_at(pos+1) == 118 and
+            ast.byte_at(pos+2) == 97 and ast.byte_at(pos+3) == 114 and
+            ast.byte_at(pos+4) == 32 and ast.byte_at(pos+5) == 60 { pos  // "(let mut <" } else { find_var_pattern(ast, pos + 1) };
 
 fn find_char_in(s: String, c: i64, pos: i64) -> i64 =
-    if pos >= s.len() { 0 - 1 } else if s.char_at(pos) == c { pos } else { find_char_in(s, c, pos + 1) };
+    if pos >= s.len() { 0 - 1 } else if s.byte_at(pos) == c { pos } else { find_char_in(s, c, pos + 1) };
 
 // Filter out params from vars to get free variables
 fn filter_free_vars(vars: String, params: String) -> String =
@@ -846,7 +868,7 @@ fn count_names(names: String) -> i64 =
     if names.len() == 0 { 0 } else { 1 + count_commas_in(names, 0) };
 
 fn count_commas_in(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { 0 } else if s.char_at(pos) == 44 { 1 + count_commas_in(s, pos + 1) } else { count_commas_in(s, pos + 1) };
+    if pos >= s.len() { 0 } else if s.byte_at(pos) == 44 { 1 + count_commas_in(s, pos + 1) } else { count_commas_in(s, pos + 1) };
 
 // Get name at index in comma-separated list
 fn name_at_index(names: String, idx: i64) -> String =
@@ -1307,7 +1329,7 @@ fn lower_call(ast: String, temp: i64, block: i64) -> String =
 // Lower call arguments recursively
 fn lower_call_args(ast: String, idx: i64, temp: i64, block: i64, places: String) -> String =
     let arg = get_child(ast, idx);
-    if arg.len() == 0 or arg == "" { pack_lower_result(temp, block, places, "") } else if arg.char_at(0) != 40 and not is_ident_char(arg.char_at(0)) { pack_lower_result(temp, block, places, "") } else { let r = lower_expr(arg, temp, block) };
+    if arg.len() == 0 or arg == "" { pack_lower_result(temp, block, places, "") } else if arg.byte_at(0) != 40 and not is_ident_char(arg.byte_at(0)) { pack_lower_result(temp, block, places, "") } else { let r = lower_expr(arg, temp, block) };
         let t = unpack_temp(r);
         let b = unpack_block(r);
         let p = unpack_result_place(r);
@@ -1345,7 +1367,7 @@ fn lower_struct_init(ast: String, temp: i64, block: i64) -> String =
 // Lower struct fields recursively: "(new Point (x val1) (y val2))" -> "x: %t0, y: %t1"
 fn lower_struct_fields(ast: String, idx: i64, temp: i64, block: i64, fields: String) -> String =
     let field_ast = get_child(ast, idx);
-    if field_ast.len() == 0 or field_ast == "" { pack_lower_result(temp, block, fields, "") } else if field_ast.char_at(0) != 40 { pack_lower_result(temp, block, fields, "") } else { let field_name = get_field_assign_name(field_ast) };
+    if field_ast.len() == 0 or field_ast == "" { pack_lower_result(temp, block, fields, "") } else if field_ast.byte_at(0) != 40 { pack_lower_result(temp, block, fields, "") } else { let field_name = get_field_assign_name(field_ast) };
         let value_ast = get_field_assign_value(field_ast);
 
         let r = lower_expr(value_ast, temp, block);
@@ -1482,7 +1504,7 @@ fn static_method_symbol(trait_name: String, type_name: String, method_name: Stri
 // v0.30.101: Check if trait dispatch should use static symbol
 // Returns true if type_name is concrete (not a type variable)
 fn is_concrete_type(type_name: String) -> bool =
-    if type_name.len() == 0 { false } else { let first = type_name.char_at(0) };
+    if type_name.len() == 0 { false } else { let first = type_name.byte_at(0) };
         // i64, u64, etc. are also concrete
         if first >= 65 and first <= 90 { true } else if type_name == "i64" { true } else if type_name == "u64" { true } else if type_name == "i32" { true } else if type_name == "u32" { true } else if type_name == "bool" { true } else if type_name == "String" { true } else { false };
 
@@ -1570,11 +1592,11 @@ fn gen_impl_key(trait_name: String, target_type: String) -> String =
 
 // Find semicolon in registry string
 fn impl_reg_find_semi(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { 0 - 1 } else if s.char_at(pos) == 59 { pos } else { impl_reg_find_semi(s, pos + 1) };
+    if pos >= s.len() { 0 - 1 } else if s.byte_at(pos) == 59 { pos } else { impl_reg_find_semi(s, pos + 1) };
 
 // Find equals in registry string
 fn impl_reg_find_eq(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { 0 - 1 } else if s.char_at(pos) == 61 { pos } else { impl_reg_find_eq(s, pos + 1) };
+    if pos >= s.len() { 0 - 1 } else if s.byte_at(pos) == 61 { pos } else { impl_reg_find_eq(s, pos + 1) };
 
 // Lookup impl definition in registry by key
 fn impl_reg_lookup_from(reg: String, key: String, pos: i64) -> String =
@@ -1726,7 +1748,7 @@ fn lower_match(ast: String, temp: i64, block: i64) -> String =
 // Lower match arms recursively
 fn lower_match_arms(ast: String, idx: i64, temp: i64, block: i64, scrutinee: String, result: String, merge_lbl: String, cases: String, acc: String) -> String =
     let arm = get_match_arm(ast, idx);
-    if arm == "" or arm.len() == 0 or arm.char_at(0) != 40 { pack_lower_result(temp, block, cases, acc) } else { let pattern = get_arm_pattern(arm) };
+    if arm == "" or arm.len() == 0 or arm.byte_at(0) != 40 { pack_lower_result(temp, block, cases, acc) } else { let pattern = get_arm_pattern(arm) };
         let body_ast = get_arm_body(arm);
 
         // Get variant info from pattern
@@ -1784,7 +1806,7 @@ fn format_params(params_ast: String) -> String =
 
 fn format_params_inner(params_ast: String, idx: i64, acc: String) -> String =
     let param = get_child(params_ast, idx);
-    if param.len() == 0 or param == "" { acc } else if param.char_at(0) != 40 { acc  // Not a paren } else { let name = extract_name(get_child(param, 0)) };
+    if param.len() == 0 or param == "" { acc } else if param.byte_at(0) != 40 { acc  // Not a paren } else { let name = extract_name(get_child(param, 0)) };
         let ty = get_child(param, 1);
         let param_str = name + ": " + ty;
         let new_acc = if acc.len() > 0 { acc + ", " + param_str } else { param_str };

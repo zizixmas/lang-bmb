@@ -139,16 +139,16 @@ fn const_string(value: String) -> String = "S:" + value;
 fn const_unit() -> String = "U";
 
 fn is_const_int(c: String) -> bool =
-    c.len() >= 2 and c.char_at(0) == 73 and c.char_at(1) == 58;  // "I:"
+    c.len() >= 2 and c.byte_at(0) == 73 and c.byte_at(1) == 58;  // "I:"
 
 fn is_const_bool(c: String) -> bool =
-    c.len() >= 2 and c.char_at(0) == 66 and c.char_at(1) == 58;  // "B:"
+    c.len() >= 2 and c.byte_at(0) == 66 and c.byte_at(1) == 58;  // "B:"
 
 fn is_const_string(c: String) -> bool =
-    c.len() >= 2 and c.char_at(0) == 83 and c.char_at(1) == 58;  // "S:"
+    c.len() >= 2 and c.byte_at(0) == 83 and c.byte_at(1) == 58;  // "S:"
 
 fn is_const_unit(c: String) -> bool =
-    c.len() == 1 and c.char_at(0) == 85;  // "U"
+    c.len() == 1 and c.byte_at(0) == 85;  // "U"
 
 // ============================================================================
 // Place (Variable/Temporary) Encoding
@@ -162,9 +162,9 @@ fn place_temp(index: i64) -> String = "%_t" + int_to_string(index);
 
 fn is_temp(place: String) -> bool =
     place.len() >= 3 and
-    place.char_at(0) == 37 and   // %
-    place.char_at(1) == 95 and   // _
-    place.char_at(2) == 116;     // t
+    place.byte_at(0) == 37 and   // %
+    place.byte_at(1) == 95 and   // _
+    place.byte_at(2) == 116;     // t
 
 // ============================================================================
 // MIR Instruction Text Format
@@ -252,7 +252,7 @@ fn unpack_mir_count(result: String) -> i64 =
 
 // Find first colon (58 = ':')
 fn find_first_colon(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if s.char_at(pos) == 58 { pos } else { find_first_colon(s, pos + 1) };
+    if pos >= s.len() { pos } else if s.byte_at(pos) == 58 { pos } else { find_first_colon(s, pos + 1) };
 
 fn unpack_mir_text(result: String) -> String =
     let colon_pos = find_first_colon(result, 0);
@@ -261,7 +261,7 @@ fn unpack_mir_text(result: String) -> String =
 // Parse integer prefix from string
 fn parse_int_prefix(s: String, pos: i64, acc: i64) -> i64 =
     if pos >= s.len() { acc } else {
-        let c = s.char_at(pos);
+        let c = s.byte_at(pos);
         if c >= 48 and c <= 57 { parse_int_prefix(s, pos + 1, acc * 10 + (c - 48)) } else { acc }
     };
 

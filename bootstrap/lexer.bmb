@@ -42,16 +42,16 @@ fn digit_to_int(c: i64) -> i64 = c - 48;
 
 // Skip whitespace recursively, return new position
 fn skip_ws(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if is_whitespace(s.char_at(pos)) { skip_ws(s, pos + 1) } else { pos };
+    if pos >= s.len() { pos } else if is_whitespace(s.byte_at(pos)) { skip_ws(s, pos + 1) } else { pos };
 
 // Skip to end of line (for comments), return new position
 fn skip_to_eol(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if s.char_at(pos) == 10 { pos } else { skip_to_eol(s, pos + 1) };
+    if pos >= s.len() { pos } else if s.byte_at(pos) == 10 { pos } else { skip_to_eol(s, pos + 1) };
 
 // Skip comment if present, return new position
 // Note: Now uses short-circuit `and` (fixed in Phase 10)
 fn skip_comment(s: String, pos: i64) -> i64 =
-    if pos + 1 < s.len() and s.char_at(pos) == 45 and s.char_at(pos + 1) == 45 { skip_to_eol(s, pos + 2) } else { pos };
+    if pos + 1 < s.len() and s.byte_at(pos) == 45 and s.byte_at(pos + 1) == 45 { skip_to_eol(s, pos + 2) } else { pos };
 
 // Skip all whitespace and comments, return new position
 fn skip_all(s: String, pos: i64) -> i64 =
@@ -61,11 +61,11 @@ fn skip_all(s: String, pos: i64) -> i64 =
 
 // Find end of identifier, return end position
 fn find_ident_end(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if is_alnum_or_underscore(s.char_at(pos)) { find_ident_end(s, pos + 1) } else { pos };
+    if pos >= s.len() { pos } else if is_alnum_or_underscore(s.byte_at(pos)) { find_ident_end(s, pos + 1) } else { pos };
 
 // Find end of number, return end position
 fn find_number_end(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if is_digit(s.char_at(pos)) { find_number_end(s, pos + 1) } else { pos };
+    if pos >= s.len() { pos } else if is_digit(s.byte_at(pos)) { find_number_end(s, pos + 1) } else { pos };
 
 // Lookup keyword (returns token code: 100-199 for keywords, 201 for ident)
 fn lookup_keyword(w: String) -> i64 =
@@ -78,8 +78,8 @@ fn symbol_code(c: i64) -> i64 =
 // Check for two-character tokens, return (code * 10 + 2) or 0
 fn check_two_char(s: String, pos: i64) -> i64 =
     if pos + 1 >= s.len() { 0 } else {
-        let c1 = s.char_at(pos);
-        let c2 = s.char_at(pos + 1);
+        let c1 = s.byte_at(pos);
+        let c2 = s.byte_at(pos + 1);
         if c1 == 58 and c2 == 58 { 3202 } else if c1 == 45 and c2 == 62 { 3212 } else if c1 == 61 and c2 == 62 { 3222 } else if c1 == 46 and c2 == 46 { 3232 } else if c1 == 61 and c2 == 61 { 4102 } else if c1 == 33 and c2 == 61 { 4112 } else if c1 == 60 and c2 == 61 { 4122 } else if c1 == 62 and c2 == 61 { 4132 } else { 0 }
     };
 
@@ -103,7 +103,7 @@ fn process_symbol(s: String, p: i64) -> i64 =
         let tlen = two - kind * 10;
         kind * 1000000 + p * 1000 + tlen
     } else {
-        let c = s.char_at(p);
+        let c = s.byte_at(p);
         let kind = symbol_code(c);
         kind * 1000000 + p * 1000 + 1
     };
@@ -112,7 +112,7 @@ fn process_symbol(s: String, p: i64) -> i64 =
 fn next_token(s: String, pos: i64) -> i64 =
     let p = skip_all(s, pos);
     if p >= s.len() { 900 * 1000000 + p * 1000 + 0 } else {
-        let c = s.char_at(p);
+        let c = s.byte_at(p);
         if is_ident_start(c) { process_ident(s, p) } else if is_digit(c) { process_number(s, p) } else { process_symbol(s, p) }
     };
 
