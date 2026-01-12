@@ -227,23 +227,28 @@ fn is_index_node(s: String) -> bool = get_node_type(s) == "index";
 // v0.30.63: Method call node detection - (method_call receiver <method> args...)
 fn is_method_call_node(s: String) -> bool = get_node_type(s) == "method_call";
 
+// '::'
 fn has_double_colon(s: String, pos: i64) -> bool =
-    if pos + 1 >= s.len() { false } else if s.byte_at(pos) == 58 and s.byte_at(pos + 1) == 58 { true  // '::' } else { has_double_colon(s, pos + 1) };
+    if pos + 1 >= s.len() { false } else if s.byte_at(pos) == 58 and s.byte_at(pos + 1) == 58 { true } else { has_double_colon(s, pos + 1) };
 
 // ============================================================================
 // AST Content Extraction
 // ============================================================================
 
 // Extract name from <name>
+// '<' = 60
 fn extract_name(s: String) -> String =
     let start = 0;
     let pos = skip_ws(s, start);
-    if pos >= s.len() { "" } else if s.byte_at(pos) != 60 { ""  // '<' } else { let nstart = pos + 1 };
+    if pos >= s.len() { "" } else if s.byte_at(pos) != 60 { "" } else {
+        let nstart = pos + 1;
         let nend = find_name_end(s, nstart);
-        s.slice(nstart, nend);
+        s.slice(nstart, nend)
+    };
 
+// '>'
 fn find_name_end(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if s.byte_at(pos) == 62 { pos  // '>' } else { find_name_end(s, pos + 1) };
+    if pos >= s.len() { pos } else if s.byte_at(pos) == 62 { pos } else { find_name_end(s, pos + 1) };
 
 // Extract integer value from "(int 42)" -> 42
 fn extract_int_value(s: String) -> i64 =
@@ -278,15 +283,22 @@ fn extract_var_name(s: String) -> String =
 
 // Skip first N children in S-expr content
 fn skip_children(s: String, pos: i64, n: i64) -> i64 =
-    if n == 0 { pos } else { let p = skip_ws(s, pos) };
-        if p >= s.len() { p } else { let child_end = find_child_end(s, p) };
-            skip_children(s, child_end, n - 1);
+    if n == 0 { pos } else {
+        let p = skip_ws(s, pos);
+        if p >= s.len() { p } else {
+            let child_end = find_child_end(s, p);
+            skip_children(s, child_end, n - 1)
+        }
+    };
 
 // Find end of current child (handles nested parens)
 // v0.32.1: Fixed to distinguish '<' as name start (<n>) vs operator start (<=)
+// '(' - nested expr, name like <n>, operator like <=/<>/<, operator symbol, identifier/symbol
 fn find_child_end(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else { let c = s.byte_at(pos) };
-        if c == 40 { find_close_paren(s, pos, 0) + 1  // '(' - nested expr } else if c == 60 { if pos + 1 < s.len() and is_ident_char(s.byte_at(pos + 1)) { find_name_end(s, pos) + 1  // name like <n> } else { find_op_end(s, pos)  // operator like <=, <>, < } } else if is_op_char(c) { find_op_end(s, pos)  // operator symbol } else { find_ident_end(s, pos) };  // identifier/symbol
+    if pos >= s.len() { pos } else {
+        let c = s.byte_at(pos);
+        if c == 40 { find_close_paren(s, pos, 0) + 1 } else if c == 60 { if pos + 1 < s.len() and is_ident_char(s.byte_at(pos + 1)) { find_name_end(s, pos) + 1 } else { find_op_end(s, pos) } } else if is_op_char(c) { find_op_end(s, pos) } else { find_ident_end(s, pos) }
+    };
 
 // Get nth child (0-indexed) from S-expression content
 fn get_child(s: String, n: i64) -> String =
@@ -325,8 +337,9 @@ fn get_for_iter(s: String) -> String = get_child(s, 1);
 fn get_for_body(s: String) -> String = get_child(s, 2);
 
 // v0.30.40: Extract let mut name from "<varname>" format
+// Minimum: "<x>", must start with '<', strip < and >
 fn extract_for_varname(s: String) -> String =
-    if s.len() < 3 { ""  // Minimum: "<x>" } else if s.byte_at(0) != 60 { ""  // Must start with '<' } else { s.slice(1, s.len() - 1) };  // Strip < and >
+    if s.len() < 3 { "" } else if s.byte_at(0) != 60 { "" } else { s.slice(1, s.len() - 1) };
 
 // Get let name/value/body
 fn get_let_name(s: String) -> String =
@@ -427,13 +440,13 @@ fn mir_type_name(ty: i64) -> String =
 // MIR Operator Encoding
 // ============================================================================
 
+// v0.30.44: Range operators (.., ..=)
 fn binop_from_symbol(s: String) -> i64 =
-    if s == "+" { 1 } else if s == "-" { 2 } else if s == "*" { 3 } else if s == "/" { 4 } else if s == "%" { 5 } else if s == "==" { 6 } else if s == "!=" { 7 } else if s == "<" { 8 } else if s == ">" { 9 } else if s == "<=" { 10 } else if s == ">=" { 11 } else if s == "and" { 12 } else if s == "or" { 13
-    // v0.30.44: Range operators } else if s == ".." { 14 } else if s == "..=" { 15 } else { 0 };
+    if s == "+" { 1 } else if s == "-" { 2 } else if s == "*" { 3 } else if s == "/" { 4 } else if s == "%" { 5 } else if s == "==" { 6 } else if s == "!=" { 7 } else if s == "<" { 8 } else if s == ">" { 9 } else if s == "<=" { 10 } else if s == ">=" { 11 } else if s == "and" { 12 } else if s == "or" { 13 } else if s == ".." { 14 } else if s == "..=" { 15 } else { 0 };
 
+// v0.30.44: Range operators (.., ..=)
 fn binop_symbol(op: i64) -> String =
-    if op == 1 { "+" } else if op == 2 { "-" } else if op == 3 { "*" } else if op == 4 { "/" } else if op == 5 { "%" } else if op == 6 { "==" } else if op == 7 { "!=" } else if op == 8 { "<" } else if op == 9 { ">" } else if op == 10 { "<=" } else if op == 11 { ">=" } else if op == 12 { "and" } else if op == 13 { "or"
-    // v0.30.44: Range operators } else if op == 14 { ".." } else if op == 15 { "..=" } else { "?" };
+    if op == 1 { "+" } else if op == 2 { "-" } else if op == 3 { "*" } else if op == 4 { "/" } else if op == 5 { "%" } else if op == 6 { "==" } else if op == 7 { "!=" } else if op == 8 { "<" } else if op == 9 { ">" } else if op == 10 { "<=" } else if op == 11 { ">=" } else if op == 12 { "and" } else if op == 13 { "or" } else if op == 14 { ".." } else if op == 15 { "..=" } else { "?" };
 
 // ============================================================================
 // MIR Place Encoding
@@ -539,10 +552,11 @@ fn pack_result_sb(temp: i64, block: i64, result: String) -> String =
 
 // Push MIR text to StringBuilder with separator handling
 fn sb_push_mir(sb: i64, text: String) -> i64 =
-    if text.len() > 0 { let len = sb_len(sb) };
+    if text.len() > 0 {
+        let len = sb_len(sb);
         let w0 = if len > 0 { sb_push(sb, "|") } else { 0 };
         sb_push(sb, text)
-    else 0;
+    } else { 0 };
 
 // StringBuilder-aware leaf lowering functions
 fn lower_int_sb(ast: String, temp: i64, block: i64, sb: i64) -> String =
@@ -676,23 +690,27 @@ fn lower_call_sb(ast: String, temp: i64, block: i64, sb: i64) -> String =
 
 fn lower_call_args_sb(ast: String, idx: i64, temp: i64, block: i64, acc: String, sb: i64) -> String =
     let arg_ast = get_child(ast, idx);
-    if arg_ast == "" { pack_result_sb(temp, block, acc) } else { let ra = lower_expr_sb(arg_ast, temp, block, sb) };
+    if arg_ast == "" { pack_result_sb(temp, block, acc) } else {
+        let ra = lower_expr_sb(arg_ast, temp, block, sb);
         let ta = unpack_temp(ra);
         let ba = unpack_block(ra);
         let pa = unpack_result_place(ra);
         let new_acc = if acc == "" { pa } else { acc + ", " + pa };
-        lower_call_args_sb(ast, idx + 1, ta, ba, new_acc, sb);
+        lower_call_args_sb(ast, idx + 1, ta, ba, new_acc, sb)
+    };
 
 // StringBuilder-aware expression dispatcher
+// Fallback to original for complex nodes (struct, enum, lambda, etc.)
 fn lower_expr_sb(ast: String, temp: i64, block: i64, sb: i64) -> String =
-    if is_int_node(ast) { lower_int_sb(ast, temp, block, sb) } else if is_bool_node(ast) { lower_bool_sb(ast, temp, block, sb) } else if is_string_node(ast) { lower_string_sb(ast, temp, block, sb) } else if is_var_node(ast) { lower_var_sb(ast, temp, block, sb) } else if is_op_node(ast) { lower_binop_sb(ast, temp, block, sb) } else if is_neg_node(ast) { lower_neg_sb(ast, temp, block, sb) } else if is_not_node(ast) { lower_not_sb(ast, temp, block, sb) } else if is_if_node(ast) { lower_if_sb(ast, temp, block, sb) } else if is_let_node(ast) or is_let_mut_node(ast) { lower_let_sb(ast, temp, block, sb) } else if is_call_node(ast) { lower_call_sb(ast, temp, block, sb) } else if is_unit_node(ast) { lower_unit_sb(ast, temp, block, sb)
-    // Fallback to original for complex nodes (struct, enum, lambda, etc.) } else { let r = lower_expr(ast, temp, block) };
+    if is_int_node(ast) { lower_int_sb(ast, temp, block, sb) } else if is_bool_node(ast) { lower_bool_sb(ast, temp, block, sb) } else if is_string_node(ast) { lower_string_sb(ast, temp, block, sb) } else if is_var_node(ast) { lower_var_sb(ast, temp, block, sb) } else if is_op_node(ast) { lower_binop_sb(ast, temp, block, sb) } else if is_neg_node(ast) { lower_neg_sb(ast, temp, block, sb) } else if is_not_node(ast) { lower_not_sb(ast, temp, block, sb) } else if is_if_node(ast) { lower_if_sb(ast, temp, block, sb) } else if is_let_node(ast) or is_let_mut_node(ast) { lower_let_sb(ast, temp, block, sb) } else if is_call_node(ast) { lower_call_sb(ast, temp, block, sb) } else if is_unit_node(ast) { lower_unit_sb(ast, temp, block, sb) } else {
+        let r = lower_expr(ast, temp, block);
         let t = unpack_temp(r);
         let b = unpack_block(r);
         let p = unpack_result_place(r);
         let text = unpack_text(r);
         let w1 = sb_push_mir(sb, text);
-        pack_result_sb(t, b, p);
+        pack_result_sb(t, b, p)
+    };
 
 // ============================================================================
 // Expression Lowering
@@ -700,19 +718,19 @@ fn lower_expr_sb(ast: String, temp: i64, block: i64, sb: i64) -> String =
 
 // Lower an expression AST node to MIR
 // Returns: temp:block:result_place:mir_text
+// v0.30.33: String literal support
+// v0.21.0: Struct support
+// v0.21.1: Enum support
+// v0.30.34: Lambda/closure support
+// v0.30.36: Block and unit expressions
+// v0.30.38: While expression support
+// v0.30.40: For expression support
+// v0.30.43: Break/Continue expression support
+// v0.30.64: Array literal support
+// v0.30.65: Index expression support
+// v0.30.63: Method call support
 fn lower_expr(ast: String, temp: i64, block: i64) -> String =
-    if is_int_node(ast) { lower_int(ast, temp, block) } else if is_bool_node(ast) { lower_bool(ast, temp, block)
-    // v0.30.33: String literal support } else if is_string_node(ast) { lower_string(ast, temp, block) } else if is_var_node(ast) { lower_var(ast, temp, block) } else if is_op_node(ast) { lower_binop(ast, temp, block) } else if is_neg_node(ast) { lower_neg(ast, temp, block) } else if is_not_node(ast) { lower_not(ast, temp, block) } else if is_if_node(ast) { lower_if(ast, temp, block) } else if is_let_node(ast) or is_let_mut_node(ast) { lower_let(ast, temp, block) } else if is_call_node(ast) { lower_call(ast, temp, block)
-    // v0.21.0: Struct support } else if is_new_node(ast) { lower_struct_init(ast, temp, block) } else if is_dot_node(ast) { lower_field_access(ast, temp, block)
-    // v0.21.1: Enum support } else if is_enum_variant_node(ast) { lower_enum_variant(ast, temp, block) } else if is_match_node(ast) { lower_match(ast, temp, block)
-    // v0.30.34: Lambda/closure support } else if is_lambda_node(ast) { lower_lambda(ast, temp, block)
-    // v0.30.36: Block and unit expressions } else if is_block_node(ast) { lower_block(ast, temp, block) } else if is_unit_node(ast) { lower_unit(ast, temp, block)
-    // v0.30.38: While expression support } else if is_while_node(ast) { lower_while(ast, temp, block)
-    // v0.30.40: For expression support } else if is_for_node(ast) { lower_for(ast, temp, block)
-    // v0.30.43: Break/Continue expression support } else if is_break_node(ast) { lower_break(ast, temp, block) } else if is_continue_node(ast) { lower_continue(ast, temp, block)
-    // v0.30.64: Array literal support } else if is_array_node(ast) { lower_array(ast, temp, block)
-    // v0.30.65: Index expression support } else if is_index_node(ast) { lower_index(ast, temp, block)
-    // v0.30.63: Method call support } else if is_method_call_node(ast) { lower_method_call(ast, temp, block) } else { pack_lower_result(temp, block, "%error", "  ; unknown: " + get_node_type(ast)) };
+    if is_int_node(ast) { lower_int(ast, temp, block) } else if is_bool_node(ast) { lower_bool(ast, temp, block) } else if is_string_node(ast) { lower_string(ast, temp, block) } else if is_var_node(ast) { lower_var(ast, temp, block) } else if is_op_node(ast) { lower_binop(ast, temp, block) } else if is_neg_node(ast) { lower_neg(ast, temp, block) } else if is_not_node(ast) { lower_not(ast, temp, block) } else if is_if_node(ast) { lower_if(ast, temp, block) } else if is_let_node(ast) or is_let_mut_node(ast) { lower_let(ast, temp, block) } else if is_call_node(ast) { lower_call(ast, temp, block) } else if is_new_node(ast) { lower_struct_init(ast, temp, block) } else if is_dot_node(ast) { lower_field_access(ast, temp, block) } else if is_enum_variant_node(ast) { lower_enum_variant(ast, temp, block) } else if is_match_node(ast) { lower_match(ast, temp, block) } else if is_lambda_node(ast) { lower_lambda(ast, temp, block) } else if is_block_node(ast) { lower_block(ast, temp, block) } else if is_unit_node(ast) { lower_unit(ast, temp, block) } else if is_while_node(ast) { lower_while(ast, temp, block) } else if is_for_node(ast) { lower_for(ast, temp, block) } else if is_break_node(ast) { lower_break(ast, temp, block) } else if is_continue_node(ast) { lower_continue(ast, temp, block) } else if is_array_node(ast) { lower_array(ast, temp, block) } else if is_index_node(ast) { lower_index(ast, temp, block) } else if is_method_call_node(ast) { lower_method_call(ast, temp, block) } else { pack_lower_result(temp, block, "%error", "  ; unknown: " + get_node_type(ast)) };
 
 // Lower integer literal: (int 42)
 fn lower_int(ast: String, temp: i64, block: i64) -> String =
@@ -742,8 +760,9 @@ fn lower_string(ast: String, temp: i64, block: i64) -> String =
 // Example: (fn |(x: i64)| (let mut <x>))
 
 // Find closing pipe | position (starting after opening pipe at pos 4)
+// '|'
 fn lambda_find_pipe(ast: String, pos: i64) -> i64 =
-    if pos >= ast.len() { pos } else if ast.byte_at(pos) == 124 { pos  // '|' } else { lambda_find_pipe(ast, pos + 1) };
+    if pos >= ast.len() { pos } else if ast.byte_at(pos) == 124 { pos } else { lambda_find_pipe(ast, pos + 1) };
 
 // Check if there's "-> type" after the pipe (skip whitespace)
 fn lambda_has_arrow(ast: String, pos: i64) -> bool =
@@ -755,9 +774,12 @@ fn lambda_skip_return_type(ast: String, pos: i64) -> i64 =
     let p = skip_ws(ast, pos + 2);  // skip "-> "
     lambda_skip_type_chars(ast, p);
 
+// '(' starts body (40 = '(')
 fn lambda_skip_type_chars(ast: String, pos: i64) -> i64 =
-    if pos >= ast.len() { pos } else { let c = ast.byte_at(pos) };
-        if c == 40 { pos  // '(' starts body } else { lambda_skip_type_chars(ast, pos + 1) };
+    if pos >= ast.len() { pos } else {
+        let c = ast.byte_at(pos);
+        if c == 40 { pos } else { lambda_skip_type_chars(ast, pos + 1) }
+    };
 
 // Find where lambda body starts
 fn lambda_body_start(ast: String) -> i64 =
@@ -766,24 +788,30 @@ fn lambda_body_start(ast: String) -> i64 =
     if lambda_has_arrow(ast, after_pipe) { lambda_skip_return_type(ast, after_pipe) } else { skip_ws(ast, after_pipe) };
 
 // Extract lambda body expression (from body start to closing paren)
+// +1 to include closing paren
 fn lambda_extract_body(ast: String) -> String =
     let start = lambda_body_start(ast);
-    if start >= ast.len() { "" } else { let end = find_close_paren(ast, start, 0) };
-        ast.slice(start, end + 1);  // +1 to include closing paren
+    if start >= ast.len() { "" } else {
+        let end = find_close_paren(ast, start, 0);
+        ast.slice(start, end + 1)
+    };
 
 // ============================================================================
 // v0.30.99: Closure Free Variable Analysis
 // ============================================================================
 // Detect free variables in lambda body and generate Capture instructions
 
-// Extract lambda parameter section: (fn |(x: i64, y: i64)| body) → "x: i64, y: i64"
+// Extract lambda parameter section: (fn |(x: i64, y: i64)| body) -> "x: i64, y: i64"
 // Handles both formats: |(params)| and |params|
+// no params case: pipe2 <= pipe1 + 1
 fn lambda_extract_params(ast: String) -> String =
     let pipe1 = lambda_find_pipe(ast, 4);  // first |
     let pipe2 = lambda_find_pipe(ast, pipe1 + 1);  // second |
-    if pipe2 <= pipe1 + 1 { ""  // no params } else { let raw = ast.slice(pipe1 + 1, pipe2) };
+    if pipe2 <= pipe1 + 1 { "" } else {
+        let raw = ast.slice(pipe1 + 1, pipe2);
         // Strip surrounding parentheses if present
-        strip_param_parens(raw);
+        strip_param_parens(raw)
+    };
 
 // Strip surrounding parens from "(x: i64)" → "x: i64"
 fn strip_param_parens(s: String) -> String =
@@ -794,8 +822,9 @@ fn param_extract_name(param: String) -> String =
     let colon = find_colon_in(param, 0);
     if colon < 0 { trim_whitespace(param) } else { trim_whitespace(param.slice(0, colon)) };
 
+// ':'
 fn find_colon_in(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { 0 - 1 } else if s.byte_at(pos) == 58 { pos  // ':' } else { find_colon_in(s, pos + 1) };
+    if pos >= s.len() { 0 - 1 } else if s.byte_at(pos) == 58 { pos } else { find_colon_in(s, pos + 1) };
 
 fn trim_whitespace(s: String) -> String =
     let start = skip_leading_ws(s, 0);
@@ -813,42 +842,55 @@ fn collect_param_names(params: String) -> String =
     if params.len() == 0 { "" } else { collect_param_names_at(params, 0, "") };
 
 fn collect_param_names_at(params: String, pos: i64, acc: String) -> String =
-    if pos >= params.len() { acc } else { let comma = find_comma_at(params, pos) };
+    if pos >= params.len() { acc } else {
+        let comma = find_comma_at(params, pos);
         let param = if comma < 0 { params.slice(pos, params.len()) } else { params.slice(pos, comma) };
         let name = param_extract_name(param);
         let new_acc = if acc.len() == 0 { name } else { acc + "," + name };
-        if comma < 0 { new_acc } else { collect_param_names_at(params, comma + 1, new_acc) };
+        if comma < 0 { new_acc } else { collect_param_names_at(params, comma + 1, new_acc) }
+    };
 
+// ','
 fn find_comma_at(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { 0 - 1 } else if s.byte_at(pos) == 44 { pos  // ',' } else { find_comma_at(s, pos + 1) };
+    if pos >= s.len() { 0 - 1 } else if s.byte_at(pos) == 44 { pos } else { find_comma_at(s, pos + 1) };
 
 // Check if name is in comma-separated list
 fn is_in_names(name: String, names: String) -> bool =
     if names.len() == 0 { false } else { is_in_names_at(name, names, 0) };
 
 fn is_in_names_at(name: String, names: String, pos: i64) -> bool =
-    if pos >= names.len() { false } else { let comma = find_comma_at(names, pos) };
+    if pos >= names.len() { false } else {
+        let comma = find_comma_at(names, pos);
         let current = if comma < 0 { names.slice(pos, names.len()) } else { names.slice(pos, comma) };
-        if current == name { true } else if comma < 0 { false } else { is_in_names_at(name, names, comma + 1) };
+        if current == name { true } else if comma < 0 { false } else { is_in_names_at(name, names, comma + 1) }
+    };
 
 // Collect variable references from expression: "(let mut <x>)" → "x"
 // Returns comma-separated list of unique variable names
 fn collect_var_refs(ast: String) -> String =
     collect_var_refs_at(ast, 0, "");
 
+// skip "(var <" - 6 chars; '>' = 62
 fn collect_var_refs_at(ast: String, pos: i64, acc: String) -> String =
-    if pos >= ast.len() { acc } else { let var_pos = find_var_pattern(ast, pos) };
-        if var_pos < 0 { acc } else { let name_start = var_pos + 6 };  // skip "(let mut <"
-            let name_end = find_char_in(ast, 62, name_start);  // '>'
-            if name_end <= name_start { collect_var_refs_at(ast, var_pos + 1, acc) } else { let name = ast.slice(name_start, name_end) };
+    if pos >= ast.len() { acc } else {
+        let var_pos = find_var_pattern(ast, pos);
+        if var_pos < 0 { acc } else {
+            let name_start = var_pos + 6;
+            let name_end = find_char_in(ast, 62, name_start);
+            if name_end <= name_start { collect_var_refs_at(ast, var_pos + 1, acc) } else {
+                let name = ast.slice(name_start, name_end);
                 // Add to acc if not already present
                 let new_acc = if is_in_names(name, acc) { acc } else if acc.len() == 0 { name } else { acc + "," + name };
-                collect_var_refs_at(ast, name_end + 1, new_acc);
+                collect_var_refs_at(ast, name_end + 1, new_acc)
+            }
+        }
+    };
 
+// "(var <" pattern: 40='(' 118='v' 97='a' 114='r' 32=' ' 60='<'
 fn find_var_pattern(ast: String, pos: i64) -> i64 =
     if pos + 5 >= ast.len() { 0 - 1 } else if ast.byte_at(pos) == 40 and ast.byte_at(pos+1) == 118 and
             ast.byte_at(pos+2) == 97 and ast.byte_at(pos+3) == 114 and
-            ast.byte_at(pos+4) == 32 and ast.byte_at(pos+5) == 60 { pos  // "(let mut <" } else { find_var_pattern(ast, pos + 1) };
+            ast.byte_at(pos+4) == 32 and ast.byte_at(pos+5) == 60 { pos } else { find_var_pattern(ast, pos + 1) };
 
 fn find_char_in(s: String, c: i64, pos: i64) -> i64 =
     if pos >= s.len() { 0 - 1 } else if s.byte_at(pos) == c { pos } else { find_char_in(s, c, pos + 1) };
@@ -858,10 +900,12 @@ fn filter_free_vars(vars: String, params: String) -> String =
     if vars.len() == 0 { "" } else { filter_free_vars_at(vars, params, 0, "") };
 
 fn filter_free_vars_at(vars: String, params: String, pos: i64, acc: String) -> String =
-    if pos >= vars.len() { acc } else { let comma = find_comma_at(vars, pos) };
+    if pos >= vars.len() { acc } else {
+        let comma = find_comma_at(vars, pos);
         let var_name = if comma < 0 { vars.slice(pos, vars.len()) } else { vars.slice(pos, comma) };
         let new_acc = if is_in_names(var_name, params) { acc } else if acc.len() == 0 { var_name } else { acc + "," + var_name };
-        if comma < 0 { new_acc } else { filter_free_vars_at(vars, params, comma + 1, new_acc) };
+        if comma < 0 { new_acc } else { filter_free_vars_at(vars, params, comma + 1, new_acc) }
+    };
 
 // Count comma-separated items
 fn count_names(names: String) -> i64 =
@@ -875,15 +919,19 @@ fn name_at_index(names: String, idx: i64) -> String =
     name_at_index_helper(names, 0, 0, idx);
 
 fn name_at_index_helper(names: String, pos: i64, current: i64, target: i64) -> String =
-    if pos >= names.len() { "" } else { let comma = find_comma_at(names, pos) };
-        if current == target { if comma < 0 { names.slice(pos, names.len()) } else { names.slice(pos, comma) } } else if comma < 0 { "" } else { name_at_index_helper(names, comma + 1, current + 1, target) };
+    if pos >= names.len() { "" } else {
+        let comma = find_comma_at(names, pos);
+        if current == target { if comma < 0 { names.slice(pos, names.len()) } else { names.slice(pos, comma) } } else if comma < 0 { "" } else { name_at_index_helper(names, comma + 1, current + 1, target) }
+    };
 
 // Generate Capture MIR instructions
 fn gen_captures(closure_place: String, free_vars: String, count: i64, idx: i64) -> String =
-    if idx >= count { "" } else { let var_name = name_at_index(free_vars, idx) };
+    if idx >= count { "" } else {
+        let var_name = name_at_index(free_vars, idx);
         let capture_text = "  Capture " + closure_place + ", %" + var_name + ", " + int_to_string(idx);
         let rest = gen_captures(closure_place, free_vars, count, idx + 1);
-        if rest.len() > 0 { capture_text + "|" + rest } else { capture_text };
+        if rest.len() > 0 { capture_text + "|" + rest } else { capture_text }
+    };
 
 // ============================================================================
 // v0.30.103: Closure Environment Allocation
@@ -901,10 +949,12 @@ fn gen_env_store(env_place: String, idx: i64, value_place: String) -> String =
 
 // Generate multiple environment stores for captured variables
 fn gen_env_stores(env_place: String, free_vars: String, count: i64, idx: i64) -> String =
-    if idx >= count { "" } else { let var_name = name_at_index(free_vars, idx) };
+    if idx >= count { "" } else {
+        let var_name = name_at_index(free_vars, idx);
         let store_text = gen_env_store(env_place, idx, "%" + var_name);
         let rest = gen_env_stores(env_place, free_vars, count, idx + 1);
-        if rest.len() > 0 { store_text + "|" + rest } else { store_text };
+        if rest.len() > 0 { store_text + "|" + rest } else { store_text }
+    };
 
 // Generate closure creation with environment
 // ClosureEnv %closure, %env, @fn_name
@@ -925,10 +975,12 @@ fn gen_closure_fn_header(fn_id: i64, params: String) -> String =
 // Generate LoadCapture instructions for closure prelude
 // Generates: %let mut = LoadCapture %env, idx for each captured variable
 fn gen_closure_prelude(free_vars: String, count: i64, idx: i64) -> String =
-    if idx >= count { "" } else { let var_name = name_at_index(free_vars, idx) };
+    if idx >= count { "" } else {
+        let var_name = name_at_index(free_vars, idx);
         let load_text = "  %" + var_name + " = LoadCapture %env, " + int_to_string(idx);
         let rest = gen_closure_prelude(free_vars, count, idx + 1);
-        if rest.len() > 0 { load_text + "|" + rest } else { load_text };
+        if rest.len() > 0 { load_text + "|" + rest } else { load_text }
+    };
 
 // Generate complete closure function MIR
 // Includes: header, LoadCapture prelude, body, footer
@@ -963,9 +1015,12 @@ fn is_captured_var(var_name: String, captured_vars: String) -> bool =
 fn find_capture_index(var_name: String, captured_vars: String) -> i64 =
     find_capture_index_at(var_name, captured_vars, 0);
 
+// -1 indicates not found
 fn find_capture_index_at(var_name: String, captured_vars: String, idx: i64) -> i64 =
-    if captured_vars.len() == 0 { 0 - 1  // not found } else { let name = name_at_index(captured_vars, idx) };
-        if name == var_name { idx } else if name == "" { 0 - 1  // not found } else { find_capture_index_at(var_name, captured_vars, idx + 1) };
+    if captured_vars.len() == 0 { 0 - 1 } else {
+        let name = name_at_index(captured_vars, idx);
+        if name == var_name { idx } else if name == "" { 0 - 1 } else { find_capture_index_at(var_name, captured_vars, idx + 1) }
+    };
 
 // Generate LoadCapture for a captured variable access
 fn gen_captured_var_access(dest: String, var_name: String, closure_place: String, captured_vars: String) -> String =
@@ -977,18 +1032,21 @@ fn gen_captured_var_access(dest: String, var_name: String, closure_place: String
 fn lower_var_with_captures(var_name: String, temp: i64, block: i64,
                            closure_place: String, captured_vars: String) -> String =
     let dest = place_temp(temp);
-    if is_captured_var(var_name, captured_vars) { let load_text = gen_captured_var_access(dest, var_name, closure_place, captured_vars) };
+    if is_captured_var(var_name, captured_vars) {
+        let load_text = gen_captured_var_access(dest, var_name, closure_place, captured_vars);
         pack_lower_result(temp + 1, block, dest, load_text)
-    else
+    } else {
         // Normal variable reference (unchanged behavior)
         let text = "  " + dest + " = copy %" + var_name;
-        pack_lower_result(temp + 1, block, dest, text);
+        pack_lower_result(temp + 1, block, dest, text)
+    };
 
 // Lower lambda/closure expression (updated v0.30.104)
 // Now with environment allocation for captured variables
 fn lower_lambda(ast: String, temp: i64, block: i64) -> String =
     let body = lambda_extract_body(ast);
-    if body == "" { pack_lower_result(temp, block, "%error", "  ; lambda: empty body") } else { let params = lambda_extract_params(ast) };
+    if body == "" { pack_lower_result(temp, block, "%error", "  ; lambda: empty body") } else {
+        let params = lambda_extract_params(ast);
         let param_names = collect_param_names(params);
         let all_vars = collect_var_refs(body);
         let free_vars = filter_free_vars(all_vars, param_names);
@@ -1011,13 +1069,15 @@ fn lower_lambda(ast: String, temp: i64, block: i64) -> String =
         let body_result = lower_expr(body, temp + 1, block);
         let body_text = unpack_text(body_result);
         let combined = if body_text.len() > 0 { closure_with_captures + "|" + body_text } else { closure_with_captures };
-        pack_lower_result(unpack_temp(body_result), unpack_block(body_result), dest, combined);
+        pack_lower_result(unpack_temp(body_result), unpack_block(body_result), dest, combined)
+    };
 
 // v0.30.36: Lower block expression: (block inner_expr)
 // Block expressions simply lower to their inner expression
+// minimum: "(block x)", skip "(block " and trailing ")"
 fn block_inner_expr(ast: String) -> String =
     let len = ast.len();
-    if len < 9 { ""  // minimum: "(block x)" } else { ast.slice(7, len - 1) };  // skip "(block " and trailing ")"
+    if len < 9 { "" } else { ast.slice(7, len - 1) };
 
 fn lower_block(ast: String, temp: i64, block: i64) -> String =
     let inner = block_inner_expr(ast);
@@ -1329,7 +1389,8 @@ fn lower_call(ast: String, temp: i64, block: i64) -> String =
 // Lower call arguments recursively
 fn lower_call_args(ast: String, idx: i64, temp: i64, block: i64, places: String) -> String =
     let arg = get_child(ast, idx);
-    if arg.len() == 0 or arg == "" { pack_lower_result(temp, block, places, "") } else if arg.byte_at(0) != 40 and not is_ident_char(arg.byte_at(0)) { pack_lower_result(temp, block, places, "") } else { let r = lower_expr(arg, temp, block) };
+    if arg.len() == 0 or arg == "" { pack_lower_result(temp, block, places, "") } else if arg.byte_at(0) != 40 and not is_ident_char(arg.byte_at(0)) { pack_lower_result(temp, block, places, "") } else {
+        let r = lower_expr(arg, temp, block);
         let t = unpack_temp(r);
         let b = unpack_block(r);
         let p = unpack_result_place(r);
@@ -1343,7 +1404,8 @@ fn lower_call_args(ast: String, idx: i64, temp: i64, block: i64, places: String)
         let text2 = unpack_text(next_result);
 
         let combined = if text.len() > 0 and text2.len() > 0 { text + "|" + text2 } else if text.len() > 0 { text } else { text2 };
-        pack_lower_result(t2, b2, p2, combined);
+        pack_lower_result(t2, b2, p2, combined)
+    };
 
 // ============================================================================
 // v0.21.0: Struct Lowering
@@ -1367,7 +1429,8 @@ fn lower_struct_init(ast: String, temp: i64, block: i64) -> String =
 // Lower struct fields recursively: "(new Point (x val1) (y val2))" -> "x: %t0, y: %t1"
 fn lower_struct_fields(ast: String, idx: i64, temp: i64, block: i64, fields: String) -> String =
     let field_ast = get_child(ast, idx);
-    if field_ast.len() == 0 or field_ast == "" { pack_lower_result(temp, block, fields, "") } else if field_ast.byte_at(0) != 40 { pack_lower_result(temp, block, fields, "") } else { let field_name = get_field_assign_name(field_ast) };
+    if field_ast.len() == 0 or field_ast == "" { pack_lower_result(temp, block, fields, "") } else if field_ast.byte_at(0) != 40 { pack_lower_result(temp, block, fields, "") } else {
+        let field_name = get_field_assign_name(field_ast);
         let value_ast = get_field_assign_value(field_ast);
 
         let r = lower_expr(value_ast, temp, block);
@@ -1386,7 +1449,8 @@ fn lower_struct_fields(ast: String, idx: i64, temp: i64, block: i64, fields: Str
         let text2 = unpack_text(next_result);
 
         let combined = if text.len() > 0 and text2.len() > 0 { text + "|" + text2 } else if text.len() > 0 { text } else { text2 };
-        pack_lower_result(t2, b2, p2, combined);
+        pack_lower_result(t2, b2, p2, combined)
+    };
 
 // Lower field access: (. base field)
 fn lower_field_access(ast: String, temp: i64, block: i64) -> String =
@@ -1426,7 +1490,8 @@ fn lower_array(ast: String, temp: i64, block: i64) -> String =
 // Lower array elements recursively: "(array 1 2 3)" -> "%t0, %t1, %t2"
 fn lower_array_elements(ast: String, idx: i64, temp: i64, block: i64, elems: String) -> String =
     let elem_ast = get_child(ast, idx);
-    if elem_ast.len() == 0 or elem_ast == "" { pack_lower_result(temp, block, elems, "") } else { let r = lower_expr(elem_ast, temp, block) };
+    if elem_ast.len() == 0 or elem_ast == "" { pack_lower_result(temp, block, elems, "") } else {
+        let r = lower_expr(elem_ast, temp, block);
         let t = unpack_temp(r);
         let b = unpack_block(r);
         let p = unpack_result_place(r);
@@ -1441,7 +1506,8 @@ fn lower_array_elements(ast: String, idx: i64, temp: i64, block: i64, elems: Str
         let text2 = unpack_text(next_result);
 
         let combined = if text.len() > 0 and text2.len() > 0 { text + "|" + text2 } else if text.len() > 0 { text } else { text2 };
-        pack_lower_result(t2, b2, p2, combined);
+        pack_lower_result(t2, b2, p2, combined)
+    };
 
 // ============================================================================
 // v0.30.65: Index Expression Lowering
@@ -1481,10 +1547,10 @@ fn lower_index(ast: String, temp: i64, block: i64) -> String =
 
 // Check if a method is a built-in method (String/Array methods)
 // Built-in methods are handled by the runtime, not trait dispatch
+// String methods: len, slice, char_at, concat, eq
+// Array methods: get, set, push, pop, clear
 fn is_builtin_method(name: String) -> bool =
-    // String methods
-    if name == "len" { true } else if name == "slice" { true } else if name == "char_at" { true } else if name == "concat" { true } else if name == "eq" { true
-    // Array methods } else if name == "get" { true } else if name == "set" { true } else if name == "push" { true } else if name == "pop" { true } else if name == "clear" { true } else { false };
+    if name == "len" { true } else if name == "slice" { true } else if name == "char_at" { true } else if name == "concat" { true } else if name == "eq" { true } else if name == "get" { true } else if name == "set" { true } else if name == "push" { true } else if name == "pop" { true } else if name == "clear" { true } else { false };
 
 // Check if method looks like a trait method (non-builtin)
 fn is_trait_method(name: String) -> bool =
@@ -1503,10 +1569,13 @@ fn static_method_symbol(trait_name: String, type_name: String, method_name: Stri
 
 // v0.30.101: Check if trait dispatch should use static symbol
 // Returns true if type_name is concrete (not a type variable)
+// Uppercase letters (65-90) indicate types like Point, String
 fn is_concrete_type(type_name: String) -> bool =
-    if type_name.len() == 0 { false } else { let first = type_name.byte_at(0) };
+    if type_name.len() == 0 { false } else {
+        let first = type_name.byte_at(0);
         // i64, u64, etc. are also concrete
-        if first >= 65 and first <= 90 { true } else if type_name == "i64" { true } else if type_name == "u64" { true } else if type_name == "i32" { true } else if type_name == "u32" { true } else if type_name == "bool" { true } else if type_name == "String" { true } else { false };
+        if first >= 65 and first <= 90 { true } else if type_name == "i64" { true } else if type_name == "u64" { true } else if type_name == "i32" { true } else if type_name == "u32" { true } else if type_name == "bool" { true } else if type_name == "String" { true } else { false }
+    };
 
 // v0.30.101: Generate static dispatch call instruction
 // Instead of TraitCall, generates: call @Trait_Type_method(%args)
@@ -1600,11 +1669,15 @@ fn impl_reg_find_eq(s: String, pos: i64) -> i64 =
 
 // Lookup impl definition in registry by key
 fn impl_reg_lookup_from(reg: String, key: String, pos: i64) -> String =
-    if pos >= reg.len() { "" } else { let eq = impl_reg_find_eq(reg, pos) };
-        if eq < 0 { "" } else { let entry_key = reg.slice(pos, eq) };
+    if pos >= reg.len() { "" } else {
+        let eq = impl_reg_find_eq(reg, pos);
+        if eq < 0 { "" } else {
+            let entry_key = reg.slice(pos, eq);
             let semi = impl_reg_find_semi(reg, eq + 1);
             let def = if semi < 0 { reg.slice(eq + 1, reg.len()) } else { reg.slice(eq + 1, semi) };
-            if entry_key == key { def } else if semi < 0 { "" } else { impl_reg_lookup_from(reg, key, semi + 1) };
+            if entry_key == key { def } else if semi < 0 { "" } else { impl_reg_lookup_from(reg, key, semi + 1) }
+        }
+    };
 
 // Lookup impl definition by trait and target type
 fn impl_reg_lookup(reg: String, trait_name: String, target_type: String) -> String =
@@ -1663,7 +1736,8 @@ fn lower_method_call_builtin(ast: String, temp: i64, block: i64) -> String =
 // Lower method call arguments: (method_call recv <method> arg1 arg2) -> "%t0, %t1"
 fn lower_method_args(ast: String, idx: i64, temp: i64, block: i64, args: String) -> String =
     let arg_ast = get_child(ast, idx);
-    if arg_ast.len() == 0 or arg_ast == "" { pack_lower_result(temp, block, args, "") } else { let r = lower_expr(arg_ast, temp, block) };
+    if arg_ast.len() == 0 or arg_ast == "" { pack_lower_result(temp, block, args, "") } else {
+        let r = lower_expr(arg_ast, temp, block);
         let t = unpack_temp(r);
         let b = unpack_block(r);
         let p = unpack_result_place(r);
@@ -1678,7 +1752,8 @@ fn lower_method_args(ast: String, idx: i64, temp: i64, block: i64, args: String)
         let text2 = unpack_text(next_result);
 
         let combined = if text.len() > 0 and text2.len() > 0 { text + "|" + text2 } else if text.len() > 0 { text } else { text2 };
-        pack_lower_result(t2, b2, p2, combined);
+        pack_lower_result(t2, b2, p2, combined)
+    };
 
 // Extract method name from method_call AST: (method_call recv <method> args) -> "method"
 fn get_method_name(ast: String) -> String =
@@ -1697,10 +1772,11 @@ fn lower_enum_variant(ast: String, temp: i64, block: i64) -> String =
     let discriminant = variant_to_discriminant(variant_name);
     let arg_ast = get_enum_variant_arg(ast);
 
-    if arg_ast == "" or arg_ast.len() == 0 { let dest = place_temp(temp) };
+    if arg_ast == "" or arg_ast.len() == 0 {
+        let dest = place_temp(temp);
         let text = mir_text_enum_variant(dest, enum_name, variant_name, discriminant, "");
         pack_lower_result(temp + 1, block, dest, text)
-    else
+    } else {
         // Tuple variant with argument
         let ra = lower_expr(arg_ast, temp, block);
         let ta = unpack_temp(ra);
@@ -1711,7 +1787,8 @@ fn lower_enum_variant(ast: String, temp: i64, block: i64) -> String =
         let dest = place_temp(ta);
         let variant_text = mir_text_enum_variant(dest, enum_name, variant_name, discriminant, pa);
         let combined = if texta.len() > 0 { texta + "|" + variant_text } else { variant_text };
-        pack_lower_result(ta + 1, ba, dest, combined);
+        pack_lower_result(ta + 1, ba, dest, combined)
+    };
 
 // Lower match expression: (match scrutinee (arm1) (arm2) ...)
 fn lower_match(ast: String, temp: i64, block: i64) -> String =
@@ -1748,7 +1825,8 @@ fn lower_match(ast: String, temp: i64, block: i64) -> String =
 // Lower match arms recursively
 fn lower_match_arms(ast: String, idx: i64, temp: i64, block: i64, scrutinee: String, result: String, merge_lbl: String, cases: String, acc: String) -> String =
     let arm = get_match_arm(ast, idx);
-    if arm == "" or arm.len() == 0 or arm.byte_at(0) != 40 { pack_lower_result(temp, block, cases, acc) } else { let pattern = get_arm_pattern(arm) };
+    if arm == "" or arm.len() == 0 or arm.byte_at(0) != 40 { pack_lower_result(temp, block, cases, acc) } else {
+        let pattern = get_arm_pattern(arm);
         let body_ast = get_arm_body(arm);
 
         // Get variant info from pattern
@@ -1780,7 +1858,8 @@ fn lower_match_arms(ast: String, idx: i64, temp: i64, block: i64, scrutinee: Str
         let new_acc = if acc == "" { arm_block } else { acc + "|" + arm_block };
 
         // Process next arm
-        lower_match_arms(ast, idx + 1, tb, bb, scrutinee, result, merge_lbl, new_cases, new_acc);
+        lower_match_arms(ast, idx + 1, tb, bb, scrutinee, result, merge_lbl, new_cases, new_acc)
+    };
 
 // ============================================================================
 // Function Lowering
@@ -1804,13 +1883,16 @@ fn get_fn_body(ast: String) -> String = get_child(ast, 3);
 fn format_params(params_ast: String) -> String =
     format_params_inner(params_ast, 0, "");
 
+// Not a paren case: param.byte_at(0) != 40
 fn format_params_inner(params_ast: String, idx: i64, acc: String) -> String =
     let param = get_child(params_ast, idx);
-    if param.len() == 0 or param == "" { acc } else if param.byte_at(0) != 40 { acc  // Not a paren } else { let name = extract_name(get_child(param, 0)) };
+    if param.len() == 0 or param == "" { acc } else if param.byte_at(0) != 40 { acc } else {
+        let name = extract_name(get_child(param, 0));
         let ty = get_child(param, 1);
         let param_str = name + ": " + ty;
         let new_acc = if acc.len() > 0 { acc + ", " + param_str } else { param_str };
-        format_params_inner(params_ast, idx + 1, new_acc);
+        format_params_inner(params_ast, idx + 1, new_acc)
+    };
 
 // Lower a complete function
 // StringBuilder-aware function lowering (v0.31.20)
@@ -1882,11 +1964,13 @@ fn lower_program_sb(ast: String) -> String =
 
 fn lower_program_inner_sb(ast: String, idx: i64, sb: i64) -> i64 =
     let fn_ast = get_child(ast, idx);
-    if fn_ast.len() == 0 or fn_ast == "" { 0 } else if not is_fn_node(fn_ast) { 0 } else { let fn_mir = lower_function_sb(fn_ast) };
+    if fn_ast.len() == 0 or fn_ast == "" { 0 } else if not is_fn_node(fn_ast) { 0 } else {
+        let fn_mir = lower_function_sb(fn_ast);
         let len = sb_len(sb);
         let w1 = if len > 0 { sb_push(sb, "||") } else { 0 };
         let w2 = sb_push(sb, fn_mir);
-        lower_program_inner_sb(ast, idx + 1, sb);
+        lower_program_inner_sb(ast, idx + 1, sb)
+    };
 
 // Original program lowering (kept for compatibility)
 fn lower_program(ast: String) -> String =
@@ -1894,9 +1978,11 @@ fn lower_program(ast: String) -> String =
 
 fn lower_program_inner(ast: String, idx: i64, acc: String) -> String =
     let fn_ast = get_child(ast, idx);
-    if fn_ast.len() == 0 or fn_ast == "" { acc } else if not is_fn_node(fn_ast) { acc } else { let fn_mir = lower_function(fn_ast) };
+    if fn_ast.len() == 0 or fn_ast == "" { acc } else if not is_fn_node(fn_ast) { acc } else {
+        let fn_mir = lower_function(fn_ast);
         let new_acc = if acc.len() > 0 { acc + "||" + fn_mir } else { fn_mir };
-        lower_program_inner(ast, idx + 1, new_acc);
+        lower_program_inner(ast, idx + 1, new_acc)
+    };
 
 // ============================================================================
 // Test Helpers
@@ -2142,7 +2228,7 @@ fn main() -> i64 =
     let wn2 = if is_while_node("(while (var <x>) (call <foo>))") { 1 } else { 0 };
     let wn3 = if is_while_node("(if cond then else)") { 0 } else { 1 };  // if is not while
     let while_node_tests = wn1 + wn2 + wn3;
-    let u32 = println(while_node_tests);  // Should be 3
+    let w_print = println(while_node_tests);  // Should be 3
 
     // Test 30: v0.30.38 While lowering (3 tests)
     let wl1 = test_lower_contains("(while (bool true) (int 42))", "loop_start_");
@@ -2395,7 +2481,7 @@ fn main() -> i64 =
     let gea2 = if gen_env_alloc("%env1", 0) == "  %env1 = EnvAlloc 0" { 1 } else { 0 };
     let gea3 = if str_contains(gen_env_alloc("%e", 5), "EnvAlloc 5") { 1 } else { 0 };
     let env_alloc_tests = gea1 + gea2 + gea3;
-    let u64 = println(env_alloc_tests);  // Should be 3
+    let env_print = println(env_alloc_tests);  // Should be 3
 
     // Test 62: v0.30.103 gen_env_store (3 tests)
     let ges1 = if gen_env_store("%env", 0, "%x") == "  EnvStore %env, 0, %x" { 1 } else { 0 };

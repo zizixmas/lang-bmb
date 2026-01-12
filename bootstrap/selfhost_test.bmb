@@ -105,8 +105,10 @@ fn find_colon(s: String, pos: i64) -> i64 =
     if pos >= s.len() { s.len() } else if s.byte_at(pos) == 58 { pos } else { find_colon(s, pos + 1) };
 
 fn parse_int_prefix(s: String, pos: i64, acc: i64) -> i64 =
-    if pos >= s.len() { acc } else { let c = s.byte_at(pos) };
-        if c >= 48 and c <= 57 { parse_int_prefix(s, pos + 1, acc * 10 + c - 48) } else { acc };
+    if pos >= s.len() { acc } else {
+        let c = s.byte_at(pos);
+        if c >= 48 and c <= 57 { parse_int_prefix(s, pos + 1, acc * 10 + c - 48) } else { acc }
+    };
 
 fn pack_result(pos: i64, ast: String) -> String = int_to_string(pos) + ":" + ast;
 fn unpack_pos(result: String) -> i64 = parse_int_prefix(result, 0, 0);
@@ -126,28 +128,48 @@ fn parse_type(src: String, pos: i64) -> String =
 fn parse_primary(src: String, pos: i64) -> String =
     let tok = next_token_raw(src, pos);
     let kind = tok_kind(tok);
-    if kind == TK_INT() { let ns = skip_all(src, pos) };
+    if kind == TK_INT() {
+        let ns = skip_all(src, pos);
         let num = src.slice(ns, tok_end(tok));
         pack_result(tok_end(tok), "(int " + num + ")")
-    else if kind == TK_TRUE() { pack_result(tok_end(tok), "(bool true)") } else if kind == TK_FALSE() { pack_result(tok_end(tok), "(bool false)") } else if kind == TK_IDENT() { let ns = skip_all(src, pos) };
+    } else if kind == TK_TRUE() { pack_result(tok_end(tok), "(bool true)") }
+    else if kind == TK_FALSE() { pack_result(tok_end(tok), "(bool false)") }
+    else if kind == TK_IDENT() {
+        let ns = skip_all(src, pos);
         let name = src.slice(ns, tok_end(tok));
         let t2 = next_token_raw(src, tok_end(tok));
-        if tok_kind(t2) == TK_LPAREN() { let ra = parse_args(src, tok_end(t2), "") };
-            if is_error(unpack_ast(ra)) { ra } else { pack_result(unpack_pos(ra), "(call <" + name + ">" + unpack_ast(ra) + ")") }else pack_result(tok_end(tok), "(var <" + name + ">)")
-    else if kind == TK_LPAREN() { let re = parse_expr(src, tok_end(tok)) };
-        if is_error(unpack_ast(re)) { re } else { let t2 = next_token_raw(src, unpack_pos(re)) };
-            if tok_kind(t2) == TK_RPAREN() { pack_result(tok_end(t2), unpack_ast(re)) } else { pack_result(unpack_pos(re), make_error("paren")) }else if kind == TK_NOT() { let re = parse_unary(src, tok_end(tok)) };
-        if is_error(unpack_ast(re)) { re } else { pack_result(unpack_pos(re), "(not " + unpack_ast(re) + ")") }else if kind == TK_MINUS() { let re = parse_unary(src, tok_end(tok)) };
-        if is_error(unpack_ast(re)) { re } else { pack_result(unpack_pos(re), "(neg " + unpack_ast(re) + ")") }else pack_result(pos, make_error("primary"));
+        if tok_kind(t2) == TK_LPAREN() {
+            let ra = parse_args(src, tok_end(t2), "");
+            if is_error(unpack_ast(ra)) { ra } else { pack_result(unpack_pos(ra), "(call <" + name + ">" + unpack_ast(ra) + ")") }
+        } else { pack_result(tok_end(tok), "(var <" + name + ">)") }
+    } else if kind == TK_LPAREN() {
+        let re = parse_expr(src, tok_end(tok));
+        if is_error(unpack_ast(re)) { re } else {
+            let t2 = next_token_raw(src, unpack_pos(re));
+            if tok_kind(t2) == TK_RPAREN() { pack_result(tok_end(t2), unpack_ast(re)) } else { pack_result(unpack_pos(re), make_error("paren")) }
+        }
+    } else if kind == TK_NOT() {
+        let re = parse_unary(src, tok_end(tok));
+        if is_error(unpack_ast(re)) { re } else { pack_result(unpack_pos(re), "(not " + unpack_ast(re) + ")") }
+    } else if kind == TK_MINUS() {
+        let re = parse_unary(src, tok_end(tok));
+        if is_error(unpack_ast(re)) { re } else { pack_result(unpack_pos(re), "(neg " + unpack_ast(re) + ")") }
+    } else { pack_result(pos, make_error("primary")) };
 
 fn parse_unary(src: String, pos: i64) -> String = parse_primary(src, pos);
 
 fn parse_args(src: String, pos: i64, acc: String) -> String =
     let tok = next_token_raw(src, pos);
-    if tok_kind(tok) == TK_RPAREN() { pack_result(tok_end(tok), acc) } else { let re = parse_expr(src, pos) };
-        if is_error(unpack_ast(re)) { re } else { let t2 = next_token_raw(src, unpack_pos(re)) };
+    if tok_kind(tok) == TK_RPAREN() { pack_result(tok_end(tok), acc) } else {
+        let re = parse_expr(src, pos);
+        if is_error(unpack_ast(re)) { re } else {
+            let t2 = next_token_raw(src, unpack_pos(re));
             let new_acc = acc + " " + unpack_ast(re);
-            if tok_kind(t2) == TK_RPAREN() { pack_result(tok_end(t2), new_acc) } else if tok_kind(t2) == TK_COMMA() { parse_args(src, tok_end(t2), new_acc) } else { pack_result(unpack_pos(re), make_error("args")) };
+            if tok_kind(t2) == TK_RPAREN() { pack_result(tok_end(t2), new_acc) }
+            else if tok_kind(t2) == TK_COMMA() { parse_args(src, tok_end(t2), new_acc) }
+            else { pack_result(unpack_pos(re), make_error("args")) }
+        }
+    };
 
 fn op_symbol(kind: i64) -> String =
     if kind == TK_PLUS() { "+" } else if kind == TK_MINUS() { "-" } else if kind == TK_STAR() { "*" } else if kind == TK_SLASH() { "/" } else if kind == TK_PERCENT() { "%" } else if kind == TK_EQEQ() { "==" } else if kind == TK_NE() { "!=" } else if kind == TK_LT() { "<" } else if kind == TK_GT() { ">" } else if kind == TK_LE() { "<=" } else if kind == TK_GE() { ">=" } else if kind == TK_AND() { "and" } else if kind == TK_OR() { "or" } else { "" };
@@ -164,10 +186,13 @@ fn parse_mul(src: String, pos: i64) -> String =
 fn parse_mul_more(src: String, pos: i64, left: String) -> String =
     let tok = next_token_raw(src, pos);
     let kind = tok_kind(tok);
-    if kind == TK_STAR() or kind == TK_SLASH() or kind == TK_PERCENT() { let rr = parse_unary(src, tok_end(tok)) };
-        if is_error(unpack_ast(rr)) { rr } else { let new_left = "(op " + op_symbol(kind) + " " + left + " " + unpack_ast(rr) + ")" };
+    if kind == TK_STAR() or kind == TK_SLASH() or kind == TK_PERCENT() {
+        let rr = parse_unary(src, tok_end(tok));
+        if is_error(unpack_ast(rr)) { rr } else {
+            let new_left = "(op " + op_symbol(kind) + " " + left + " " + unpack_ast(rr) + ")";
             parse_mul_more(src, unpack_pos(rr), new_left)
-    else pack_result(pos, left);
+        }
+    } else { pack_result(pos, left) };
 
 fn parse_add(src: String, pos: i64) -> String =
     let rl = parse_mul(src, pos);
@@ -176,10 +201,13 @@ fn parse_add(src: String, pos: i64) -> String =
 fn parse_add_more(src: String, pos: i64, left: String) -> String =
     let tok = next_token_raw(src, pos);
     let kind = tok_kind(tok);
-    if kind == TK_PLUS() or kind == TK_MINUS() { let rr = parse_mul(src, tok_end(tok)) };
-        if is_error(unpack_ast(rr)) { rr } else { let new_left = "(op " + op_symbol(kind) + " " + left + " " + unpack_ast(rr) + ")" };
+    if kind == TK_PLUS() or kind == TK_MINUS() {
+        let rr = parse_mul(src, tok_end(tok));
+        if is_error(unpack_ast(rr)) { rr } else {
+            let new_left = "(op " + op_symbol(kind) + " " + left + " " + unpack_ast(rr) + ")";
             parse_add_more(src, unpack_pos(rr), new_left)
-    else pack_result(pos, left);
+        }
+    } else { pack_result(pos, left) };
 
 fn parse_cmp(src: String, pos: i64) -> String =
     let rl = parse_add(src, pos);
@@ -189,8 +217,10 @@ fn parse_cmp_more(src: String, pos: i64, left: String) -> String =
     let tok = next_token_raw(src, pos);
     let kind = tok_kind(tok);
     if kind == TK_EQEQ() or kind == TK_NE() or kind == TK_LT() or kind == TK_GT() or
-       kind == TK_LE() or kind == TK_GE() { let rr = parse_add(src, tok_end(tok)) };
-        if is_error(unpack_ast(rr)) { rr } else { pack_result(unpack_pos(rr), "(op " + op_symbol(kind) + " " + left + " " + unpack_ast(rr) + ")") }else pack_result(pos, left);
+       kind == TK_LE() or kind == TK_GE() {
+        let rr = parse_add(src, tok_end(tok));
+        if is_error(unpack_ast(rr)) { rr } else { pack_result(unpack_pos(rr), "(op " + op_symbol(kind) + " " + left + " " + unpack_ast(rr) + ")") }
+    } else { pack_result(pos, left) };
 
 fn parse_and(src: String, pos: i64) -> String =
     let rl = parse_cmp(src, pos);
@@ -198,10 +228,13 @@ fn parse_and(src: String, pos: i64) -> String =
 
 fn parse_and_more(src: String, pos: i64, left: String) -> String =
     let tok = next_token_raw(src, pos);
-    if tok_kind(tok) == TK_AND() { let rr = parse_cmp(src, tok_end(tok)) };
-        if is_error(unpack_ast(rr)) { rr } else { let new_left = "(op and " + left + " " + unpack_ast(rr) + ")" };
+    if tok_kind(tok) == TK_AND() {
+        let rr = parse_cmp(src, tok_end(tok));
+        if is_error(unpack_ast(rr)) { rr } else {
+            let new_left = "(op and " + left + " " + unpack_ast(rr) + ")";
             parse_and_more(src, unpack_pos(rr), new_left)
-    else pack_result(pos, left);
+        }
+    } else { pack_result(pos, left) };
 
 fn parse_or(src: String, pos: i64) -> String =
     let rl = parse_and(src, pos);
@@ -209,57 +242,108 @@ fn parse_or(src: String, pos: i64) -> String =
 
 fn parse_or_more(src: String, pos: i64, left: String) -> String =
     let tok = next_token_raw(src, pos);
-    if tok_kind(tok) == TK_OR() { let rr = parse_and(src, tok_end(tok)) };
-        if is_error(unpack_ast(rr)) { rr } else { let new_left = "(op or " + left + " " + unpack_ast(rr) + ")" };
+    if tok_kind(tok) == TK_OR() {
+        let rr = parse_and(src, tok_end(tok));
+        if is_error(unpack_ast(rr)) { rr } else {
+            let new_left = "(op or " + left + " " + unpack_ast(rr) + ")";
             parse_or_more(src, unpack_pos(rr), new_left)
-    else pack_result(pos, left);
+        }
+    } else { pack_result(pos, left) };
 
 fn parse_expr(src: String, pos: i64) -> String =
     let tok = next_token_raw(src, pos);
     let kind = tok_kind(tok);
-    if kind == TK_LET() { let t1 = next_token_raw(src, tok_end(tok)) };
-        if tok_kind(t1) != TK_IDENT() { pack_result(tok_end(tok), make_error("let-name")) } else { let ns = skip_all(src, tok_end(tok)) };
+    if kind == TK_LET() {
+        let t1 = next_token_raw(src, tok_end(tok));
+        if tok_kind(t1) != TK_IDENT() { pack_result(tok_end(tok), make_error("let-name")) } else {
+            let ns = skip_all(src, tok_end(tok));
             let name = src.slice(ns, tok_end(t1));
             let t2 = next_token_raw(src, tok_end(t1));
-            if tok_kind(t2) != TK_EQ() { pack_result(tok_end(t1), make_error("let-eq")) } else { let rv = parse_expr(src, tok_end(t2)) };
-                if is_error(unpack_ast(rv)) { rv } else { let t3 = next_token_raw(src, unpack_pos(rv)) };
-                    if tok_kind(t3) != TK_SEMI() { pack_result(unpack_pos(rv), make_error("let-semi")) } else { let rb = parse_expr(src, tok_end(t3)) };
-                        if is_error(unpack_ast(rb)) { rb } else { pack_result(unpack_pos(rb), "(let <" + name + "> " + unpack_ast(rv) + " " + unpack_ast(rb) + ")") }else if kind == TK_IF() { let rc = parse_expr(src, tok_end(tok)) };
-        if is_error(unpack_ast(rc)) { rc } else { let t1 = next_token_raw(src, unpack_pos(rc)) };
-            if tok_kind(t1) != TK_THEN() { pack_result(unpack_pos(rc), make_error("if-then")) } else { let rt = parse_expr(src, tok_end(t1)) };
-                if is_error(unpack_ast(rt)) { rt } else { let t2 = next_token_raw(src, unpack_pos(rt)) };
-                    if tok_kind(t2) != TK_ELSE() { pack_result(unpack_pos(rt), make_error("if-else")) } else { let re = parse_expr(src, tok_end(t2)) };
-                        if is_error(unpack_ast(re)) { re } else { pack_result(unpack_pos(re), "(if " + unpack_ast(rc) + " " + unpack_ast(rt) + " " + unpack_ast(re) + ")") }else parse_or(src, pos);
+            if tok_kind(t2) != TK_EQ() { pack_result(tok_end(t1), make_error("let-eq")) } else {
+                let rv = parse_expr(src, tok_end(t2));
+                if is_error(unpack_ast(rv)) { rv } else {
+                    let t3 = next_token_raw(src, unpack_pos(rv));
+                    if tok_kind(t3) != TK_SEMI() { pack_result(unpack_pos(rv), make_error("let-semi")) } else {
+                        let rb = parse_expr(src, tok_end(t3));
+                        if is_error(unpack_ast(rb)) { rb } else { pack_result(unpack_pos(rb), "(let <" + name + "> " + unpack_ast(rv) + " " + unpack_ast(rb) + ")") }
+                    }
+                }
+            }
+        }
+    } else if kind == TK_IF() {
+        let rc = parse_expr(src, tok_end(tok));
+        if is_error(unpack_ast(rc)) { rc } else {
+            let t1 = next_token_raw(src, unpack_pos(rc));
+            if tok_kind(t1) != TK_THEN() { pack_result(unpack_pos(rc), make_error("if-then")) } else {
+                let rt = parse_expr(src, tok_end(t1));
+                if is_error(unpack_ast(rt)) { rt } else {
+                    let t2 = next_token_raw(src, unpack_pos(rt));
+                    if tok_kind(t2) != TK_ELSE() { pack_result(unpack_pos(rt), make_error("if-else")) } else {
+                        let re = parse_expr(src, tok_end(t2));
+                        if is_error(unpack_ast(re)) { re } else { pack_result(unpack_pos(re), "(if " + unpack_ast(rc) + " " + unpack_ast(rt) + " " + unpack_ast(re) + ")") }
+                    }
+                }
+            }
+        }
+    } else { parse_or(src, pos) };
 
 fn parse_params(src: String, pos: i64, acc: String) -> String =
     let tok = next_token_raw(src, pos);
-    if tok_kind(tok) == TK_RPAREN() { pack_result(tok_end(tok), acc) } else if tok_kind(tok) == TK_IDENT() { let ns = skip_all(src, pos) };
+    if tok_kind(tok) == TK_RPAREN() { pack_result(tok_end(tok), acc) }
+    else if tok_kind(tok) == TK_IDENT() {
+        let ns = skip_all(src, pos);
         let name = src.slice(ns, tok_end(tok));
         let t1 = next_token_raw(src, tok_end(tok));
-        if tok_kind(t1) != TK_COLON() { pack_result(tok_end(tok), make_error("param-colon")) } else { let rt = parse_type(src, tok_end(t1)) };
-            if is_error(unpack_ast(rt)) { rt } else { let new_acc = acc + " (p <" + name + "> " + unpack_ast(rt) + ")" };
+        if tok_kind(t1) != TK_COLON() { pack_result(tok_end(tok), make_error("param-colon")) } else {
+            let rt = parse_type(src, tok_end(t1));
+            if is_error(unpack_ast(rt)) { rt } else {
+                let new_acc = acc + " (p <" + name + "> " + unpack_ast(rt) + ")";
                 let t2 = next_token_raw(src, unpack_pos(rt));
-                if tok_kind(t2) == TK_RPAREN() { pack_result(tok_end(t2), new_acc) } else if tok_kind(t2) == TK_COMMA() { parse_params(src, tok_end(t2), new_acc) } else { pack_result(unpack_pos(rt), make_error("params")) }else pack_result(pos, make_error("param-name"));
+                if tok_kind(t2) == TK_RPAREN() { pack_result(tok_end(t2), new_acc) }
+                else if tok_kind(t2) == TK_COMMA() { parse_params(src, tok_end(t2), new_acc) }
+                else { pack_result(unpack_pos(rt), make_error("params")) }
+            }
+        }
+    } else { pack_result(pos, make_error("param-name")) };
 
 fn parse_fn(src: String, pos: i64) -> String =
     let t1 = next_token_raw(src, pos);
-    if tok_kind(t1) != TK_IDENT() { pack_result(pos, make_error("fn-name")) } else { let ns = skip_all(src, pos) };
+    if tok_kind(t1) != TK_IDENT() { pack_result(pos, make_error("fn-name")) } else {
+        let ns = skip_all(src, pos);
         let name = src.slice(ns, tok_end(t1));
         let t2 = next_token_raw(src, tok_end(t1));
-        if tok_kind(t2) != TK_LPAREN() { pack_result(tok_end(t1), make_error("fn-lparen")) } else { let rp = parse_params(src, tok_end(t2), "") };
-            if is_error(unpack_ast(rp)) { rp } else { let t3 = next_token_raw(src, unpack_pos(rp)) };
-                if tok_kind(t3) != TK_ARROW() { pack_result(unpack_pos(rp), make_error("fn-arrow")) } else { let rt = parse_type(src, tok_end(t3)) };
-                    if is_error(unpack_ast(rt)) { rt } else { let t4 = next_token_raw(src, unpack_pos(rt)) };
-                        if tok_kind(t4) != TK_EQ() { pack_result(unpack_pos(rt), make_error("fn-eq")) } else { let rb = parse_expr(src, tok_end(t4)) };
-                            if is_error(unpack_ast(rb)) { rb } else { let t5 = next_token_raw(src, unpack_pos(rb)) };
-                                if tok_kind(t5) != TK_SEMI() { pack_result(unpack_pos(rb), make_error("fn-semi")) } else { let params = if unpack_ast(rp) == "" { "" } else { " (params" + unpack_ast(rp) + ")" } };
-                                    pack_result(tok_end(t5), "(fn <" + name + ">" + params + " " + unpack_ast(rt) + " " + unpack_ast(rb) + ")");
+        if tok_kind(t2) != TK_LPAREN() { pack_result(tok_end(t1), make_error("fn-lparen")) } else {
+            let rp = parse_params(src, tok_end(t2), "");
+            if is_error(unpack_ast(rp)) { rp } else {
+                let t3 = next_token_raw(src, unpack_pos(rp));
+                if tok_kind(t3) != TK_ARROW() { pack_result(unpack_pos(rp), make_error("fn-arrow")) } else {
+                    let rt = parse_type(src, tok_end(t3));
+                    if is_error(unpack_ast(rt)) { rt } else {
+                        let t4 = next_token_raw(src, unpack_pos(rt));
+                        if tok_kind(t4) != TK_EQ() { pack_result(unpack_pos(rt), make_error("fn-eq")) } else {
+                            let rb = parse_expr(src, tok_end(t4));
+                            if is_error(unpack_ast(rb)) { rb } else {
+                                let t5 = next_token_raw(src, unpack_pos(rb));
+                                if tok_kind(t5) != TK_SEMI() { pack_result(unpack_pos(rb), make_error("fn-semi")) } else {
+                                    let params = if unpack_ast(rp) == "" { "" } else { " (params" + unpack_ast(rp) + ")" };
+                                    pack_result(tok_end(t5), "(fn <" + name + ">" + params + " " + unpack_ast(rt) + " " + unpack_ast(rb) + ")")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    };
 
 fn parse_program(src: String, pos: i64, fns: String) -> String =
     let tok = next_token_raw(src, pos);
     let kind = tok_kind(tok);
-    if kind == TK_EOF() { "(program" + fns + ")" } else if kind == TK_FN() { let rf = parse_fn(src, tok_end(tok)) };
-        if is_error(unpack_ast(rf)) { unpack_ast(rf) } else { parse_program(src, unpack_pos(rf), fns + " " + unpack_ast(rf)) }else make_error("program");
+    if kind == TK_EOF() { "(program" + fns + ")" }
+    else if kind == TK_FN() {
+        let rf = parse_fn(src, tok_end(tok));
+        if is_error(unpack_ast(rf)) { unpack_ast(rf) } else { parse_program(src, unpack_pos(rf), fns + " " + unpack_ast(rf)) }
+    } else { make_error("program") };
 
 fn parse_source(src: String) -> String = parse_program(src, 0, "");
 
