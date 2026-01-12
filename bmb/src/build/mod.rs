@@ -491,6 +491,8 @@ fn link_executable(obj_path: &Path, output: &Path, verbose: bool) -> BuildResult
 
     #[cfg(target_os = "linux")]
     {
+        // v0.100: Disable PIE to avoid PIC relocation issues
+        cmd.arg("-no-pie");
         cmd.arg("-lc");
     }
 
@@ -570,12 +572,15 @@ fn find_linker() -> BuildResult<String> {
     // On Windows, prefer gcc/clang (MinGW) over MSVC link.exe because:
     // 1. We target x86_64-pc-windows-gnu
     // 2. gcc understands -o flag while link.exe uses /OUT:
+    // On Linux, prefer clang/gcc over bare ld because:
+    // 1. clang/gcc automatically link C runtime (crt1.o, libc)
+    // 2. bare ld requires manual setup of startup files
     let candidates = if cfg!(target_os = "windows") {
         vec!["gcc", "clang", "lld", "lld-link"]
     } else if cfg!(target_os = "macos") {
-        vec!["ld", "clang", "gcc"]
+        vec!["clang", "gcc", "ld"]
     } else {
-        vec!["ld", "lld", "clang", "gcc"]
+        vec!["clang", "gcc", "ld", "lld"]
     };
 
     for linker in candidates {

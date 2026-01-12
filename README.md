@@ -1,186 +1,93 @@
 # BMB - Bare-Metal-Banter
 
-A verified systems programming language with contract-based verification, designed for AI-native code generation.
+A contract-verified systems programming language.
 
-## Current Status: v0.30.310
+Hard to write. Hard to get wrong.
+And that's what AI prefers.
 
-| Component | Status | Description |
-|-----------|--------|-------------|
-| Lexer/Parser | Complete | logos + lalrpop based tokenization, 113+ tests |
-| Type System | Complete | Generics, refinement types, Option/Result, ownership, closures |
-| Contracts | Complete | pre/post conditions, quantifiers, SMT verification (Z3) |
-| Interpreter | Complete | Tree-walking interpreter with REPL |
-| MIR | Complete | Middle Intermediate Representation with optimization |
-| LLVM Backend | Complete | Native code generation via inkwell (optional) |
-| Bootstrap | Complete | Self-hosted compiler in BMB (29,818 lines, 93+ tests) |
-| Module System | Complete | Cross-package type references, use statements |
-| Code Quality | Complete | 0 Clippy warnings, 0 doc warnings, 132 tests |
+## Why BMB?
+
+Traditional languages prioritize human convenience—readable syntax, flexible conventions, implicit behaviors. The cost: ambiguity, guesswork, runtime surprises.
+
+BMB takes a different approach. Contracts are mandatory. Specifications are explicit. Invariants are verified at compile time.
+
+**BMB unifies code, documentation, and tests:**
+
+```bmb
+fn binary_search(arr: &[i64], target: i64) -> i64
+  pre is_sorted(arr)
+  post ret == -1 or (0 <= ret and ret < len(arr))
+  post ret != -1 implies arr[ret] == target
+  post ret == -1 implies forall i: 0..len(arr). arr[i] != target
+= {
+    var lo = 0;
+    var hi = len(arr) - 1;
+    while lo <= hi
+      invariant 0 <= lo and hi < len(arr)
+      invariant forall i: 0..lo. arr[i] < target
+      invariant forall i: (hi+1)..len(arr). arr[i] > target
+    {
+        let mid = lo + (hi - lo) / 2;
+        if arr[mid] == target then mid
+        else if arr[mid] < target then { lo = mid + 1; }
+        else { hi = mid - 1; }
+    };
+    -1
+};
+```
+
+## Priorities (P0)
+
+| Priority | Principle |
+|----------|-----------|
+| P0 | **Performance** — No syntax that constrains optimization. Target: exceed C/Rust. |
+| P0 | **Correctness** — If it can be verified at compile time, it must be. |
 
 ## Quick Start
 
 ```bash
-# Build the compiler
 cargo build --release
-
-# Run a BMB program
 bmb run examples/hello.bmb
-
-# Type check a file
 bmb check examples/simple.bmb
-
-# Parse and output AST
-bmb parse examples/simple.bmb                 # JSON format
-bmb parse examples/simple.bmb --format=sexpr  # S-expression format
-
-# Verify contracts (requires Z3)
-bmb verify examples/verify.bmb --z3-path /path/to/z3
-
-# Start interactive REPL
+bmb verify examples/verify.bmb   # requires Z3
+bmb build examples/hello.bmb     # requires LLVM
 bmb repl
-
-# Build native executable (requires LLVM)
-bmb build examples/hello.bmb -o hello
-bmb build examples/hello.bmb --release     # optimized
-bmb build examples/hello.bmb --emit-ir     # output LLVM IR
 ```
 
-## Building with LLVM
+## Current Version: v0.100
 
-For native code generation, build with the `llvm` feature:
+**P0 Performance Achieved**: BMB matches C -O3 performance.
 
-```bash
-# Requires LLVM 21 with llvm-config
-cargo build --release --features llvm
+```
+Benchmark: fib(45)
+C (-O3):   1.65s (100%)
+BMB:       1.63s (99%)
 ```
 
-> **Note**: Windows pre-built LLVM does not include `llvm-config`. Use MSYS2 LLVM or build from source.
-
-## Language Example
-
-```bmb
--- Function with contract verification
-fn max(a: i64, b: i64) -> i64
-  post ret >= a and ret >= b
-= if a > b then a else b;
-
--- Precondition ensures non-zero division
-fn safe_div(a: i64, b: i64) -> i64
-  pre b != 0
-= a / b;
-
--- Generic type with refinement
-type NonZero = i64 where self != 0;
-
-enum Option<T> {
-  Some(T),
-  None
-}
-
--- Method call syntax
-fn example(x: Option<i64>) -> i64 =
-  x.unwrap_or(0);
-
--- Closure expression (v0.20+)
-fn apply_twice(f: fn(i64) -> i64, x: i64) -> i64 =
-  f(f(x));
-```
+See [ROADMAP.md](docs/ROADMAP.md) for detailed progress and planned features.
 
 ## Project Structure
 
 ```
 lang-bmb/
-├── bmb/                    # Rust compiler implementation
-│   └── src/
-│       ├── lexer/          # Token definitions (logos)
-│       ├── parser/         # Parser (lalrpop) + tests
-│       ├── ast/            # AST definitions + S-expr output
-│       ├── types/          # Type checker with generics
-│       ├── smt/            # SMT-LIB2 generation
-│       ├── verify/         # Contract verification
-│       ├── interp/         # Tree-walking interpreter
-│       ├── mir/            # Middle IR
-│       ├── codegen/        # LLVM/WASM backends
-│       ├── lsp/            # Language Server Protocol
-│       └── repl/           # Interactive REPL
-├── bootstrap/              # Self-hosted compiler in BMB
-├── stdlib/                 # Standard library
-├── runtime/                # Runtime support
-├── ecosystem/              # Development tools (submodules)
-├── tests/                  # Integration tests
-├── examples/               # Example programs
-└── docs/                   # Documentation
+├── bmb/           # Compiler (Rust)
+├── bootstrap/     # Self-hosted compiler (BMB)
+├── stdlib/        # Standard library
+├── ecosystem/     # Tools, editor support
+└── docs/          # Specification, roadmap
 ```
-
-## Ecosystem (Submodules)
-
-| Repository | Description | Status |
-|------------|-------------|--------|
-| [gotgan](ecosystem/gotgan) | Package manager with Rust fallback | Active |
-| [tree-sitter-bmb](ecosystem/tree-sitter-bmb) | Tree-sitter grammar for editors | Active |
-| [vscode-bmb](ecosystem/vscode-bmb) | VS Code extension | Active |
-| [playground](ecosystem/playground) | Online playground (WASM) | Active |
-| [lang-bmb-site](ecosystem/lang-bmb-site) | Official website | Active |
-| [bmb-samples](ecosystem/bmb-samples) | Example programs and tutorials | Active |
-| [benchmark-bmb](ecosystem/benchmark-bmb) | Performance benchmarks | Active |
-| [action-bmb](ecosystem/action-bmb) | GitHub Actions support | Active |
-
-### Submodule Setup
-
-```bash
-# Clone with submodules
-git clone --recursive https://github.com/lang-bmb/lang-bmb.git
-
-# Or initialize after clone
-git submodule update --init --recursive
-```
-
-## Bootstrap Status
-
-Self-hosted compiler components written in BMB (29,818 lines):
-
-| Component | Lines | Description | Status |
-|-----------|-------|-------------|--------|
-| lexer.bmb | 1,046 | Token generation | Complete |
-| parser.bmb | 1,523 | Syntax validation | Complete |
-| parser_ast.bmb | 3,666 | S-expression AST | Complete |
-| types.bmb | 8,764 | Type checking (316 tests) | Complete |
-| mir.bmb | 1,705 | MIR foundation | Complete |
-| lowering.bmb | 3,867 | AST to MIR transform | Complete |
-| llvm_ir.bmb | 4,621 | LLVM IR generation | Complete |
-| pipeline.bmb | 2,107 | End-to-end compilation (42 tests) | Complete |
-| compiler.bmb | 2,783 | Full compiler driver | Complete |
-
-**Stage 3 Bootstrap**: 6/7 tests passing (86%)
-
-See [bootstrap/README.md](bootstrap/README.md) for details.
 
 ## Requirements
 
 - Rust 1.70+
-- Z3 Solver (for contract verification)
-- LLVM 21 (optional, for native codegen)
+- Z3 (verification)
+- LLVM 18+ (native codegen, optional)
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| [SPECIFICATION.md](docs/SPECIFICATION.md) | Complete language specification |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Compiler architecture and internals |
-| [ROADMAP.md](docs/ROADMAP.md) | Development roadmap and milestones |
-| [GOTGAN.md](docs/GOTGAN.md) | Package manager specification |
-| [ECOSYSTEM.md](docs/ECOSYSTEM.md) | Ecosystem tools and submodules |
-
-## Design Philosophy
-
-BMB is designed as an **AI-native** programming language:
-
-| Principle | Description |
-|-----------|-------------|
-| Correctness First | Contract verification prevents bugs at source |
-| Performance | Contracts enable optimizations beyond C/Rust |
-| AI-Native | Optimized for LLM code generation |
-| Minimal Rules | Same syntax = same meaning, zero exceptions |
-| Composability | Small contracts compose into complex ones |
+- [SPECIFICATION.md](docs/SPECIFICATION.md)
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- [ROADMAP.md](docs/ROADMAP.md)
 
 ## License
 

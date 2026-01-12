@@ -25,7 +25,7 @@ tokio.workspace = true
 chrono.workspace = true
 
 # Optional LLVM code generation
-inkwell = { workspace = true, optional = true, features = ["llvm21-1", "llvm21-1-prefer-dynamic"] }
+inkwell = { workspace = true, optional = true, features = ["llvm21-1"] }
 
 [build-dependencies]
 lalrpop.workspace = true

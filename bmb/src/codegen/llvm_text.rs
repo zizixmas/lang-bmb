@@ -113,53 +113,48 @@ impl TextCodeGen {
         for func in &program.functions {
             for block in &func.blocks {
                 for inst in &block.instructions {
-                    if let MirInst::Const { value: Constant::String(s), .. } = inst {
-                        if !table.contains_key(s) {
+                    if let MirInst::Const { value: Constant::String(s), .. } = inst
+                        && !table.contains_key(s) {
                             table.insert(s.clone(), format!(".str.{}", counter));
                             counter += 1;
                         }
-                    }
                     // Check for string constants in call arguments
                     if let MirInst::Call { args, .. } = inst {
                         for arg in args {
-                            if let Operand::Constant(Constant::String(s)) = arg {
-                                if !table.contains_key(s) {
+                            if let Operand::Constant(Constant::String(s)) = arg
+                                && !table.contains_key(s) {
                                     table.insert(s.clone(), format!(".str.{}", counter));
                                     counter += 1;
                                 }
-                            }
                         }
                     }
                     // Check for string constants in phi values
                     if let MirInst::Phi { values, .. } = inst {
                         for (val, _label) in values {
-                            if let Operand::Constant(Constant::String(s)) = val {
-                                if !table.contains_key(s) {
+                            if let Operand::Constant(Constant::String(s)) = val
+                                && !table.contains_key(s) {
                                     table.insert(s.clone(), format!(".str.{}", counter));
                                     counter += 1;
                                 }
-                            }
                         }
                     }
                     // Check for string constants in BinOp operands
                     if let MirInst::BinOp { lhs, rhs, .. } = inst {
                         for operand in [lhs, rhs] {
-                            if let Operand::Constant(Constant::String(s)) = operand {
-                                if !table.contains_key(s) {
+                            if let Operand::Constant(Constant::String(s)) = operand
+                                && !table.contains_key(s) {
                                     table.insert(s.clone(), format!(".str.{}", counter));
                                     counter += 1;
                                 }
-                            }
                         }
                     }
                 }
                 // Check for string constants in Return terminator
-                if let Terminator::Return(Some(Operand::Constant(Constant::String(s)))) = &block.terminator {
-                    if !table.contains_key(s) {
+                if let Terminator::Return(Some(Operand::Constant(Constant::String(s)))) = &block.terminator
+                    && !table.contains_key(s) {
                         table.insert(s.clone(), format!(".str.{}", counter));
                         counter += 1;
                     }
-                }
             }
         }
 
@@ -228,6 +223,8 @@ impl TextCodeGen {
         writeln!(out, "declare ptr @bmb_string_new(ptr, i64)")?;
         writeln!(out, "declare ptr @bmb_string_from_cstr(ptr)")?;
         writeln!(out, "declare i64 @bmb_string_len(ptr)")?;
+        // Note: Returns byte at index, not Unicode char. Name kept for ABI compatibility.
+        // v0.67: Interpreter method renamed to byte_at for clarity
         writeln!(out, "declare i64 @bmb_string_char_at(ptr, i64)")?;
         writeln!(out, "declare ptr @bmb_string_slice(ptr, i64, i64)")?;
         writeln!(out, "declare ptr @bmb_string_concat(ptr, ptr)")?;
@@ -475,11 +472,11 @@ impl TextCodeGen {
                     for (val, pred_label) in values {
                         if let Operand::Constant(Constant::String(s)) = val {
                             let key = (block.label.clone(), s.clone(), pred_label.clone());
-                            if !phi_string_map.contains_key(&key) {
+                            phi_string_map.entry(key).or_insert_with(|| {
                                 let temp_name = format!("_str_phi_{}", string_phi_counter);
                                 string_phi_counter += 1;
-                                phi_string_map.insert(key, temp_name);
-                            }
+                                temp_name
+                            });
                         }
                     }
                 }
@@ -543,6 +540,7 @@ impl TextCodeGen {
     }
 
     /// Emit a basic block with string table support
+    #[allow(clippy::too_many_arguments)]
     fn emit_block_with_strings(
         &self,
         out: &mut String,
@@ -609,6 +607,7 @@ impl TextCodeGen {
     }
 
     /// Emit an instruction with string table support
+    #[allow(clippy::too_many_arguments)]
     fn emit_instruction_with_strings(
         &self,
         out: &mut String,
@@ -653,6 +652,10 @@ impl TextCodeGen {
                                 writeln!(out, "  %{} = add ptr null, null", temp_name)?;
                             }
                         }
+                        // v0.64: Character constant (stored as i32 Unicode codepoint)
+                        Constant::Char(c) => {
+                            writeln!(out, "  %{} = add {} 0, {}", temp_name, ty, *c as u32)?;
+                        }
                     }
                     writeln!(out, "  store {} %{}, ptr %{}.addr", ty, temp_name, dest.name)?;
                 } else {
@@ -682,6 +685,10 @@ impl TextCodeGen {
                                 // Fallback if string not in table (shouldn't happen)
                                 writeln!(out, "  ; string constant not in table: {}", s)?;
                             }
+                        }
+                        // v0.64: Character constant (stored as i32 Unicode codepoint)
+                        Constant::Char(c) => {
+                            writeln!(out, "  %{} = add {} 0, {}", dest_name, ty, *c as u32)?;
                         }
                     }
                 }
@@ -821,6 +828,12 @@ impl TextCodeGen {
                              dest_name, lhs_final, rhs_final)?;
                     // Convert i64 to i1 and negate (0 means not equal, so i64==0 means Ne is true)
                     writeln!(out, "  %{} = icmp eq i64 %{}.i64, 0", dest_name, dest_name)?;
+                } else if *op == MirBinOp::Implies {
+                    // v0.36: Implication P => Q = !P || Q
+                    // Step 1: Negate left operand
+                    writeln!(out, "  %{}.not = xor i1 {}, true", dest_name, lhs_str)?;
+                    // Step 2: Or with right operand
+                    writeln!(out, "  %{} = or i1 %{}.not, {}", dest_name, dest_name, rhs_str)?;
                 } else {
                     // v0.34: Fix float operations - MIR may use Add/Sub/etc. for f64 due to type inference issues
                     // Override to float operations when operand type is double/f64
@@ -831,13 +844,24 @@ impl TextCodeGen {
                             MirBinOp::Mul | MirBinOp::FMul => "fmul",
                             MirBinOp::Div | MirBinOp::FDiv => "fdiv",
                             MirBinOp::Mod => "frem",
+                            // v0.37: Wrapping arithmetic (not applicable to floats)
+                            MirBinOp::AddWrap | MirBinOp::SubWrap | MirBinOp::MulWrap |
+                            // v0.38: Checked arithmetic (not applicable to floats)
+                            MirBinOp::AddChecked | MirBinOp::SubChecked | MirBinOp::MulChecked |
+                            // v0.38: Saturating arithmetic (not applicable to floats)
+                            MirBinOp::AddSat | MirBinOp::SubSat | MirBinOp::MulSat => {
+                                let (s, _) = self.binop_to_llvm(*op);
+                                s
+                            }
                             MirBinOp::Eq | MirBinOp::FEq => "fcmp oeq",
                             MirBinOp::Ne | MirBinOp::FNe => "fcmp one",
                             MirBinOp::Lt | MirBinOp::FLt => "fcmp olt",
                             MirBinOp::Gt | MirBinOp::FGt => "fcmp ogt",
                             MirBinOp::Le | MirBinOp::FLe => "fcmp ole",
                             MirBinOp::Ge | MirBinOp::FGe => "fcmp oge",
-                            MirBinOp::And | MirBinOp::Or => {
+                            MirBinOp::And | MirBinOp::Or | MirBinOp::Shl | MirBinOp::Shr |
+                            MirBinOp::Band | MirBinOp::Bor | MirBinOp::Bxor | MirBinOp::Implies => {
+                                // These operations don't apply to floats, use integer path
                                 let (s, _) = self.binop_to_llvm(*op);
                                 s
                             }
@@ -875,6 +899,10 @@ impl TextCodeGen {
                     }
                     MirUnaryOp::Not => {
                         writeln!(out, "  %{} = xor i1 {}, 1", dest_name, src_str)?;
+                    }
+                    // v0.36: Bitwise not (integer only)
+                    MirUnaryOp::Bnot => {
+                        writeln!(out, "  %{} = xor {} {}, -1", dest_name, ty, src_str)?;
                     }
                 }
             }
@@ -1849,6 +1877,9 @@ impl TextCodeGen {
         match ty {
             MirType::I32 => "i32",
             MirType::I64 => "i64",
+            // v0.38: Unsigned types map to same LLVM types
+            MirType::U32 => "i32",
+            MirType::U64 => "i64",
             MirType::F64 => "double",
             MirType::Bool => "i1",
             MirType::String => "ptr",
@@ -1860,6 +1891,8 @@ impl TextCodeGen {
             MirType::Enum { .. } => "ptr",
             // v0.19.3: Array types are represented as pointers
             MirType::Array { .. } => "ptr",
+            // v0.64: Character type (32-bit Unicode codepoint)
+            MirType::Char => "i32",
         }
     }
 
@@ -1870,6 +1903,8 @@ impl TextCodeGen {
             Constant::Float(_) => "double",
             Constant::Bool(_) => "i1",
             Constant::String(_) => "ptr",
+            // v0.64: Character constant (32-bit Unicode codepoint)
+            Constant::Char(_) => "i32",
             Constant::Unit => "i8",
         }
     }
@@ -1895,6 +1930,8 @@ impl TextCodeGen {
             }
             Constant::Bool(b) => if *b { "1" } else { "0" }.to_string(),
             Constant::String(s) => format!("\"{}\"", s),
+            // v0.64: Character constant (Unicode codepoint)
+            Constant::Char(c) => (*c as u32).to_string(),
             Constant::Unit => "0".to_string(),
         }
     }
@@ -1904,41 +1941,6 @@ impl TextCodeGen {
         match op {
             Operand::Place(p) => format!("%{}", p.name),
             Operand::Constant(c) => self.format_constant(c),
-        }
-    }
-
-    /// Format an operand with potential load for local variables
-    /// Returns (needs_load_prefix, formatted_value)
-    /// If needs_load_prefix is Some, caller should emit a load instruction first
-    fn format_operand_with_locals(
-        &self,
-        op: &Operand,
-        string_table: &HashMap<String, String>,
-        local_names: &std::collections::HashSet<String>,
-        load_counter: &mut u32,
-    ) -> (Option<(String, String, &'static str)>, String) {
-        match op {
-            Operand::Place(p) => {
-                if local_names.contains(&p.name) {
-                    // Need to emit load from alloca
-                    *load_counter += 1;
-                    let load_name = format!("{}.ld{}", p.name, *load_counter);
-                    // Return info for caller to emit load
-                    (Some((load_name.clone(), p.name.clone(), "ptr")), format!("%{}", load_name))
-                } else {
-                    (None, format!("%{}", p.name))
-                }
-            }
-            Operand::Constant(c) => match c {
-                Constant::String(s) => {
-                    if let Some(global_name) = string_table.get(s) {
-                        (None, format!("@{}", global_name))
-                    } else {
-                        (None, format!("\"{}\"", s))
-                    }
-                }
-                _ => (None, self.format_constant(c)),
-            },
         }
     }
 
@@ -2052,6 +2054,23 @@ impl TextCodeGen {
             MirBinOp::Div => ("sdiv", true),  // sdiv doesn't benefit from nsw
             MirBinOp::Mod => ("srem", true),  // srem doesn't benefit from nsw
 
+            // v0.37: Wrapping arithmetic - no nsw/nuw flags (allows overflow)
+            MirBinOp::AddWrap => ("add", true),
+            MirBinOp::SubWrap => ("sub", true),
+            MirBinOp::MulWrap => ("mul", true),
+
+            // v0.38: Checked arithmetic - use intrinsics for overflow detection
+            // For now, same as wrapping (full checked impl needs Option handling)
+            MirBinOp::AddChecked => ("add", true),
+            MirBinOp::SubChecked => ("sub", true),
+            MirBinOp::MulChecked => ("mul", true),
+
+            // v0.38: Saturating arithmetic - clamps to min/max on overflow
+            // LLVM doesn't have native saturating ops; use sadd.sat intrinsics in future
+            MirBinOp::AddSat => ("add", true),
+            MirBinOp::SubSat => ("sub", true),
+            MirBinOp::MulSat => ("mul", true),
+
             // Floating-point arithmetic - result type same as operand
             MirBinOp::FAdd => ("fadd", true),
             MirBinOp::FSub => ("fsub", true),
@@ -2077,6 +2096,19 @@ impl TextCodeGen {
             // Logical - result is i1
             MirBinOp::And => ("and", false),
             MirBinOp::Or => ("or", false),
+
+            // v0.32: Shift operators - result type same as operand
+            MirBinOp::Shl => ("shl", true),
+            MirBinOp::Shr => ("ashr", true),  // arithmetic shift right (preserves sign)
+
+            // v0.36: Bitwise operators - result type same as operand
+            MirBinOp::Band => ("and", true),
+            MirBinOp::Bor => ("or", true),
+            MirBinOp::Bxor => ("xor", true),
+
+            // v0.36: Implies is handled specially before this function is called
+            // This arm exists for exhaustiveness; the actual codegen is in emit_instruction
+            MirBinOp::Implies => ("or", false),
         }
     }
 }

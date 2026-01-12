@@ -377,9 +377,14 @@ impl IndexGenerator {
         match ty {
             Type::I32 => "i32".to_string(),
             Type::I64 => "i64".to_string(),
+            // v0.38: Unsigned types
+            Type::U32 => "u32".to_string(),
+            Type::U64 => "u64".to_string(),
             Type::F64 => "f64".to_string(),
             Type::Bool => "bool".to_string(),
             Type::String => "String".to_string(),
+            // v0.64: Char type
+            Type::Char => "char".to_string(),
             Type::Unit => "()".to_string(),
             Type::Named(name) => name.clone(),
             Type::TypeVar(name) => name.clone(),
@@ -404,6 +409,13 @@ impl IndexGenerator {
             }
             // v0.31: Never type
             Type::Never => "!".to_string(),
+            // v0.37: Nullable type
+            Type::Nullable(inner) => format!("{}?", self.format_type(inner)),
+            // v0.42: Tuple type
+            Type::Tuple(elems) => {
+                let elems_str: Vec<_> = elems.iter().map(|t| self.format_type(t)).collect();
+                format!("({})", elems_str.join(", "))
+            }
         }
     }
 
@@ -424,6 +436,18 @@ impl IndexGenerator {
                     ast::BinOp::Mul => "*",
                     ast::BinOp::Div => "/",
                     ast::BinOp::Mod => "%",
+                    // v0.37: Wrapping arithmetic
+                    ast::BinOp::AddWrap => "+%",
+                    ast::BinOp::SubWrap => "-%",
+                    ast::BinOp::MulWrap => "*%",
+                    // v0.38: Checked arithmetic
+                    ast::BinOp::AddChecked => "+?",
+                    ast::BinOp::SubChecked => "-?",
+                    ast::BinOp::MulChecked => "*?",
+                    // v0.38: Saturating arithmetic
+                    ast::BinOp::AddSat => "+|",
+                    ast::BinOp::SubSat => "-|",
+                    ast::BinOp::MulSat => "*|",
                     ast::BinOp::Eq => "==",
                     ast::BinOp::Ne => "!=",
                     ast::BinOp::Lt => "<",
@@ -432,6 +456,15 @@ impl IndexGenerator {
                     ast::BinOp::Ge => ">=",
                     ast::BinOp::And => "and",
                     ast::BinOp::Or => "or",
+                    // v0.32: Shift operators
+                    ast::BinOp::Shl => "<<",
+                    ast::BinOp::Shr => ">>",
+                    // v0.36: Bitwise operators
+                    ast::BinOp::Band => "band",
+                    ast::BinOp::Bor => "bor",
+                    ast::BinOp::Bxor => "bxor",
+                    // v0.36: Logical implication
+                    ast::BinOp::Implies => "implies",
                 };
                 format!(
                     "{} {} {}",
@@ -444,6 +477,8 @@ impl IndexGenerator {
                 let op_str = match op {
                     ast::UnOp::Neg => "-",
                     ast::UnOp::Not => "not ",
+                    // v0.36: Bitwise not
+                    ast::UnOp::Bnot => "bnot ",
                 };
                 format!("{}{}", op_str, self.format_expr(&expr.node))
             }

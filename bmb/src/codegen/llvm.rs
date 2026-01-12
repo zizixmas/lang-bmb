@@ -97,9 +97,15 @@ impl CodeGen {
         // Declare built-in functions
         ctx.declare_builtins();
 
-        // Generate code for all functions
+        // v0.35.4: Two-pass approach for forward references
+        // Pass 1: Declare all user functions
         for func in &program.functions {
-            ctx.gen_function(func)?;
+            ctx.declare_function(func)?;
+        }
+
+        // Pass 2: Generate function bodies
+        for func in &program.functions {
+            ctx.gen_function_body(func)?;
         }
 
         // Write to object file
@@ -114,9 +120,15 @@ impl CodeGen {
         // Declare built-in functions
         ctx.declare_builtins();
 
-        // Generate code for all functions
+        // v0.35.4: Two-pass approach for forward references
+        // Pass 1: Declare all user functions
         for func in &program.functions {
-            ctx.gen_function(func)?;
+            ctx.declare_function(func)?;
+        }
+
+        // Pass 2: Generate function bodies
+        for func in &program.functions {
+            ctx.gen_function_body(func)?;
         }
 
         Ok(ctx.module.print_to_string().to_string())
@@ -229,6 +241,161 @@ impl<'ctx> LlvmContext<'ctx> {
         let max_type = i64_type.fn_type(&[i64_type.into(), i64_type.into()], false);
         let max_fn = self.module.add_function("bmb_max", max_type, None);
         self.functions.insert("max".to_string(), max_fn);
+
+        // v0.35.4: f64 math intrinsics
+        let f64_type = self.context.f64_type();
+
+        // sqrt(f64) -> f64 (LLVM intrinsic)
+        let sqrt_type = f64_type.fn_type(&[f64_type.into()], false);
+        let sqrt_fn = self.module.add_function("llvm.sqrt.f64", sqrt_type, None);
+        self.functions.insert("sqrt".to_string(), sqrt_fn);
+
+        // i64_to_f64(i64) -> f64
+        // This is handled by sitofp instruction, but we declare it as a placeholder
+        // The actual implementation is in gen_call
+        let i64_to_f64_type = f64_type.fn_type(&[i64_type.into()], false);
+        let i64_to_f64_fn = self.module.add_function("bmb_i64_to_f64", i64_to_f64_type, None);
+        self.functions.insert("i64_to_f64".to_string(), i64_to_f64_fn);
+
+        // f64_to_i64(f64) -> i64
+        let f64_to_i64_type = i64_type.fn_type(&[f64_type.into()], false);
+        let f64_to_i64_fn = self.module.add_function("bmb_f64_to_i64", f64_to_i64_type, None);
+        self.functions.insert("f64_to_i64".to_string(), f64_to_i64_fn);
+
+        // v0.97: Character functions
+        let i32_type = self.context.i32_type();
+        let ptr_type = self.context.ptr_type(inkwell::AddressSpace::default());
+
+        // chr(i64) -> i32 (char)
+        let chr_type = i32_type.fn_type(&[i64_type.into()], false);
+        let chr_fn = self.module.add_function("bmb_chr", chr_type, None);
+        self.functions.insert("chr".to_string(), chr_fn);
+
+        // ord(i32) -> i64
+        let ord_type = i64_type.fn_type(&[i32_type.into()], false);
+        let ord_fn = self.module.add_function("bmb_ord", ord_type, None);
+        self.functions.insert("ord".to_string(), ord_fn);
+
+        // v0.97: String functions
+        // print_str(ptr) -> void
+        let print_str_type = void_type.fn_type(&[ptr_type.into()], false);
+        let print_str_fn = self.module.add_function("bmb_print_str", print_str_type, None);
+        self.functions.insert("print_str".to_string(), print_str_fn);
+
+        // println_str(ptr) -> void
+        let println_str_type = void_type.fn_type(&[ptr_type.into()], false);
+        let println_str_fn = self.module.add_function("bmb_println_str", println_str_type, None);
+        self.functions.insert("println_str".to_string(), println_str_fn);
+
+        // len(ptr) -> i64
+        let len_type = i64_type.fn_type(&[ptr_type.into()], false);
+        let len_fn = self.module.add_function("bmb_str_len", len_type, None);
+        self.functions.insert("len".to_string(), len_fn);
+
+        // v0.98: Vector functions
+        // vec_new() -> i64 (returns pointer as i64)
+        let vec_new_type = i64_type.fn_type(&[], false);
+        let vec_new_fn = self.module.add_function("bmb_vec_new", vec_new_type, None);
+        self.functions.insert("vec_new".to_string(), vec_new_fn);
+
+        // vec_with_capacity(cap: i64) -> i64
+        let vec_with_cap_type = i64_type.fn_type(&[i64_type.into()], false);
+        let vec_with_cap_fn = self.module.add_function("bmb_vec_with_capacity", vec_with_cap_type, None);
+        self.functions.insert("vec_with_capacity".to_string(), vec_with_cap_fn);
+
+        // vec_push(vec: i64, value: i64) -> void
+        let vec_push_type = void_type.fn_type(&[i64_type.into(), i64_type.into()], false);
+        let vec_push_fn = self.module.add_function("bmb_vec_push", vec_push_type, None);
+        self.functions.insert("vec_push".to_string(), vec_push_fn);
+
+        // vec_pop(vec: i64) -> i64
+        let vec_pop_type = i64_type.fn_type(&[i64_type.into()], false);
+        let vec_pop_fn = self.module.add_function("bmb_vec_pop", vec_pop_type, None);
+        self.functions.insert("vec_pop".to_string(), vec_pop_fn);
+
+        // vec_get(vec: i64, index: i64) -> i64
+        let vec_get_type = i64_type.fn_type(&[i64_type.into(), i64_type.into()], false);
+        let vec_get_fn = self.module.add_function("bmb_vec_get", vec_get_type, None);
+        self.functions.insert("vec_get".to_string(), vec_get_fn);
+
+        // vec_set(vec: i64, index: i64, value: i64) -> void
+        let vec_set_type = void_type.fn_type(&[i64_type.into(), i64_type.into(), i64_type.into()], false);
+        let vec_set_fn = self.module.add_function("bmb_vec_set", vec_set_type, None);
+        self.functions.insert("vec_set".to_string(), vec_set_fn);
+
+        // vec_len(vec: i64) -> i64
+        let vec_len_type = i64_type.fn_type(&[i64_type.into()], false);
+        let vec_len_fn = self.module.add_function("bmb_vec_len", vec_len_type, None);
+        self.functions.insert("vec_len".to_string(), vec_len_fn);
+
+        // vec_cap(vec: i64) -> i64
+        let vec_cap_type = i64_type.fn_type(&[i64_type.into()], false);
+        let vec_cap_fn = self.module.add_function("bmb_vec_cap", vec_cap_type, None);
+        self.functions.insert("vec_cap".to_string(), vec_cap_fn);
+
+        // vec_free(vec: i64) -> void
+        let vec_free_type = void_type.fn_type(&[i64_type.into()], false);
+        let vec_free_fn = self.module.add_function("bmb_vec_free", vec_free_type, None);
+        self.functions.insert("vec_free".to_string(), vec_free_fn);
+
+        // vec_clear(vec: i64) -> void
+        let vec_clear_type = void_type.fn_type(&[i64_type.into()], false);
+        let vec_clear_fn = self.module.add_function("bmb_vec_clear", vec_clear_type, None);
+        self.functions.insert("vec_clear".to_string(), vec_clear_fn);
+
+        // v0.99: String conversion functions
+        // char_to_string(c: i32) -> ptr (returns heap-allocated string)
+        let char_to_str_type = ptr_type.fn_type(&[i32_type.into()], false);
+        let char_to_str_fn = self.module.add_function("bmb_char_to_string", char_to_str_type, None);
+        self.functions.insert("char_to_string".to_string(), char_to_str_fn);
+
+        // int_to_string(n: i64) -> ptr
+        let int_to_str_type = ptr_type.fn_type(&[i64_type.into()], false);
+        let int_to_str_fn = self.module.add_function("bmb_int_to_string", int_to_str_type, None);
+        self.functions.insert("int_to_string".to_string(), int_to_str_fn);
+
+        // v0.100: String concatenation
+        // string_concat(a: ptr, b: ptr) -> ptr
+        let string_concat_type = ptr_type.fn_type(&[ptr_type.into(), ptr_type.into()], false);
+        let string_concat_fn = self.module.add_function("bmb_string_concat", string_concat_type, None);
+        self.functions.insert("string_concat".to_string(), string_concat_fn);
+
+        // Memory allocation (libc)
+        // malloc(size: i64) -> ptr
+        let malloc_type = ptr_type.fn_type(&[i64_type.into()], false);
+        let malloc_fn = self.module.add_function("malloc", malloc_type, None);
+        self.functions.insert("malloc".to_string(), malloc_fn);
+
+        // realloc(ptr: ptr, size: i64) -> ptr
+        let realloc_type = ptr_type.fn_type(&[ptr_type.into(), i64_type.into()], false);
+        let realloc_fn = self.module.add_function("realloc", realloc_type, None);
+        self.functions.insert("realloc".to_string(), realloc_fn);
+
+        // free(ptr: ptr) -> void
+        let free_type = void_type.fn_type(&[ptr_type.into()], false);
+        let free_fn = self.module.add_function("free", free_type, None);
+        self.functions.insert("free".to_string(), free_fn);
+
+        // Memory access functions
+        // store_i64(ptr: i64, value: i64) -> void
+        let store_i64_type = void_type.fn_type(&[i64_type.into(), i64_type.into()], false);
+        let store_i64_fn = self.module.add_function("bmb_store_i64", store_i64_type, None);
+        self.functions.insert("store_i64".to_string(), store_i64_fn);
+
+        // load_i64(ptr: i64) -> i64
+        let load_i64_type = i64_type.fn_type(&[i64_type.into()], false);
+        let load_i64_fn = self.module.add_function("bmb_load_i64", load_i64_type, None);
+        self.functions.insert("load_i64".to_string(), load_i64_fn);
+
+        // calloc(count: i64, size: i64) -> i64
+        let calloc_type = i64_type.fn_type(&[i64_type.into(), i64_type.into()], false);
+        let calloc_fn = self.module.add_function("bmb_calloc", calloc_type, None);
+        self.functions.insert("calloc".to_string(), calloc_fn);
+
+        // box_new_i64(value: i64) -> i64
+        let box_new_type = i64_type.fn_type(&[i64_type.into()], false);
+        let box_new_fn = self.module.add_function("bmb_box_new_i64", box_new_type, None);
+        self.functions.insert("box_new_i64".to_string(), box_new_fn);
     }
 
     /// Convert MIR type to LLVM type
@@ -236,18 +403,32 @@ impl<'ctx> LlvmContext<'ctx> {
         match ty {
             MirType::I32 => self.context.i32_type().into(),
             MirType::I64 => self.context.i64_type().into(),
+            // v0.95: Added unsigned integer types
+            MirType::U32 => self.context.i32_type().into(),
+            MirType::U64 => self.context.i64_type().into(),
             MirType::F64 => self.context.f64_type().into(),
             MirType::Bool => self.context.bool_type().into(),
+            // v0.95: Char represented as i32 (Unicode code point)
+            MirType::Char => self.context.i32_type().into(),
             MirType::Unit => self.context.i8_type().into(), // Unit represented as i8
+            // v0.35: String represented as i8 pointer
+            MirType::String => self
+                .context
+                .ptr_type(inkwell::AddressSpace::default())
+                .into(),
+            // Struct/Enum/Array types - use i64 pointer as placeholder for now
+            MirType::Struct { .. }
+            | MirType::StructPtr(_)
+            | MirType::Enum { .. }
+            | MirType::Array { .. } => self
+                .context
+                .ptr_type(inkwell::AddressSpace::default())
+                .into(),
         }
     }
 
-    /// Generate code for a function
-    fn gen_function(&mut self, func: &MirFunction) -> CodeGenResult<()> {
-        // Clear per-function state
-        self.variables.clear();
-        self.blocks.clear();
-
+    /// v0.35.4: Declare a function signature (pass 1 of two-pass approach)
+    fn declare_function(&mut self, func: &MirFunction) -> CodeGenResult<()> {
         // Build function type
         let ret_type = self.mir_type_to_llvm(&func.ret_ty);
         let param_types: Vec<BasicMetadataTypeEnum> = func
@@ -261,9 +442,28 @@ impl<'ctx> LlvmContext<'ctx> {
             _ => ret_type.fn_type(&param_types, false),
         };
 
-        // Create function
-        let function = self.module.add_function(&func.name, fn_type, None);
+        // v0.35: Rename BMB main to bmb_user_main so C runtime can provide real main()
+        let emitted_name = if func.name == "main" {
+            "bmb_user_main"
+        } else {
+            &func.name
+        };
+
+        // Create function declaration
+        let function = self.module.add_function(emitted_name, fn_type, None);
         self.functions.insert(func.name.clone(), function);
+        Ok(())
+    }
+
+    /// v0.35.4: Generate function body (pass 2 of two-pass approach)
+    fn gen_function_body(&mut self, func: &MirFunction) -> CodeGenResult<()> {
+        // Clear per-function state
+        self.variables.clear();
+        self.blocks.clear();
+
+        // Get the already-declared function
+        let function = *self.functions.get(&func.name)
+            .ok_or_else(|| CodeGenError::UnknownFunction(func.name.clone()))?;
 
         // Create all basic blocks first
         for block in &func.blocks {
@@ -300,26 +500,107 @@ impl<'ctx> LlvmContext<'ctx> {
             self.variables.insert(name.clone(), (alloca, llvm_ty));
         }
 
+        // v0.35.3: Collect PHI stores needed for each block
+        // PHI nodes are transformed into stores in predecessor blocks
+        let phi_stores = self.collect_phi_stores(func);
+
+        // v0.35.3: Pre-allocate PHI destination variables at function entry
+        // This ensures all PHI destinations have allocas in the entry block
+        self.allocate_phi_destinations(func)?;
+
         // Generate code for each block
         for block in &func.blocks {
-            self.gen_basic_block(block, function)?;
+            let stores_for_block = phi_stores.get(&block.label);
+            self.gen_basic_block_with_phi(block, function, stores_for_block)?;
         }
 
         Ok(())
     }
 
-    /// Generate code for a basic block
-    fn gen_basic_block(
+    /// v0.35.3: Collect PHI stores needed for each predecessor block
+    /// Returns: HashMap<block_label, Vec<(dest_place, value_operand)>>
+    fn collect_phi_stores(&self, func: &MirFunction) -> HashMap<String, Vec<(Place, Operand)>> {
+        let mut phi_stores: HashMap<String, Vec<(Place, Operand)>> = HashMap::new();
+
+        for block in &func.blocks {
+            for inst in &block.instructions {
+                if let MirInst::Phi { dest, values } = inst {
+                    // For each (value, source_block), record that source_block needs to store value to dest
+                    for (value, source_label) in values {
+                        phi_stores
+                            .entry(source_label.clone())
+                            .or_default()
+                            .push((dest.clone(), value.clone()));
+                    }
+                }
+            }
+        }
+
+        phi_stores
+    }
+
+    /// v0.35.3: Pre-allocate PHI destination variables at function entry
+    /// This ensures all PHI destinations have allocas in the entry block, not in branch blocks
+    fn allocate_phi_destinations(&mut self, func: &MirFunction) -> CodeGenResult<()> {
+        for block in &func.blocks {
+            for inst in &block.instructions {
+                if let MirInst::Phi { dest, values } = inst {
+                    // Skip if already allocated (e.g., in locals)
+                    if self.variables.contains_key(&dest.name) {
+                        continue;
+                    }
+
+                    // Determine type from the first incoming value
+                    if let Some((first_value, _)) = values.first() {
+                        let llvm_type = match first_value {
+                            Operand::Constant(c) => self.gen_constant(c).get_type(),
+                            Operand::Place(p) => {
+                                if let Some((_, ty)) = self.variables.get(&p.name) {
+                                    *ty
+                                } else {
+                                    // Default to i64 if type unknown
+                                    self.context.i64_type().into()
+                                }
+                            }
+                        };
+
+                        let alloca = self.builder.build_alloca(llvm_type, &dest.name)
+                            .map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
+                        self.variables.insert(dest.name.clone(), (alloca, llvm_type));
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// v0.35.3: Generate code for a basic block with PHI store support
+    fn gen_basic_block_with_phi(
         &mut self,
         block: &BasicBlock,
         _function: FunctionValue<'ctx>,
+        phi_stores: Option<&Vec<(Place, Operand)>>,
     ) -> CodeGenResult<()> {
         let bb = self.blocks.get(&block.label).unwrap();
         self.builder.position_at_end(*bb);
 
-        // Generate instructions
+        // Generate instructions (skip PHI nodes - they're handled by stores in predecessors)
         for inst in &block.instructions {
+            if matches!(inst, MirInst::Phi { .. }) {
+                // PHI nodes are transformed into stores in predecessor blocks
+                continue;
+            }
             self.gen_instruction(inst)?;
+        }
+
+        // v0.35.3: Generate PHI stores before terminator
+        // These store values for PHI nodes in successor blocks
+        if let Some(stores) = phi_stores {
+            for (dest, value) in stores {
+                let llvm_value = self.gen_operand(value)?;
+                self.store_to_place(dest, llvm_value)?;
+            }
         }
 
         // Generate terminator
@@ -355,25 +636,62 @@ impl<'ctx> LlvmContext<'ctx> {
             }
 
             MirInst::Call { dest, func, args } => {
-                let function = self
-                    .functions
-                    .get(func)
-                    .ok_or_else(|| CodeGenError::UnknownFunction(func.clone()))?;
+                // v0.35.4: Handle type conversion intrinsics specially
+                if func == "i64_to_f64" && args.len() == 1 {
+                    let arg = self.gen_operand(&args[0])?;
+                    let result = self.builder
+                        .build_signed_int_to_float(arg.into_int_value(), self.context.f64_type(), "sitofp")
+                        .map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
+                    if let Some(dest_place) = dest {
+                        self.store_to_place(dest_place, result.into())?;
+                    }
+                } else if func == "f64_to_i64" && args.len() == 1 {
+                    let arg = self.gen_operand(&args[0])?;
+                    let result = self.builder
+                        .build_float_to_signed_int(arg.into_float_value(), self.context.i64_type(), "fptosi")
+                        .map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
+                    if let Some(dest_place) = dest {
+                        self.store_to_place(dest_place, result.into())?;
+                    }
+                } else {
+                    let function = self
+                        .functions
+                        .get(func)
+                        .ok_or_else(|| CodeGenError::UnknownFunction(func.clone()))?;
 
-                let arg_values: Vec<BasicMetadataValueEnum> = args
-                    .iter()
-                    .map(|arg| self.gen_operand(arg).map(|v| v.into()))
-                    .collect::<Result<_, _>>()?;
+                    let arg_values: Vec<BasicMetadataValueEnum> = args
+                        .iter()
+                        .map(|arg| self.gen_operand(arg).map(|v| v.into()))
+                        .collect::<Result<_, _>>()?;
 
-                let call_result = self.builder
-                    .build_call(*function, &arg_values, "call")
-                    .map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
+                    let call_result = self.builder
+                        .build_call(*function, &arg_values, "call")
+                        .map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
 
-                if let Some(dest_place) = dest {
-                    if let Some(ret_val) = call_result.try_as_basic_value().basic() {
-                        self.store_to_place(dest_place, ret_val)?;
+                    if let Some(dest_place) = dest {
+                        if let Some(ret_val) = call_result.try_as_basic_value().basic() {
+                            self.store_to_place(dest_place, ret_val)?;
+                        }
                     }
                 }
+            }
+
+            // v0.35.3: PHI nodes are handled by stores in predecessor blocks
+            // This should not be reached since gen_basic_block_with_phi skips them
+            MirInst::Phi { .. } => {
+                // PHI nodes are transformed into stores in predecessor blocks
+                // If we reach here, it's a bug
+            }
+            MirInst::StructInit { .. }
+            | MirInst::FieldAccess { .. }
+            | MirInst::FieldStore { .. }
+            | MirInst::EnumVariant { .. }
+            | MirInst::ArrayInit { .. }
+            | MirInst::IndexLoad { .. }
+            | MirInst::IndexStore { .. } => {
+                return Err(CodeGenError::LlvmError(
+                    "Struct/Enum/Array instructions not yet supported in LLVM codegen".to_string(),
+                ));
             }
         }
 
@@ -428,6 +746,13 @@ impl<'ctx> LlvmContext<'ctx> {
                 self.builder.build_unreachable()
                     .map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
             }
+
+            // v0.35: Switch terminator for enum matching
+            Terminator::Switch { .. } => {
+                return Err(CodeGenError::LlvmError(
+                    "Switch terminator not yet supported in LLVM codegen".to_string(),
+                ));
+            }
         }
 
         Ok(())
@@ -443,7 +768,17 @@ impl<'ctx> LlvmContext<'ctx> {
                 .bool_type()
                 .const_int(*b as u64, false)
                 .into(),
+            Constant::String(s) => {
+                // Create a global string constant and return pointer to it
+                let global = self
+                    .builder
+                    .build_global_string_ptr(s, "str_const")
+                    .expect("Failed to build global string");
+                global.as_pointer_value().into()
+            }
             Constant::Unit => self.context.i8_type().const_int(0, false).into(),
+            // v0.95: Char as i32 Unicode code point
+            Constant::Char(c) => self.context.i32_type().const_int(*c as u64, false).into(),
         }
     }
 
@@ -497,10 +832,22 @@ impl<'ctx> LlvmContext<'ctx> {
             // Integer arithmetic with nsw (no signed wrap) for better optimization
             // nsw enables more aggressive LLVM transformations
             MirBinOp::Add => {
-                let result = self.builder
-                    .build_int_nsw_add(lhs.into_int_value(), rhs.into_int_value(), "add")
-                    .map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
-                Ok(result.into())
+                // v0.100: Check if operands are pointers (strings) - use string_concat
+                if lhs.is_pointer_value() && rhs.is_pointer_value() {
+                    let string_concat_fn = self.functions.get("string_concat")
+                        .ok_or_else(|| CodeGenError::UnknownFunction("string_concat".to_string()))?;
+                    let call_result = self.builder
+                        .build_call(*string_concat_fn, &[lhs.into(), rhs.into()], "strcat")
+                        .map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
+                    let result = call_result.try_as_basic_value().basic()
+                        .ok_or_else(|| CodeGenError::LlvmError("string_concat should return a value".to_string()))?;
+                    Ok(result)
+                } else {
+                    let result = self.builder
+                        .build_int_nsw_add(lhs.into_int_value(), rhs.into_int_value(), "add")
+                        .map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
+                    Ok(result.into())
+                }
             }
             MirBinOp::Sub => {
                 let result = self.builder
@@ -642,6 +989,96 @@ impl<'ctx> LlvmContext<'ctx> {
                     .map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
                 Ok(result.into())
             }
+
+            // v0.32: Shift operators
+            MirBinOp::Shl => {
+                let result = self.builder
+                    .build_left_shift(lhs.into_int_value(), rhs.into_int_value(), "shl")
+                    .map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
+                Ok(result.into())
+            }
+            MirBinOp::Shr => {
+                // Arithmetic right shift (sign-extending for signed integers)
+                let result = self.builder
+                    .build_right_shift(lhs.into_int_value(), rhs.into_int_value(), true, "shr")
+                    .map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
+                Ok(result.into())
+            }
+
+            // v0.95: Wrapping arithmetic (same as regular ops in LLVM, wraps on overflow)
+            MirBinOp::AddWrap => {
+                let result = self.builder
+                    .build_int_add(lhs.into_int_value(), rhs.into_int_value(), "addwrap")
+                    .map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
+                Ok(result.into())
+            }
+            MirBinOp::SubWrap => {
+                let result = self.builder
+                    .build_int_sub(lhs.into_int_value(), rhs.into_int_value(), "subwrap")
+                    .map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
+                Ok(result.into())
+            }
+            MirBinOp::MulWrap => {
+                let result = self.builder
+                    .build_int_mul(lhs.into_int_value(), rhs.into_int_value(), "mulwrap")
+                    .map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
+                Ok(result.into())
+            }
+
+            // v0.95: Checked arithmetic (TODO: proper overflow detection)
+            MirBinOp::AddChecked | MirBinOp::SubChecked | MirBinOp::MulChecked => {
+                // For now, treat as regular ops (full implementation needs Option return)
+                let result = match op {
+                    MirBinOp::AddChecked => self.builder.build_int_add(lhs.into_int_value(), rhs.into_int_value(), "addchk"),
+                    MirBinOp::SubChecked => self.builder.build_int_sub(lhs.into_int_value(), rhs.into_int_value(), "subchk"),
+                    MirBinOp::MulChecked => self.builder.build_int_mul(lhs.into_int_value(), rhs.into_int_value(), "mulchk"),
+                    _ => unreachable!(),
+                }.map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
+                Ok(result.into())
+            }
+
+            // v0.95: Saturating arithmetic
+            MirBinOp::AddSat | MirBinOp::SubSat | MirBinOp::MulSat => {
+                // For now, treat as regular ops (full implementation needs saturation logic)
+                let result = match op {
+                    MirBinOp::AddSat => self.builder.build_int_add(lhs.into_int_value(), rhs.into_int_value(), "addsat"),
+                    MirBinOp::SubSat => self.builder.build_int_sub(lhs.into_int_value(), rhs.into_int_value(), "subsat"),
+                    MirBinOp::MulSat => self.builder.build_int_mul(lhs.into_int_value(), rhs.into_int_value(), "mulsat"),
+                    _ => unreachable!(),
+                }.map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
+                Ok(result.into())
+            }
+
+            // v0.95: Bitwise operations
+            MirBinOp::Bxor => {
+                let result = self.builder
+                    .build_xor(lhs.into_int_value(), rhs.into_int_value(), "bxor")
+                    .map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
+                Ok(result.into())
+            }
+            MirBinOp::Band => {
+                let result = self.builder
+                    .build_and(lhs.into_int_value(), rhs.into_int_value(), "band")
+                    .map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
+                Ok(result.into())
+            }
+            MirBinOp::Bor => {
+                let result = self.builder
+                    .build_or(lhs.into_int_value(), rhs.into_int_value(), "bor")
+                    .map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
+                Ok(result.into())
+            }
+
+            // v0.95: Logical implication (a implies b = !a || b)
+            MirBinOp::Implies => {
+                let not_lhs = self.builder
+                    .build_not(lhs.into_int_value(), "not_lhs")
+                    .map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
+                let result = self.builder
+                    .build_or(not_lhs, rhs.into_int_value(), "implies")
+                    .map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
+                Ok(result.into())
+            }
         }
     }
 
@@ -667,6 +1104,13 @@ impl<'ctx> LlvmContext<'ctx> {
             MirUnaryOp::Not => {
                 let result = self.builder
                     .build_not(src.into_int_value(), "not")
+                    .map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
+                Ok(result.into())
+            }
+            // v0.95: Bitwise NOT
+            MirUnaryOp::Bnot => {
+                let result = self.builder
+                    .build_not(src.into_int_value(), "bnot")
                     .map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
                 Ok(result.into())
             }
