@@ -50,8 +50,11 @@ fn skip_to_eol(s: String, pos: i64) -> i64 =
 
 // Skip comment if present, return new position
 // Note: Now uses short-circuit `and` (fixed in Phase 10)
+// v0.46: Support both -- (legacy) and // (v0.32) comment styles
 fn skip_comment(s: String, pos: i64) -> i64 =
-    if pos + 1 < s.len() and s.byte_at(pos) == 45 and s.byte_at(pos + 1) == 45 { skip_to_eol(s, pos + 2) } else { pos };
+    if pos + 1 < s.len() and s.byte_at(pos) == 45 and s.byte_at(pos + 1) == 45 { skip_to_eol(s, pos + 2) }
+    else if pos + 1 < s.len() and s.byte_at(pos) == 47 and s.byte_at(pos + 1) == 47 { skip_to_eol(s, pos + 2) }
+    else { pos };
 
 // Skip all whitespace and comments, return new position
 fn skip_all(s: String, pos: i64) -> i64 =
@@ -219,16 +222,17 @@ fn test_skip() -> i64 =
     let s1 = if skip_ws("  hello", 0) == 2 { 1 } else { 0 };
     let s2 = if skip_ws("hello", 0) == 0 { 1 } else { 0 };
     let s3 = if skip_ws("", 0) == 0 { 1 } else { 0 };
-    // skip_comment
+    // skip_comment (-- and // styles)
     let c1 = if skip_comment("-- comment", 0) == 10 { 1 } else { 0 };
-    let c2 = if skip_comment("not comment", 0) == 0 { 1 } else { 0 };
+    let c2 = if skip_comment("// comment", 0) == 10 { 1 } else { 0 };
+    let c3 = if skip_comment("not comment", 0) == 0 { 1 } else { 0 };
     // find_ident_end
     let i1 = if find_ident_end("foo_bar ", 0) == 7 { 1 } else { 0 };
     let i2 = if find_ident_end("x123", 0) == 4 { 1 } else { 0 };
     // find_number_end
     let n1 = if find_number_end("12345 ", 0) == 5 { 1 } else { 0 };
     let n2 = if find_number_end("0", 0) == 1 { 1 } else { 0 };
-    s1 + s2 + s3 + c1 + c2 + i1 + i2 + n1 + n2;
+    s1 + s2 + s3 + c1 + c2 + c3 + i1 + i2 + n1 + n2;
 
 // Test type keywords
 fn test_type_keywords() -> i64 =
