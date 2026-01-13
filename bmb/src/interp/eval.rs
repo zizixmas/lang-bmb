@@ -5,6 +5,7 @@ use super::error::{InterpResult, RuntimeError};
 use super::scope::ScopeStack;
 use super::value::Value;
 use crate::ast::{BinOp, EnumDef, Expr, FnDef, LiteralPattern, Pattern, Program, Spanned, StructDef, Type, UnOp};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
@@ -12,6 +13,33 @@ use std::io::{self, BufRead, Write};
 use std::path::Path;
 use std::process::Command;
 use std::rc::Rc;
+
+// v0.46: Thread-local storage for program arguments
+// Used by arg_count() and get_arg() builtins to access program arguments
+// passed via `bmb run file.bmb arg1 arg2 ...`
+thread_local! {
+    static PROGRAM_ARGS: RefCell<Vec<String>> = RefCell::new(Vec::new());
+}
+
+/// v0.46: Set program arguments for the interpreter
+/// Called before running a BMB program to pass command-line arguments
+pub fn set_program_args(args: Vec<String>) {
+    PROGRAM_ARGS.with(|cell| {
+        *cell.borrow_mut() = args;
+    });
+}
+
+/// v0.46: Get program argument count
+fn get_program_arg_count() -> usize {
+    PROGRAM_ARGS.with(|cell| cell.borrow().len())
+}
+
+/// v0.46: Get program argument by index
+fn get_program_arg(index: usize) -> String {
+    PROGRAM_ARGS.with(|cell| {
+        cell.borrow().get(index).cloned().unwrap_or_default()
+    })
+}
 
 /// Maximum recursion depth (v0.30.248: increased for bootstrap compiler Stage 3 verification)
 const MAX_RECURSION_DEPTH: usize = 100000;
@@ -2877,17 +2905,20 @@ fn builtin_getenv(args: &[Value]) -> InterpResult<Value> {
 
 // ============ v0.31.22: Command-line Argument Builtins for Phase 32.3.D ============
 // Provides CLI argument access for standalone BMB compiler
+// v0.46: Updated to use thread-local storage for program arguments
 
 /// arg_count() -> i64
-/// Returns the number of command-line arguments (including program name).
+/// Returns the number of command-line arguments.
+/// v0.46: Uses thread-local PROGRAM_ARGS instead of env::args()
 fn builtin_arg_count(_args: &[Value]) -> InterpResult<Value> {
-    let count = env::args().count() as i64;
+    let count = get_program_arg_count() as i64;
     Ok(Value::Int(count))
 }
 
 /// get_arg(n: i64) -> String
 /// Returns the nth command-line argument (0 = program name).
 /// Returns empty string if index is out of bounds.
+/// v0.46: Uses thread-local PROGRAM_ARGS instead of env::args()
 fn builtin_get_arg(args: &[Value]) -> InterpResult<Value> {
     if args.len() != 1 {
         return Err(RuntimeError::arity_mismatch("get_arg", 1, args.len()));
@@ -2895,7 +2926,7 @@ fn builtin_get_arg(args: &[Value]) -> InterpResult<Value> {
     match &args[0] {
         Value::Int(n) => {
             let idx = *n as usize;
-            let arg = env::args().nth(idx).unwrap_or_default();
+            let arg = get_program_arg(idx);
             Ok(Value::Str(Rc::new(arg)))
         }
         _ => Err(RuntimeError::type_error("integer", args[0].type_name())),

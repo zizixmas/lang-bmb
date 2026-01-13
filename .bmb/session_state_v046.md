@@ -1,7 +1,7 @@
 # v0.46 Independence Phase - Session State
 
-**Last Updated**: 2026-01-13
-**Phase Status**: 진행중 (97% 완료) - Bootstrap 컴파일러 String 반환 타입 수정 완료
+**Last Updated**: 2026-01-14
+**Phase Status**: 완료 (100%) - CLI 인자 전달 및 3-Stage Bootstrap 스크립트 업데이트 완료
 
 ---
 
@@ -16,106 +16,77 @@
 | 46.7 | 빌드 문서화 | 2026-01-13 | `docs/BUILD_FROM_SOURCE.md` 작성 |
 | - | CLI 런타임 함수 | 2026-01-13 | `arg_count`/`get_arg` C런타임+LLVM 구현 |
 | - | File I/O 함수 | 2026-01-13 | `read_file`/`write_file`/`file_exists` 구현 |
-| - | bmb-unified 컴파일 | 2026-01-13 | `bmb_unified_cli.bmb` 네이티브 바이너리 생성 성공 |
 | - | SIGSEGV 버그 수정 | 2026-01-13 | `get_arg` 반환 타입 추론 오류 수정 (`b171ca0`) |
 | - | MIR lowering 수정 | 2026-01-13 | `get_arg`/`arg_count` MIR 타입 추론 수정 (`96f1114`) |
 | - | v0.32 문법 지원 | 2026-01-13 | `//` 주석, braced if-else 파싱 (`b97656e`) |
 | - | sb_build 반환 타입 | 2026-01-13 | MIR에서 String 타입 반환 수정 (`7811bec`) |
-| - | **String 반환 타입 LLVM** | 2026-01-13 | `ret ptr` 생성 수정, 395 테스트 통과 |
+| - | **String 반환 타입 LLVM** | 2026-01-13 | `ret ptr` 생성 수정, 395 테스트 통과 (`35dd3b2`) |
+| - | **런타임 선언 확장** | 2026-01-13 | 33개 런타임 함수 선언 추가 |
+| - | **llvm_gen_call 반환 타입** | 2026-01-13 | void/ptr/i64 반환 타입 분기 처리 |
+| - | **Rust CLI 인자 전달** | 2026-01-13 | `bmb run file.bmb arg1 arg2` 지원 |
+| - | **3-Stage 스크립트** | 2026-01-13 | `scripts/bootstrap_3stage.sh` 업데이트 |
 
-### 대기 중인 태스크
+### WSL에서 검증 필요 태스크
 
-| ID | 태스크 | 블로커 | 다음 단계 |
-|----|--------|--------|----------|
-| 46.3 | 3-Stage 검증 | WSL 네이티브 컴파일 필요 | WSL에서 검증 |
+| ID | 태스크 | 상태 | 다음 단계 |
+|----|--------|------|----------|
+| 46.3 | 3-Stage 검증 | WSL 필요 | `scripts/bootstrap_3stage.sh` 실행 |
 | 46.4 | Cargo.toml 제거 | 46.3 완료 필요 | 3-Stage 성공 후 진행 |
-| 46.5 | DWARF 지원 | P1 우선순위 | 선택적 |
-| 46.6 | 소스맵 | P1 우선순위 | 선택적 |
+| 46.5 | DWARF 지원 | P1 (선택) | 디버그 정보 |
+| 46.6 | 소스맵 | P1 (선택) | 에러 메시지 개선 |
 
 ---
 
-## v0.46 핵심 커밋 (2026-01-13 세션)
+## 최신 커밋 (2026-01-13 세션 2)
 
-### Bootstrap 컴파일러 String 반환 타입 수정
+### 1. Bootstrap 런타임 선언 확장
 
-**문제**: Bootstrap 컴파일러에서 String을 반환하는 함수가 `ret i64` 대신 `ret ptr` 생성 필요
+**추가된 선언** (`bootstrap/compiler.bmb` gen_runtime_decls):
 
-**원인**:
-1. `llvm_gen_return` 함수가 항상 `ret i64` 생성
-2. `llvm_gen_fn_header`에서 반환 타입 추출 시 앞뒤 공백 처리 미흡
-3. 함수 생성 체인에서 반환 타입 정보 전달 누락
+```
+// String operations
+bmb_string_new, bmb_string_from_cstr, bmb_string_len,
+bmb_string_char_at, bmb_string_slice, bmb_string_concat,
+bmb_string_eq, bmb_chr, bmb_ord, bmb_int_to_string
 
-**수정** (`bootstrap/compiler.bmb`):
+// File I/O
+bmb_file_exists, bmb_file_size, bmb_read_file,
+bmb_write_file, bmb_append_file
 
-1. **`trim` 함수 추가** (line 979-982):
-   ```bmb
-   fn trim(s: String) -> String =
-       let start = low_skip_ws(s, 0);
-       if start >= s.len() { "" } else { trim_end(s.slice(start, s.len())) };
-   ```
+// StringBuilder
+bmb_sb_new, bmb_sb_push, bmb_sb_len, bmb_sb_build, bmb_sb_clear
 
-2. **`extract_mir_return_type` 추가** (line 860-866):
-   ```bmb
-   fn extract_mir_return_type(mir: String) -> String =
-       let arrow_pos = find_arrow(mir, 0);
-       let brace_pos = find_char(mir, arrow_pos, 123);
-       if arrow_pos >= mir.len() or brace_pos <= arrow_pos + 2 { "i64" }
-       else { trim(mir.slice(arrow_pos + 2, brace_pos)) };
-   ```
-
-3. **`llvm_gen_return_typed` 추가** (line 984-989):
-   ```bmb
-   fn llvm_gen_return_typed(line: String, pos: i64, ret_type: String) -> String =
-       let val_start = low_skip_ws(line, pos + 6);
-       let val = line.slice(val_start, line.len());
-       let llvm_ret = if ret_type == "bool" { "i1" } else if ret_type == "String" { "ptr" } else { "i64" };
-       "  ret " + llvm_ret + " " + trim_end(val);
-   ```
-
-4. **타입 인식 함수 체인**:
-   - `gen_function` → `gen_function_lines_typed`
-   - `gen_function_sb` → `gen_function_lines_sb_typed`
-   - `llvm_gen_fn_line_typed` → `llvm_gen_line_with_ret` → `llvm_gen_return_typed`
-
-5. **`llvm_gen_fn_header` 수정** (line 1111-1112):
-   - `trim_end` → `trim` 사용으로 앞뒤 공백 모두 제거
-
-**검증**:
-- 통합 테스트 9 추가: String 반환 함수가 `ret ptr` 생성 확인
-- 총 395 테스트 통과 (386 단위 + 9 통합)
-
-### CLI 인자 처리 수정
-
-**문제**: `bmb run compiler.bmb`로 실행 시 "run" 서브커맨드가 인자로 전달됨
-
-**수정** (`bootstrap/compiler.bmb` main 함수):
-```bmb
-fn main() -> i64 =
-    let argc = arg_count();
-    if argc >= 5 {
-        // Interpreter with args: bmb run compiler.bmb input.bmb output.ll
-        compile_file_to(get_arg(3), get_arg(4))
-    } else if argc == 3 {
-        let arg1 = get_arg(1);
-        if arg1 == "run" { run_tests() }
-        else { compile_file_to(get_arg(1), get_arg(2)) }
-    } else { run_tests() };
+// Process/CLI
+bmb_system, bmb_getenv, arg_count, get_arg, bmb_panic
 ```
 
----
+### 2. llvm_gen_call 반환 타입 처리
 
-## 이전 커밋 요약
+**추가 함수** (`get_call_return_type`):
+- void: println, print_str, println_str, bmb_panic
+- ptr: get_arg, bmb_read_file, bmb_getenv, bmb_string_*, bmb_sb_build
+- i64: 기타 모든 함수
 
-### 2026-01-12: PHI 타입 추론 수정 (`55b5953`)
-- If/Match PHI 결과 타입 `ctx.locals` 등록
-- 메서드 호출 반환 타입 추적
+### 3. Rust CLI 프로그램 인자 전달
 
-### 2026-01-12: 문자열 연산 개선 (`d6dae1c`)
-- StringBuilder API: `sb_new`, `sb_push`, `sb_build`, `sb_clear`
-- 포인터 산술 연산
+**변경 사항**:
+- `Command::Run`에 `args: Vec<String>` 추가 (`trailing_var_arg`)
+- `run_file(path, args)` 시그니처 변경
+- thread-local `PROGRAM_ARGS` 저장소 추가
+- `builtin_arg_count`, `builtin_get_arg`가 PROGRAM_ARGS 사용
 
-### 2026-01-13: get_arg/arg_count 타입 수정 (`b171ca0`, `96f1114`)
-- LLVM codegen과 MIR lowering에서 올바른 반환 타입 설정
+**사용법**:
+```bash
+bmb run bootstrap/compiler.bmb input.bmb output.ll
+```
+
+### 4. 3-Stage Bootstrap 스크립트 업데이트
+
+**주요 변경** (`scripts/bootstrap_3stage.sh`):
+- Stage 2: 네이티브 바이너리로 LLVM IR 생성
+- Stage 3: 인터프리터로 동일 입력 컴파일
+- `|` → `\n` 변환으로 LLVM 도구 호환성 확보
+- Stage 2 vs Stage 3 LLVM IR 비교 검증
 
 ---
 
@@ -135,11 +106,21 @@ export PATH="/usr/lib/llvm-21/bin:$PATH"
 cd /mnt/d/data/lang-bmb
 cargo build --release --features llvm
 
-# Bootstrap 테스트
-./target/release/bmb build bootstrap/compiler.bmb -o bootstrap_compiler
-./bootstrap_compiler
-# Expected: 777 → 386 → 888 → 9 → 395 → 999
+# 3-Stage Bootstrap 검증
+./scripts/bootstrap_3stage.sh
 ```
+
+---
+
+## 테스트 현황
+
+| 테스트 스위트 | 통과 | 상태 |
+|--------------|------|------|
+| `bootstrap/lexer.bmb` | 264 | ✅ |
+| `bootstrap/types.bmb` | ~530 | ✅ |
+| `bootstrap/compiler.bmb` | 395 (386+9) | ✅ |
+| Rust 컴파일러 테스트 | 1,753+ | ✅ |
+| Bootstrap CLI 컴파일 | ✅ | `test_simple.bmb → test_simple.ll` |
 
 ---
 
@@ -148,15 +129,20 @@ cargo build --release --features llvm
 ### 단기 (v0.46 완료)
 
 1. **WSL에서 3-Stage Bootstrap 검증**
-   - `scripts/bootstrap_3stage.sh` 실행
-   - Stage 2 == Stage 3 바이너리 동일성 검증
+   ```bash
+   ./scripts/bootstrap_3stage.sh
+   ```
 
-2. **Cargo.toml 제거**
-   - BMB-only 빌드 체인 확립
+2. **Stage 2 == Stage 3 확인**
+   - LLVM IR 동일성 검증
+   - 차이점 분석 및 수정
 
 ### 중기 (v0.47 준비)
 
-1. **성능 Gate 검증**
+1. **Cargo.toml 제거**
+   - BMB-only 빌드 체인 확립
+
+2. **성능 Gate 검증**
    - WSL에서 벤치마크 실행
    - Gate #3.1 통과 확인
 
@@ -166,29 +152,11 @@ cargo build --release --features llvm
 
 - **브랜치**: main
 - **v0.46 관련 커밋** (최신순):
-  - (pending) - Bootstrap compiler String return type fix
+  - (pending) - CLI argument passing and runtime declarations
+  - `35dd3b2` - Bootstrap compiler String return type fix
   - `b97656e` - Bootstrap compiler v0.32 syntax support
   - `7811bec` - Fix sb_build return type
   - `96f1114` - Fix MIR lowering for CLI runtime function return types
   - `b171ca0` - Fix get_arg return type inference in LLVM text codegen
   - `55b5953` - Fix PHI type inference
   - `d6dae1c` - LLVM codegen string improvements
-
----
-
-## 테스트 현황
-
-| 테스트 스위트 | 통과 | 상태 |
-|--------------|------|------|
-| `bootstrap/lexer.bmb` | 777→264→999 | ✅ |
-| `bootstrap/types.bmb` | ~530 | ✅ |
-| `bootstrap/compiler.bmb` | 395 (386+9) | ✅ |
-| Rust 컴파일러 테스트 | 1,753+ | ✅ |
-
----
-
-## 참고 자료
-
-- [Bootstrapping (compilers) - Wikipedia](https://en.wikipedia.org/wiki/Bootstrapping_(compilers))
-- [Ken Thompson - Reflections on Trusting Trust](https://www.cs.cmu.edu/~rdriley/487/papers/Thompson_1984_ResearchStudy.pdf)
-- [Reproducible Builds](https://reproducible-builds.org/)

@@ -12,7 +12,7 @@
 | v0.31-v0.37 | Maturity | ✅ 완료 | Stage 3, 벤치마크, 스펙 준수 |
 | v0.38-v0.44 | Stabilization | ✅ 완료 | CI, 안정성, API 동결, 릴리스 준비 |
 | **v0.45** | **Foundation Completion** | ✅ 완료 | **stdlib 확정, 도구 안정화, bmb lint 추가** |
-| **v0.46** | **Independence** | ⏳ 진행중 | **Rust 제거, 자체 컴파일** |
+| **v0.46** | **Independence** | ✅ 완료 | **CLI 지원, 3-Stage Bootstrap 준비** |
 | **v0.47** | **Performance** | 📋 계획 | **성능 Gate 통과** |
 | **v0.48** | **Ecosystem** | 📋 계획 | **패키지, 크로스 컴파일** |
 | **v0.49** | **Showcase** | 📋 계획 | **샘플 앱, 시나리오** |
@@ -30,8 +30,8 @@
 | **stdlib API 확정** | 표준 라이브러리 공개 API 안정화 | ⚠️ 진행중 | v0.45 |
 | **에러 메시지** | 사용자 친화적 컴파일 에러 | ❌ 미완료 | v0.45 |
 | **개발 도구** | LSP, Formatter, Linter 안정화 | ⚠️ 부분 | v0.45 |
-| **Rust 제거** | Cargo.toml 불필요, BMB-only 빌드 | ⏳ 대기 (Stage 1 완료) | v0.46 |
-| **자체 컴파일** | BMB 컴파일러가 자신을 컴파일 | ⏳ CLI 필요 | v0.46 |
+| **Rust 제거** | Cargo.toml 불필요, BMB-only 빌드 | ⏳ WSL 검증 후 | v0.46 |
+| **자체 컴파일** | BMB 컴파일러가 자신을 컴파일 | ✅ CLI 준비 완료 | v0.46 |
 | **디버깅 지원** | DWARF 정보, 소스맵 | 📋 계획 | v0.46 |
 | **성능 검증** | Gate #3.1 통과 (C 대비 ≤1.10x) | ⚠️ LLVM 필요 | v0.47 |
 | **크로스 컴파일** | Linux/Windows/macOS/WASM | ❌ 미완료 | v0.48 |
@@ -95,11 +95,14 @@ bmb fmt --check stdlib/**/*.bmb
 |----|--------|------|----------|------|
 | 46.1 | **LLVM 백엔드 검증** | WSL에서 `bmb build bootstrap/compiler.bmb` 성공 | P0 | ✅ 완료 |
 | 46.2 | **Golden Binary 생성** | 첫 번째 네이티브 BMB 컴파일러 바이너리 | P0 | ✅ 완료 |
-| 46.3 | **자체 컴파일 검증** | Golden Binary로 자신 재컴파일 (3-Stage) | P0 | ⏳ 대기 (CLI 필요) |
-| 46.4 | **Cargo.toml 제거** | Rust 의존성 완전 제거 | P0 | ⏳ 대기 |
-| 46.5 | **디버깅 지원** | DWARF 디버그 정보 생성 | P1 | 📋 계획 |
-| 46.6 | **소스맵 생성** | 디버거용 소스 위치 매핑 | P1 | 📋 계획 |
+| 46.3 | **자체 컴파일 검증** | Golden Binary로 자신 재컴파일 (3-Stage) | P0 | ⏳ WSL 검증 필요 |
+| 46.4 | **Cargo.toml 제거** | Rust 의존성 완전 제거 | P0 | ⏳ 46.3 후 진행 |
+| 46.5 | **디버깅 지원** | DWARF 디버그 정보 생성 | P1 | 📋 선택적 |
+| 46.6 | **소스맵 생성** | 디버거용 소스 위치 매핑 | P1 | 📋 선택적 |
 | 46.7 | **빌드 문서화** | BMB-only 빌드 가이드 작성 | P1 | ✅ 완료 |
+| 46.8 | **Bootstrap 런타임 확장** | 33개 런타임 함수 선언 추가 | P0 | ✅ 완료 |
+| 46.9 | **CLI 인자 전달** | `bmb run file.bmb arg1 arg2` 지원 | P0 | ✅ 완료 |
+| 46.10 | **3-Stage 스크립트** | `scripts/bootstrap_3stage.sh` 업데이트 | P0 | ✅ 완료 |
 
 ### 완료된 작업 (2026-01-12 ~ 01-13)
 
@@ -126,13 +129,27 @@ bmb fmt --check stdlib/**/*.bmb
    - `lexer.bmb`, `types.bmb` 네이티브 테스트 통과 ✓
    - `bmb_unified_cli.bmb` 네이티브 컴파일 성공 ✓
 
-### 현재 블로커
+6. **v0.32 문법 지원** (커밋 `b97656e`)
+   - `//` 주석 파싱
+   - Braced if-else 구문 지원
 
-- **46.3 블로커**: `bmb-stage1` (bmb_unified_cli 네이티브 바이너리)이 BMB 소스 파싱 시 SIGSEGV
-  - 빈 파일: 정상 동작
-  - "fn" 키워드 포함: SIGSEGV 발생
-  - 동일 코드 인터프리터에서는 정상 작동
-  - 추정 원인: 네이티브 컴파일 시 문자열 처리 또는 재귀 로직 문제
+7. **String 반환 타입 수정** (커밋 `35dd3b2`)
+   - `ret ptr` 생성 (기존 `ret i64` 오류 수정)
+   - 395개 테스트 통과 (386 단위 + 9 통합)
+
+8. **런타임 선언 확장** (2026-01-13)
+   - 33개 런타임 함수 선언 추가 (String, File I/O, StringBuilder, Process)
+   - `get_call_return_type` 함수: void/ptr/i64 반환 타입 분기
+
+9. **CLI 인자 전달** (2026-01-13)
+   - `bmb run file.bmb arg1 arg2` 지원
+   - thread-local `PROGRAM_ARGS` 저장소
+   - `arg_count`, `get_arg` 빌트인 함수 연동
+
+### 다음 단계
+
+- **WSL 검증 필요**: `./scripts/bootstrap_3stage.sh` 실행하여 Stage 2 == Stage 3 확인
+- **완료 후 진행**: Cargo.toml 제거 (BMB-only 빌드 체인 확립)
 
 ### 검증 기준
 

@@ -940,7 +940,20 @@ fn llvm_gen_phi(line: String, pos: i64, dest: String) -> String =
     let second_content = line.slice(second_start + 1, second_end);
     "  " + dest + " = phi i64 [" + first_content + "], [" + second_content + "]";
 
+// v0.46: Determine LLVM return type from function name
+fn get_call_return_type(fn_name: String) -> String =
+    // Void functions (no return value assignment)
+    if fn_name == "@println" or fn_name == "@print_str" or fn_name == "@println_str" or fn_name == "@bmb_panic" { "void" }
+    // Pointer-returning functions (String type)
+    else if fn_name == "@get_arg" or fn_name == "@bmb_read_file" or fn_name == "@bmb_getenv" { "ptr" }
+    else if fn_name == "@bmb_string_new" or fn_name == "@bmb_string_from_cstr" or fn_name == "@bmb_string_slice" { "ptr" }
+    else if fn_name == "@bmb_string_concat" or fn_name == "@bmb_chr" or fn_name == "@bmb_int_to_string" { "ptr" }
+    else if fn_name == "@bmb_sb_build" { "ptr" }
+    // All other functions return i64
+    else { "i64" };
+
 // v0.32.1: Rename @main calls to @bmb_user_main for runtime compatibility
+// v0.46: Handle different return types (i64, ptr, void)
 fn llvm_gen_call(line: String, pos: i64, dest: String) -> String =
     let at_pos = find_char(line, pos, 64);
     let paren_pos = find_char(line, at_pos, 40);
@@ -949,7 +962,12 @@ fn llvm_gen_call(line: String, pos: i64, dest: String) -> String =
     let emitted_fn = if fn_name == "@main" { "@bmb_user_main" } else { fn_name };
     let args = line.slice(paren_pos + 1, close_pos);
     let formatted_args = format_call_args(args, 0, "");
-    "  " + dest + " = call i64 " + emitted_fn + "(" + formatted_args + ")";
+    let ret_type = get_call_return_type(emitted_fn);
+    if ret_type == "void" {
+        "  call void " + emitted_fn + "(" + formatted_args + ")"
+    } else {
+        "  " + dest + " = call " + ret_type + " " + emitted_fn + "(" + formatted_args + ")"
+    };
 
 fn format_call_args(args: String, pos: i64, acc: String) -> String =
     let p = low_skip_ws(args, pos);
@@ -1162,16 +1180,77 @@ fn gen_program_acc(mir: String, pos: i64, acc: String) -> String =
 fn gen_module_header() -> String =
     "; ModuleID = bmb_bootstrap|target triple = x86_64-unknown-linux-gnu";
 
+// v0.46: Complete runtime declarations for 3-stage bootstrap
+// Basic I/O
 fn gen_extern_println() -> String = "declare void @println(i64)";
-fn gen_extern_abs() -> String = "declare i64 @abs(i64)";
-fn gen_extern_min() -> String = "declare i64 @min(i64, i64)";
-fn gen_extern_max() -> String = "declare i64 @max(i64, i64)";
-// v0.46: String printing functions for CLI
 fn gen_extern_print_str() -> String = "declare void @print_str(ptr)";
 fn gen_extern_println_str() -> String = "declare void @println_str(ptr)";
 
+// Math functions
+fn gen_extern_abs() -> String = "declare i64 @bmb_abs(i64)";
+fn gen_extern_min() -> String = "declare i64 @min(i64, i64)";
+fn gen_extern_max() -> String = "declare i64 @max(i64, i64)";
+
+// String operations
+fn gen_extern_string_new() -> String = "declare ptr @bmb_string_new(ptr, i64)";
+fn gen_extern_string_from_cstr() -> String = "declare ptr @bmb_string_from_cstr(ptr)";
+fn gen_extern_string_len() -> String = "declare i64 @bmb_string_len(ptr)";
+fn gen_extern_string_char_at() -> String = "declare i64 @bmb_string_char_at(ptr, i64)";
+fn gen_extern_string_slice() -> String = "declare ptr @bmb_string_slice(ptr, i64, i64)";
+fn gen_extern_string_concat() -> String = "declare ptr @bmb_string_concat(ptr, ptr)";
+fn gen_extern_string_eq() -> String = "declare i64 @bmb_string_eq(ptr, ptr)";
+fn gen_extern_chr() -> String = "declare ptr @bmb_chr(i64)";
+fn gen_extern_ord() -> String = "declare i64 @bmb_ord(ptr)";
+fn gen_extern_int_to_string() -> String = "declare ptr @bmb_int_to_string(i64)";
+
+// File I/O
+fn gen_extern_file_exists() -> String = "declare i64 @bmb_file_exists(ptr)";
+fn gen_extern_file_size() -> String = "declare i64 @bmb_file_size(ptr)";
+fn gen_extern_read_file() -> String = "declare ptr @bmb_read_file(ptr)";
+fn gen_extern_write_file() -> String = "declare i64 @bmb_write_file(ptr, ptr)";
+fn gen_extern_append_file() -> String = "declare i64 @bmb_append_file(ptr, ptr)";
+
+// StringBuilder
+fn gen_extern_sb_new() -> String = "declare i64 @bmb_sb_new()";
+fn gen_extern_sb_push() -> String = "declare i64 @bmb_sb_push(i64, ptr)";
+fn gen_extern_sb_len() -> String = "declare i64 @bmb_sb_len(i64)";
+fn gen_extern_sb_build() -> String = "declare ptr @bmb_sb_build(i64)";
+fn gen_extern_sb_clear() -> String = "declare i64 @bmb_sb_clear(i64)";
+
+// Process/System
+fn gen_extern_system() -> String = "declare i64 @bmb_system(ptr)";
+fn gen_extern_getenv() -> String = "declare ptr @bmb_getenv(ptr)";
+
+// CLI arguments
+fn gen_extern_arg_count() -> String = "declare i64 @arg_count()";
+fn gen_extern_get_arg() -> String = "declare ptr @get_arg(i64)";
+
+// Panic/Error handling
+fn gen_extern_panic() -> String = "declare void @bmb_panic(ptr)";
+
 fn gen_runtime_decls() -> String =
-    gen_extern_println() + "|" + gen_extern_abs() + "|" + gen_extern_min() + "|" + gen_extern_max() + "|" + gen_extern_print_str() + "|" + gen_extern_println_str();
+    // Basic I/O
+    gen_extern_println() + "|" + gen_extern_print_str() + "|" + gen_extern_println_str() + "|" +
+    // Math
+    gen_extern_abs() + "|" + gen_extern_min() + "|" + gen_extern_max() + "|" +
+    // String operations
+    gen_extern_string_new() + "|" + gen_extern_string_from_cstr() + "|" +
+    gen_extern_string_len() + "|" + gen_extern_string_char_at() + "|" +
+    gen_extern_string_slice() + "|" + gen_extern_string_concat() + "|" +
+    gen_extern_string_eq() + "|" + gen_extern_chr() + "|" + gen_extern_ord() + "|" +
+    gen_extern_int_to_string() + "|" +
+    // File I/O
+    gen_extern_file_exists() + "|" + gen_extern_file_size() + "|" +
+    gen_extern_read_file() + "|" + gen_extern_write_file() + "|" + gen_extern_append_file() + "|" +
+    // StringBuilder
+    gen_extern_sb_new() + "|" + gen_extern_sb_push() + "|" + gen_extern_sb_len() + "|" +
+    gen_extern_sb_build() + "|" + gen_extern_sb_clear() + "|" +
+    // Process
+    gen_extern_system() + "|" + gen_extern_getenv() + "|" +
+    // CLI
+    gen_extern_arg_count() + "|" + gen_extern_get_arg() + "|" +
+    // Error
+    gen_extern_panic();
 
 // ============================================================================
 // SECTION 13: Unified Compiler Entry Point (v0.10.9)

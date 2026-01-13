@@ -61,6 +61,12 @@ enum Command {
     Run {
         /// Source file to run
         file: PathBuf,
+        /// v0.46: Arguments to pass to the BMB program
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+        /// v0.71: Human-readable output (colors, formatting). Default: machine/JSON
+        #[arg(long)]
+        human: bool,
     },
     /// Start interactive REPL
     Repl,
@@ -321,7 +327,7 @@ fn main() {
             all_targets,
             verbose,
         } => build_file(&file, output, release, aggressive, emit_ir, emit_mir, emit_wasm, &wasm_target, all_targets, verbose),
-        Command::Run { file } => run_file(&file),
+        Command::Run { file, args, human: _ } => run_file(&file, &args),
         Command::Repl => start_repl(),
         Command::Check { file, include_paths } => check_file_with_includes(&file, &include_paths),
         Command::Verify { file, z3_path, timeout } => verify_file(&file, &z3_path, timeout),
@@ -575,15 +581,24 @@ fn emit_mir_file(
 /// v0.30.241: Stack size for interpreter thread (64MB for deep recursion in bootstrap)
 const INTERPRETER_STACK_SIZE: usize = 64 * 1024 * 1024;
 
-fn run_file(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+fn run_file(path: &Path, extra_args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     // v0.30.241: Run entire pipeline in a thread with larger stack to prevent overflow
     // Bootstrap files have deep recursion that exceeds default 1MB Windows stack
     // We run everything in the thread because Value uses Rc<RefCell<>> (not Send)
     let path = path.to_path_buf();
+
+    // v0.46: Prepare program arguments for the BMB program
+    // Format: [program_name, arg1, arg2, ...]
+    let mut program_args = vec![path.display().to_string()];
+    program_args.extend(extra_args.iter().cloned());
+
     let handle = std::thread::Builder::new()
         .name("bmb-interpreter".to_string())
         .stack_size(INTERPRETER_STACK_SIZE)
         .spawn(move || -> Result<(), String> {
+            // v0.46: Set program arguments in thread-local storage
+            bmb::interp::set_program_args(program_args);
+
             let source = std::fs::read_to_string(&path)
                 .map_err(|e| format!("Failed to read file: {}", e))?;
             let filename = path.display().to_string();
