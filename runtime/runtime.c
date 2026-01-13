@@ -497,8 +497,21 @@ int64_t arg_count(void) {
     return (int64_t)bmb_argc;
 }
 
+// bmb_ prefixed version for LLVM codegen
+int64_t bmb_arg_count(void) {
+    return (int64_t)bmb_argc;
+}
+
 // Get argument at index (returns empty string if out of bounds)
 BmbString* get_arg(int64_t idx) {
+    if (idx < 0 || idx >= bmb_argc || !bmb_argv) {
+        return bmb_string_new("", 0);
+    }
+    return bmb_string_from_cstr(bmb_argv[idx]);
+}
+
+// bmb_ prefixed version for LLVM codegen
+BmbString* bmb_get_arg(int64_t idx) {
     if (idx < 0 || idx >= bmb_argc || !bmb_argv) {
         return bmb_string_new("", 0);
     }

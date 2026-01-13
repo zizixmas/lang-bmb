@@ -1,7 +1,7 @@
 # v0.46 Independence Phase - Session State
 
 **Last Updated**: 2026-01-13
-**Phase Status**: 진행중 (75% 완료)
+**Phase Status**: 진행중 (80% 완료)
 
 ---
 
@@ -15,6 +15,8 @@
 | 46.2 | Golden Binary 생성 | 2026-01-12 | `bootstrap/compiler.bmb` 네이티브 컴파일 성공 |
 | 46.7 | 빌드 문서화 | 2026-01-13 | `docs/BUILD_FROM_SOURCE.md` 작성 |
 | - | CLI 런타임 함수 | 2026-01-13 | `arg_count`/`get_arg` C런타임+LLVM 구현 |
+| - | File I/O 함수 | 2026-01-13 | `read_file`/`write_file`/`file_exists` 구현 |
+| - | bmb-unified 컴파일 | 2026-01-13 | `bmb_unified_cli.bmb` 네이티브 바이너리 생성 성공 |
 
 ### 대기 중인 태스크
 

@@ -154,6 +154,44 @@ char* bmb_string_concat(const char* a, const char* b) {
     return result;
 }
 
+// v0.46: File I/O support for CLI Independence
+#include <string.h>
+#include <sys/stat.h>
+
+char* bmb_read_file(const char* path) {
+    FILE* f = fopen(path, "rb");
+    if (!f) {
+        // Return empty string on error
+        char* empty = (char*)malloc(1);
+        empty[0] = '\0';
+        return empty;
+    }
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    char* content = (char*)malloc(size + 1);
+    if (content) {
+        size_t read = fread(content, 1, size, f);
+        content[read] = '\0';
+    }
+    fclose(f);
+    return content ? content : "";
+}
+
+int64_t bmb_write_file(const char* path, const char* content) {
+    FILE* f = fopen(path, "wb");
+    if (!f) return -1;
+    size_t len = strlen(content);
+    size_t written = fwrite(content, 1, len, f);
+    fclose(f);
+    return (written == len) ? 0 : -1;
+}
+
+int64_t bmb_file_exists(const char* path) {
+    struct stat st;
+    return (stat(path, &st) == 0) ? 1 : 0;
+}
+
 // v0.46: Command-line argument support for CLI Independence
 static int g_argc = 0;
 static char** g_argv = NULL;

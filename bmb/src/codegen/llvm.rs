@@ -444,6 +444,22 @@ impl<'ctx> LlvmContext<'ctx> {
         let box_new_fn = self.module.add_function("bmb_box_new_i64", box_new_type, None);
         self.functions.insert("box_new_i64".to_string(), box_new_fn);
 
+        // v0.46: File I/O functions for CLI Independence
+        // read_file(path: ptr) -> ptr (returns string content)
+        let read_file_type = ptr_type.fn_type(&[ptr_type.into()], false);
+        let read_file_fn = self.module.add_function("bmb_read_file", read_file_type, None);
+        self.functions.insert("read_file".to_string(), read_file_fn);
+
+        // write_file(path: ptr, content: ptr) -> i64 (returns 0 on success, -1 on error)
+        let write_file_type = i64_type.fn_type(&[ptr_type.into(), ptr_type.into()], false);
+        let write_file_fn = self.module.add_function("bmb_write_file", write_file_type, None);
+        self.functions.insert("write_file".to_string(), write_file_fn);
+
+        // file_exists(path: ptr) -> i64 (returns 1 if exists, 0 otherwise)
+        let file_exists_type = i64_type.fn_type(&[ptr_type.into()], false);
+        let file_exists_fn = self.module.add_function("bmb_file_exists", file_exists_type, None);
+        self.functions.insert("file_exists".to_string(), file_exists_fn);
+
         // v0.46: Command-line argument functions for CLI Independence
         // arg_count() -> i64
         let arg_count_type = i64_type.fn_type(&[], false);
