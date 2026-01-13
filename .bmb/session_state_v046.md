@@ -1,7 +1,7 @@
 # v0.46 Independence Phase - Session State
 
 **Last Updated**: 2026-01-13
-**Phase Status**: 진행중 (60% 완료)
+**Phase Status**: 진행중 (75% 완료)
 
 ---
 
@@ -14,12 +14,13 @@
 | 46.1 | LLVM 백엔드 검증 | 2026-01-12 | WSL Ubuntu, LLVM 21 |
 | 46.2 | Golden Binary 생성 | 2026-01-12 | `bootstrap/compiler.bmb` 네이티브 컴파일 성공 |
 | 46.7 | 빌드 문서화 | 2026-01-13 | `docs/BUILD_FROM_SOURCE.md` 작성 |
+| - | CLI 런타임 함수 | 2026-01-13 | `arg_count`/`get_arg` C런타임+LLVM 구현 |
 
 ### 대기 중인 태스크
 
 | ID | 태스크 | 블로커 | 다음 단계 |
 |----|--------|--------|----------|
-| 46.3 | 3-Stage 검증 | CLI 미구현 | `bmb_unified_cli.bmb` 완성 |
+| 46.3 | 3-Stage 검증 | WSL 환경 필요 | WSL에서 `scripts/bootstrap_3stage.sh` 실행 |
 | 46.4 | Cargo.toml 제거 | 46.3 완료 필요 | 3-Stage 성공 후 진행 |
 | 46.5 | DWARF 지원 | P1 우선순위 | 선택적 |
 | 46.6 | 소스맵 | P1 우선순위 | 선택적 |
@@ -58,6 +59,37 @@ let ret_type = match method.as_str() {
 - `bmb_string_from_cstr`: C 문자열 → BmbString 래핑
 - StringBuilder API: `sb_new`, `sb_push`, `sb_build`, `sb_clear`
 - 포인터 산술 연산 (`Add`, `Sub`)
+
+### 2026-01-13: CLI 런타임 함수 구현
+
+**구현 내용**:
+
+1. **C 런타임** (`bmb/runtime/bmb_runtime.c`):
+   ```c
+   // 전역 변수
+   static int g_argc = 0;
+   static char** g_argv = NULL;
+
+   // main()에서 argc/argv 저장
+   int main(int argc, char** argv) {
+       g_argc = argc;
+       g_argv = argv;
+       return (int)bmb_user_main();
+   }
+
+   // 런타임 함수
+   int64_t bmb_arg_count(void);
+   char* bmb_get_arg(int64_t index);
+   ```
+
+2. **LLVM codegen** (`bmb/src/codegen/llvm.rs`):
+   ```rust
+   // arg_count() -> i64
+   self.functions.insert("arg_count".to_string(), arg_count_fn);
+
+   // get_arg(index: i64) -> ptr
+   self.functions.insert("get_arg".to_string(), get_arg_fn);
+   ```
 
 ---
 
@@ -100,11 +132,11 @@ cargo build --release --features llvm
 
 1. **`compiler.bmb`는 테스트 하네스**
    - `build` CLI 명령 없음
-   - 3-Stage 자체 컴파일에 사용 불가
+   - 3-Stage 자체 컴파일에는 `bmb_unified_cli.bmb` 사용 필요
 
-2. **런타임 함수 미구현**
-   - `arg_count()`: CLI 인자 개수
-   - `get_arg(n)`: n번째 인자 가져오기
+2. ~~**런타임 함수 미구현**~~ ✅ 해결됨 (2026-01-13)
+   - `arg_count()`: C 런타임 + LLVM codegen 구현 완료
+   - `get_arg(n)`: C 런타임 + LLVM codegen 구현 완료
 
 3. **Windows 네이티브 빌드 불가**
    - LLVM 미지원

@@ -443,6 +443,17 @@ impl<'ctx> LlvmContext<'ctx> {
         let box_new_type = i64_type.fn_type(&[i64_type.into()], false);
         let box_new_fn = self.module.add_function("bmb_box_new_i64", box_new_type, None);
         self.functions.insert("box_new_i64".to_string(), box_new_fn);
+
+        // v0.46: Command-line argument functions for CLI Independence
+        // arg_count() -> i64
+        let arg_count_type = i64_type.fn_type(&[], false);
+        let arg_count_fn = self.module.add_function("bmb_arg_count", arg_count_type, None);
+        self.functions.insert("arg_count".to_string(), arg_count_fn);
+
+        // get_arg(index: i64) -> ptr (returns string)
+        let get_arg_type = ptr_type.fn_type(&[i64_type.into()], false);
+        let get_arg_fn = self.module.add_function("bmb_get_arg", get_arg_type, None);
+        self.functions.insert("get_arg".to_string(), get_arg_fn);
     }
 
     /// Convert MIR type to LLVM type

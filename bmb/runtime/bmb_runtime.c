@@ -154,6 +154,34 @@ char* bmb_string_concat(const char* a, const char* b) {
     return result;
 }
 
+// v0.46: Command-line argument support for CLI Independence
+static int g_argc = 0;
+static char** g_argv = NULL;
+
+int64_t bmb_arg_count(void) {
+    return (int64_t)g_argc;
+}
+
+char* bmb_get_arg(int64_t index) {
+    if (index < 0 || index >= g_argc) {
+        // Return empty string for out-of-bounds
+        char* empty = (char*)malloc(1);
+        empty[0] = '\0';
+        return empty;
+    }
+    // Return a copy of the argument
+    const char* arg = g_argv[index];
+    size_t len = 0;
+    while (arg[len]) len++;
+    char* result = (char*)malloc(len + 1);
+    for (size_t i = 0; i <= len; i++) result[i] = arg[i];
+    return result;
+}
+
 // Entry point
 int64_t bmb_user_main(void);
-int main() { return (int)bmb_user_main(); }
+int main(int argc, char** argv) {
+    g_argc = argc;
+    g_argv = argv;
+    return (int)bmb_user_main();
+}
