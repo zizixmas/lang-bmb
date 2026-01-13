@@ -1,7 +1,7 @@
 # v0.46 Independence Phase - Session State
 
 **Last Updated**: 2026-01-13
-**Phase Status**: 진행중 (80% 완료)
+**Phase Status**: 진행중 (90% 완료)
 
 ---
 
@@ -17,6 +17,7 @@
 | - | CLI 런타임 함수 | 2026-01-13 | `arg_count`/`get_arg` C런타임+LLVM 구현 |
 | - | File I/O 함수 | 2026-01-13 | `read_file`/`write_file`/`file_exists` 구현 |
 | - | bmb-unified 컴파일 | 2026-01-13 | `bmb_unified_cli.bmb` 네이티브 바이너리 생성 성공 |
+| - | SIGSEGV 버그 수정 | 2026-01-13 | `get_arg` 반환 타입 추론 오류 수정 (`b171ca0`) |
 
 ### 대기 중인 태스크
 
@@ -61,6 +62,21 @@ let ret_type = match method.as_str() {
 - `bmb_string_from_cstr`: C 문자열 → BmbString 래핑
 - StringBuilder API: `sb_new`, `sb_push`, `sb_build`, `sb_clear`
 - 포인터 산술 연산 (`Add`, `Sub`)
+
+### 2026-01-13: get_arg 반환 타입 수정 (`b171ca0`)
+
+**문제**: `bmb-unified` 네이티브 바이너리 실행 시 SIGSEGV 발생
+
+**원인**:
+- `llvm_text.rs`의 `infer_call_return_type`에서 `get_arg` 함수 누락
+- `get_arg`가 `ptr` 대신 `i64`를 반환한다고 잘못 추론
+- 결과적으로 `BmbString*` 포인터가 `i64`로 잘리면서 `read_file` 호출 시 crash
+
+**수정** (`bmb/src/codegen/llvm_text.rs:2036-2037`):
+```rust
+// v0.46: ptr return - CLI argument functions
+"get_arg" | "bmb_get_arg" => "ptr",
+```
 
 ### 2026-01-13: CLI 런타임 함수 구현
 
@@ -172,11 +188,14 @@ cargo build --release --features llvm
 ## Git 상태
 
 - **브랜치**: main
-- **최신 커밋**: `25109bb` - Update submodule references
+- **최신 커밋**: `b171ca0` - Fix get_arg return type inference
 - **v0.46 관련 커밋**:
+  - `b171ca0` - Fix get_arg return type inference in LLVM text codegen
+  - `330bab7` - Add File I/O runtime functions for CLI Independence
+  - `86ec840` - Implement arg_count/get_arg runtime functions
+  - `d8eca16` - Add 3-stage bootstrap script and build documentation
   - `55b5953` - Fix PHI type inference
   - `d6dae1c` - LLVM codegen string improvements
-  - `4e65560` - LLVM codegen string improvements (initial)
 
 ---
 
