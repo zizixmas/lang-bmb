@@ -167,6 +167,7 @@ BmbString* bmb_string_concat(BmbString* a, BmbString* b) {
     if (!a && !b) return bmb_string_new("", 0);
     if (!a) return bmb_string_new(b->data, b->len);
     if (!b) return bmb_string_new(a->data, a->len);
+
     int64_t newlen = a->len + b->len;
     char* data = (char*)malloc(newlen + 1);
     memcpy(data, a->data, a->len);
@@ -215,6 +216,14 @@ void bmb_print_str(BmbString* s) {
     if (s && s->data) {
         fwrite(s->data, 1, s->len, stdout);
     }
+}
+
+// Print string with newline
+void bmb_println_str(BmbString* s) {
+    if (s && s->data) {
+        fwrite(s->data, 1, s->len, stdout);
+    }
+    putchar('\n');
 }
 
 // ===================================================

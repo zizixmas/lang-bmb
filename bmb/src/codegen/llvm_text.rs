@@ -275,6 +275,7 @@ impl TextCodeGen {
         writeln!(out, "declare ptr @chr(i64)")?;
         writeln!(out, "declare i64 @ord(ptr)")?;
         writeln!(out, "declare void @print_str(ptr)")?;
+        writeln!(out, "declare void @println_str(ptr)")?;
         writeln!(out)?;
 
         // File I/O wrappers
