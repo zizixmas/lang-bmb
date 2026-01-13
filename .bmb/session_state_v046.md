@@ -1,7 +1,7 @@
 # v0.46 Independence Phase - Session State
 
 **Last Updated**: 2026-01-13
-**Phase Status**: 진행중 (90% 완료)
+**Phase Status**: 진행중 (95% 완료)
 
 ---
 
@@ -18,6 +18,7 @@
 | - | File I/O 함수 | 2026-01-13 | `read_file`/`write_file`/`file_exists` 구현 |
 | - | bmb-unified 컴파일 | 2026-01-13 | `bmb_unified_cli.bmb` 네이티브 바이너리 생성 성공 |
 | - | SIGSEGV 버그 수정 | 2026-01-13 | `get_arg` 반환 타입 추론 오류 수정 (`b171ca0`) |
+| - | MIR lowering 수정 | 2026-01-13 | `get_arg`/`arg_count` MIR 타입 추론 수정 (`96f1114`) |
 
 ### 대기 중인 태스크
 
@@ -76,6 +77,26 @@ let ret_type = match method.as_str() {
 ```rust
 // v0.46: ptr return - CLI argument functions
 "get_arg" | "bmb_get_arg" => "ptr",
+```
+
+### 2026-01-13: MIR lowering 타입 추론 수정 (`96f1114`)
+
+**문제**: `b171ca0` 수정 후에도 SIGSEGV 지속
+
+**원인** (Root Cause):
+- MIR lowering (`lower.rs`)에서 `get_arg` 반환 타입이 `MirType::I64`로 기본 설정
+- 이로 인해 `func.locals`에 잘못된 타입 등록
+- LLVM codegen의 `build_place_type_map`에서 locals 타입을 먼저 읽어 `i64`로 설정
+- Call 처리 시 타입 업데이트되지만, 일부 경로에서 잘못된 타입 참조
+
+**수정** (`bmb/src/mir/lower.rs:462-468`):
+```rust
+// String-returning runtime functions
+// v0.46: get_arg returns string (pointer to BmbString)
+"int_to_string" | "read_file" | "slice" | "digit_char" | "get_arg" => MirType::String,
+// i64-returning runtime functions
+// v0.46: arg_count returns i64
+"byte_at" | "len" | "strlen" | "cstr_byte_at" | "arg_count" => MirType::I64,
 ```
 
 ### 2026-01-13: CLI 런타임 함수 구현
@@ -188,8 +209,9 @@ cargo build --release --features llvm
 ## Git 상태
 
 - **브랜치**: main
-- **최신 커밋**: `b171ca0` - Fix get_arg return type inference
+- **최신 커밋**: `96f1114` - Fix MIR lowering for CLI runtime function return types
 - **v0.46 관련 커밋**:
+  - `96f1114` - Fix MIR lowering for CLI runtime function return types
   - `b171ca0` - Fix get_arg return type inference in LLVM text codegen
   - `330bab7` - Add File I/O runtime functions for CLI Independence
   - `86ec840` - Implement arg_count/get_arg runtime functions
