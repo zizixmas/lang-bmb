@@ -59,7 +59,7 @@ bmb build examples/hello.bmb -o hello
 bmb repl
 ```
 
-## Current Status: v0.44
+## Current Status: v0.46 (Independence)
 
 | Category | Status |
 |----------|--------|
@@ -67,10 +67,11 @@ bmb repl
 | Type System | ✅ Complete |
 | Contract System | ✅ Complete |
 | Bootstrap Compiler | ✅ 30K LOC |
-| Test Suite | ✅ 1,753 tests |
+| Test Suite | ✅ 1,753+ tests |
 | Documentation | ✅ Complete |
 | CI/CD | ✅ Complete |
-| **Rust Removal** | 📋 v0.45 |
+| **Performance** | ✅ 0.89x-0.99x vs C |
+| **Self-Compile** | ✅ 0.56s |
 | **v1.0.0-beta** | 🎯 Target |
 
 ## Features
@@ -87,9 +88,9 @@ bmb repl
 
 ### In Progress
 
-- Native compilation without Rust dependency
-- Ecosystem packages (Rust crate porting)
-- Performance benchmarks (Gate #3.1)
+- 3-Stage self-hosting verification (WSL)
+- Performance Gate #3.2, #3.3 (Benchmarks Game, Contract optimization)
+- Ecosystem packages (14+ target, 12 complete)
 
 ## Project Structure
 
@@ -125,22 +126,21 @@ lang-bmb/
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Compiler internals |
 | [ROADMAP.md](docs/ROADMAP.md) | Development roadmap |
 | [API_STABILITY.md](docs/API_STABILITY.md) | API guarantees |
+| [BENCHMARK_COMPARISON.md](docs/BENCHMARK_COMPARISON.md) | C/Rust/BMB performance |
 | [tutorials/](docs/tutorials/) | Getting started guides |
 
 ## Roadmap to v1.0.0-beta
 
 ```
-v0.44 (Current) ─── Stabilization complete
+v0.46 (Current) ─── Independence (3-Stage verification)
      │
-v0.45 ─────────── Rust removal (BMB-only build)
+v0.47 ─────────── Performance Gates (C parity verified)
      │
-v0.46 ─────────── Performance gates (C parity)
+v0.48 ─────────── Ecosystem (14+ core packages)
      │
-v0.47 ─────────── Ecosystem (10 core packages)
+v0.49 ─────────── Samples & scenarios
      │
-v0.48 ─────────── Samples & scenarios
-     │
-v0.49 ─────────── Final verification
+v0.50 ─────────── Final verification
      │
 v1.0.0-beta ───── Complete programming language ★
 ```
@@ -149,13 +149,19 @@ See [ROADMAP.md](docs/ROADMAP.md) for detailed phases.
 
 ## Performance
 
-```
-Benchmark: fib(45)
-C (-O3):   1.65s (100%)
-BMB:       1.63s (99%)
+BMB matches or exceeds C/Rust performance on compute-intensive workloads:
 
-Self-compile: 0.56s for 30K LOC
 ```
+                     C         Rust      BMB       Winner
+─────────────────────────────────────────────────────────
+fibonacci(45)        1.65s     1.66s     1.63s     ★ BMB (0.99x)
+fibonacci(40)        177ms     180ms     150ms     ★ BMB (0.85x)
+mandelbrot           42ms      42ms      39ms      ★ BMB (0.93x)
+spectral_norm        44ms      44ms      39ms      ★ BMB (0.89x)
+self-compile         -         -         0.56s     ✅ (30K LOC)
+```
+
+See [BENCHMARK_COMPARISON.md](docs/BENCHMARK_COMPARISON.md) for detailed methodology and results.
 
 ## License
 

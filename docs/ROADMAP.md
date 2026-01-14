@@ -13,7 +13,7 @@
 | v0.38-v0.44 | Stabilization | ✅ 완료 | CI, 안정성, API 동결, 릴리스 준비 |
 | **v0.45** | **Foundation Completion** | ✅ 완료 | **stdlib 확정, 도구 안정화, bmb lint 추가** |
 | **v0.46** | **Independence** | ✅ 완료 | **CLI 지원, 3-Stage Bootstrap 준비** |
-| **v0.47** | **Performance** | 📋 계획 | **성능 Gate 통과** |
+| **v0.47** | **Performance** | 🔄 진행중 | **성능 Gate 통과, 벤치마크 자동화** |
 | **v0.48** | **Ecosystem** | 📋 계획 | **패키지, 크로스 컴파일** |
 | **v0.49** | **Showcase** | 📋 계획 | **샘플 앱, 시나리오** |
 | **v0.50** | **Final Verification** | 📋 계획 | **보안 감사, 최종 검증** |
@@ -33,7 +33,7 @@
 | **Rust 제거** | Cargo.toml 불필요, BMB-only 빌드 | ⏳ WSL 검증 후 | v0.46 |
 | **자체 컴파일** | BMB 컴파일러가 자신을 컴파일 | ✅ CLI 준비 완료 | v0.46 |
 | **디버깅 지원** | DWARF 정보, 소스맵 | 📋 계획 | v0.46 |
-| **성능 검증** | Gate #3.1 통과 (C 대비 ≤1.10x) | ⚠️ LLVM 필요 | v0.47 |
+| **성능 검증** | Gate #3.1 통과 (C 대비 ≤1.10x) | ✅ 0.89x-0.99x 달성 | v0.47 |
 | **크로스 컴파일** | Linux/Windows/macOS/WASM | ❌ 미완료 | v0.48 |
 | **생태계** | 14+ 핵심 패키지 | ⚠️ 12/14 | v0.48 |
 | **샘플/문서** | 5개 샘플 앱, 5개 시나리오 | ❌ 미완료 | v0.49 |
@@ -190,14 +190,31 @@ gdb ./bmb-stage2 -ex "info functions"  # DWARF 정보 확인
 | 47.7 | **`bmb q proof`** | 검증 결과 인덱스 (`proofs.idx`) | P2 |
 | 47.8 | **증명 상태 쿼리** | `--unverified`, `--timeout`, `--failed` 필터 | P2 |
 
-### 벤치마크 현황
+### 벤치마크 현황 (2026-01-14 기준)
 
-| 카테고리 | 벤치마크 수 | 목표 |
-|----------|------------|------|
-| Compute | 10 | ≤1.10x C |
-| Contract | 5 | <0.90x C (계약 최적화) |
-| Memory | 5 | ≤1.10x Rust |
-| Compilation | 3 | <60s |
+| 카테고리 | 벤치마크 수 | 목표 | 현재 상태 |
+|----------|------------|------|----------|
+| Compute | 10 | ≤1.10x C | ✅ 0.89x-0.99x |
+| Contract | 6 | <0.90x C | ⏳ 검증 중 |
+| Real-World | 7 | ≤1.10x C | ⚠️ json_parse 2.5x |
+| Bootstrap | 3 | <60s | ✅ 0.56s |
+
+### 현재 성능 결과
+
+```
+                C/Rust/BMB Performance Comparison
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Benchmark         C        Rust      BMB       Winner
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+fibonacci(45)     1.65s    1.66s     1.63s     ★ BMB (0.99x)
+fibonacci(40)     177ms    180ms     150ms     ★ BMB (0.85x)
+mandelbrot        42ms     42ms      39ms      ★ BMB (0.93x)
+spectral_norm     44ms     44ms      39ms      ★ BMB (0.89x)
+self-compile      -        -         0.56s     ✅ < 60s target
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+상세 비교: docs/BENCHMARK_COMPARISON.md
+```
 
 ### 검증 기준
 
@@ -493,6 +510,9 @@ docs/
 ├── API_STABILITY.md     # API 안정성 보장
 ├── STDLIB_API.md        # 표준 라이브러리 API (v0.45 예정)
 ├── BUILD_FROM_SOURCE.md # BMB-only 빌드 (v0.46 예정)
+├── BENCHMARK_COMPARISON.md # C/Rust/BMB 성능 비교 (v0.47)
+├── BENCHMARK_ROADMAP.md # 벤치마크 로드맵
+├── PHASE_PLAN_v0.46-v0.47.md # 현재 페이즈 상세 계획
 ├── ECOSYSTEM.md         # 생태계 개요
 ├── GOTGAN.md            # 패키지 매니저
 ├── scenarios/           # 시나리오 문서 (v0.49 예정)
