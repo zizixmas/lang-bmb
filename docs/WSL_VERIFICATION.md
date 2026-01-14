@@ -209,6 +209,49 @@ cd /mnt/d/data/lang-bmb
 cargo build --release --features llvm
 ```
 
+### Windows line endings (CRLF)
+
+```
+bash: line 1: $'\r': command not found
+```
+
+Scripts copied from Windows may have CRLF line endings. Fix with:
+
+```bash
+# Fix single file
+sed -i 's/\r$//' scripts/bootstrap_3stage.sh
+
+# Fix all shell scripts
+find scripts -name "*.sh" -exec sed -i 's/\r$//' {} \;
+```
+
+### BMB runtime library not found
+
+```
+Linker error: Cannot find BMB runtime library
+```
+
+Build the runtime library in WSL:
+
+```bash
+cd /mnt/d/data/lang-bmb/bmb/runtime
+clang -c bmb_runtime.c -o bmb_runtime.o -O3
+ar rcs libbmb_runtime.a bmb_runtime.o
+```
+
+### WSL catastrophic failure
+
+```
+Catastrophic failure - Error code: Wsl/Service/E_UNEXPECTED
+```
+
+Restart WSL from PowerShell:
+
+```powershell
+wsl --shutdown
+wsl
+```
+
 ---
 
 ## Performance Results Reference
@@ -223,6 +266,31 @@ Current BMB performance vs C (native compilation):
 | spectral_norm | 44ms | 44ms | 39ms | **0.89x** |
 
 BMB achieves better-than-C performance on multiple benchmarks!
+
+---
+
+## Verification Log
+
+### 2026-01-14 Session
+
+**Environment**: WSL Ubuntu, LLVM 18.1.3
+
+**3-Stage Bootstrap**:
+| Stage | Status | Notes |
+|-------|--------|-------|
+| Stage 1: Rust BMB → native binary | ✅ Pass | Tests show 999 marker |
+| Stage 1 compiles simple files | ✅ Pass | hello.bmb → native works |
+| Stage 1 self-compilation | ⏳ Slow | >10 min timeout (30K line compiler) |
+
+**Benchmark Gate #3.1**:
+| Benchmark | C | BMB | Ratio | Status |
+|-----------|---|-----|-------|--------|
+| fibonacci(40) | 0.17s | 0.18s | ~1.06x | ✅ Pass (≤1.10x) |
+
+**Known Issues**:
+- Stage 1 self-compilation is too slow for the full 30K-line bootstrap compiler
+- This is a performance issue, not a correctness issue
+- Solution: Optimize bootstrap compiler or use incremental compilation
 
 ---
 

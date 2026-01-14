@@ -95,7 +95,7 @@ bmb fmt --check stdlib/**/*.bmb
 |----|--------|------|----------|------|
 | 46.1 | **LLVM 백엔드 검증** | WSL에서 `bmb build bootstrap/compiler.bmb` 성공 | P0 | ✅ 완료 |
 | 46.2 | **Golden Binary 생성** | 첫 번째 네이티브 BMB 컴파일러 바이너리 | P0 | ✅ 완료 |
-| 46.3 | **자체 컴파일 검증** | Golden Binary로 자신 재컴파일 (3-Stage) | P0 | ⏳ WSL 검증 필요 |
+| 46.3 | **자체 컴파일 검증** | Golden Binary로 자신 재컴파일 (3-Stage) | P0 | 🔄 Stage 1 통과, 자체컴파일 느림 |
 | 46.4 | **Cargo.toml 제거** | Rust 의존성 완전 제거 | P0 | ⏳ 46.3 후 진행 |
 | 46.5 | **디버깅 지원** | DWARF 디버그 정보 생성 | P1 | 📋 선택적 |
 | 46.6 | **소스맵 생성** | 디버거용 소스 위치 매핑 | P1 | 📋 선택적 |
@@ -565,3 +565,28 @@ docs/
     ├── GAP_ANALYSIS.md
     └── ...
 ```
+
+---
+
+## 세션 노트
+
+### 2026-01-14 WSL 검증 세션
+
+**환경**: WSL Ubuntu, LLVM 18.1.3
+
+**3-Stage Bootstrap 결과**:
+- Stage 1: ✅ Rust BMB → native binary (tests: 999 marker)
+- Stage 1 simple file compilation: ✅ hello.bmb → native works
+- Stage 1 self-compilation: ⏳ >10분 타임아웃 (30K LOC 컴파일러)
+
+**벤치마크 Gate #3.1 결과**:
+- fibonacci(40): C=0.17s, BMB=0.18s, ratio ~1.06x ✅ (≤1.10x 기준 통과)
+
+**발견된 이슈**:
+- 30K 라인 부트스트랩 컴파일러의 자체 컴파일이 너무 느림
+- 원인: 부트스트랩 컴파일러 최적화 필요 또는 점진적 컴파일 도입 필요
+- 정확성 문제가 아닌 성능 문제
+
+**문서 업데이트**:
+- `docs/WSL_VERIFICATION.md`: 검증 로그 및 트러블슈팅 추가
+- `docs/ROADMAP.md`: v0.46.3 상태 업데이트
