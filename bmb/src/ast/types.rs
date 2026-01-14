@@ -99,7 +99,7 @@ pub enum Type {
     /// Used for `todo` expressions - compatible with any type
     Never,
     /// Nullable type (v0.37): T?
-    /// Sugar for Option<T>. Per spec, T? is the only nullable syntax.
+    /// Sugar for `Option<T>`. Per spec, T? is the only nullable syntax.
     /// Example: i64?, String?, MyStruct?
     Nullable(Box<Type>),
     /// Tuple type (v0.42): (T, U, V)

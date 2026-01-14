@@ -4,16 +4,22 @@
 
 ---
 
-## Exit Criteria Summary
+## Exit Criteria Summary (2026-01-14 업데이트)
 
-| Category | Requirement | Status | Owner |
+| Category | Requirement | Status | Notes |
 |----------|-------------|--------|-------|
-| **Language** | stdlib API 확정 | ✅ | v0.45 |
-| **Compiler** | 자체 컴파일 (3-Stage) | ⏳ | v0.46 |
-| **Performance** | Gate #3.1 통과 | ✅ | v0.47 |
-| **Ecosystem** | 14+ 패키지 | ✅ | v0.48 |
-| **Documentation** | 샘플 앱 5개 | ✅ | v0.49 |
-| **Security** | 보안 감사 | ❌ | v0.50 |
+| **Language** | stdlib API 확정 | ✅ | 10 모듈, 41 postcondition 경고 (P1) |
+| **Compiler** | 자체 컴파일 (3-Stage) | ⏳ | **Stage 1만 검증, Stage 2/3 WSL 필요** |
+| **Performance** | Gate #3.1 통과 | ⚠️ | 단일 벤치마크만 검증, 전체 스위트 미실행 |
+| **Ecosystem** | 14+ 패키지 | ✅ | 14개 완료 |
+| **Documentation** | 샘플 앱 5개 | ✅ | 5개 완료, 언어 제한 워크어라운드 |
+| **Security** | 보안 감사 | 🔄 | Phase 1-2 완료, Phase 3 예정 |
+| **Cross-compile** | 멀티 플랫폼 | ❌ | 설계 문서만, 구현 0% |
+
+### 🔴 블로커 (v1.0.0-beta 전 필수)
+
+1. **3-Stage Bootstrap 검증**: WSL Ubuntu에서 Stage 2/3 실행 필요
+2. **전체 벤치마크 Gate**: `benchmark-bmb gate all` 실행 필요
 
 ---
 
@@ -317,4 +323,5 @@ echo "Scenarios: $(ls docs/scenarios/*.md 2>/dev/null | wc -l)/5"
 | Date | Change |
 |------|--------|
 | 2026-01-14 | Initial checklist created |
+| 2026-01-14 | Critical review: status adjusted to reflect actual verification state |
 

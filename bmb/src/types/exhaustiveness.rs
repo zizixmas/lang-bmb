@@ -9,7 +9,7 @@
 //! P0 Performance: No runtime overhead
 //!
 //! Algorithm based on Rust's exhaustiveness checker:
-//! https://rustc-dev-guide.rust-lang.org/pat-exhaustive-checking.html
+//! <https://rustc-dev-guide.rust-lang.org/pat-exhaustive-checking.html>
 
 use crate::ast::{LiteralPattern, Pattern, Spanned, Type};
 use std::collections::{HashMap, HashSet};

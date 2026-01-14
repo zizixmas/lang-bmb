@@ -12,7 +12,7 @@
 | v0.31-v0.37 | Maturity | ✅ 완료 | Stage 3, 벤치마크, 스펙 준수 |
 | v0.38-v0.44 | Stabilization | ✅ 완료 | CI, 안정성, API 동결, 릴리스 준비 |
 | **v0.45** | **Foundation Completion** | ✅ 완료 | **stdlib 확정, 도구 안정화, bmb lint 추가** |
-| **v0.46** | **Independence** | ✅ 완료 | **CLI 지원, 3-Stage Bootstrap 준비** |
+| **v0.46** | **Independence** | ⏳ 검증중 | **Stage 1 완료, Stage 2/3 WSL 검증 필요** |
 | **v0.47** | **Performance** | 🔄 진행중 | **성능 Gate 통과, 벤치마크 자동화** |
 | **v0.48** | **Ecosystem** | 🔄 진행중 | **패키지 14/14, 크로스 컴파일 미완료** |
 | **v0.49** | **Showcase** | ✅ 완료 | **샘플 앱 5/5, 시나리오 5/5** |
@@ -31,7 +31,7 @@
 | **에러 메시지** | 사용자 친화적 컴파일 에러 | ✅ ariadne 기반 | v0.45 |
 | **개발 도구** | LSP, Formatter, Linter 안정화 | ✅ LSP+Linter, ⏳ Formatter | v0.45 |
 | **Rust 제거** | Cargo.toml 불필요, BMB-only 빌드 | ⏳ WSL 검증 후 | v0.46 |
-| **자체 컴파일** | BMB 컴파일러가 자신을 컴파일 | ✅ CLI 준비 완료 | v0.46 |
+| **자체 컴파일** | BMB 컴파일러가 자신을 컴파일 | ⏳ Stage 1만 검증 | v0.46 |
 | **디버깅 지원** | DWARF 정보, 소스맵 | 📋 계획 | v0.46 |
 | **성능 검증** | Gate #3.1 통과 (C 대비 ≤1.10x) | ✅ 0.89x-0.99x 달성 | v0.47 |
 | **크로스 컴파일** | Linux/Windows/macOS/WASM | ❌ 미완료 | v0.48 |
@@ -768,6 +768,33 @@ fn print_str_nl(s: String) -> i64 =
   - Vec 경계 검사, HashMap 로드 팩터 확인
   - 파일 I/O 경로 순회 문서화
 
+### 2026-01-14 비판적 검토 및 문서 최신화 세션
+
+**수행된 작업**:
+1. **Doc 경고 수정**
+   - `ast/types.rs`: `Option<T>` → `` `Option<T>` `` (HTML 태그 해석 방지)
+   - `types/exhaustiveness.rs`: URL을 `<...>` 형식으로 변경
+
+2. **비판적 검토 수행**
+   - 실제 완료율 재평가: 75% → 65-70%
+   - 문서-현실 괴리 분석
+   - 블로커 식별: 3-Stage Bootstrap, 벤치마크 전체 실행
+
+3. **stdlib 검증**
+   - `core/num.bmb`: 1 경고 (is_power_of_two postcondition)
+   - `string/mod.bmb`: 10 경고 (missing postcondition)
+   - `array/mod.bmb`: 30 경고 (missing postcondition)
+   - 총 41개 postcondition 경고 (P1 개선 항목)
+
+4. **테스트 검증**
+   - Rust 테스트: 173개 통과 (154 bmb + 19 gotgan)
+   - Clippy: 0 경고
+   - Doc: 0 경고
+
+**업데이트된 문서**:
+- `docs/ROADMAP.md`: 정직한 상태 반영
+- Exit Criteria: 자체 컴파일 상태 수정
+
 ---
 
 ## 알려진 리스크 및 정직한 평가
@@ -788,28 +815,38 @@ fn print_str_nl(s: String) -> i64 =
 | WSL 의존성 | 🟡 Low | 핵심 검증이 WSL에서만 가능 | CI에서 자동화 |
 | 문서-코드 불일치 | 🟢 Low | 일부 문서가 오래됨 | 정기 리뷰 |
 
-### v1.0.0-beta 실제 상태
+### v1.0.0-beta 실제 상태 (2026-01-14 비판적 검토)
 
 ```
-실제 완료율: ~75%
+실제 완료율: ~65-70% (기존 주장 75%에서 하향 조정)
 
 확실히 완료:
 ✅ 언어 핵심 기능 (타입, 계약, 제네릭)
-✅ 컴파일러 프론트엔드
+✅ 컴파일러 프론트엔드 (173 테스트, 0 clippy 경고)
 ✅ 14개 생태계 패키지
 ✅ 5개 샘플 애플리케이션
 ✅ 5개 시나리오 문서
-✅ 테스트 인프라 (1,753+ 테스트)
+✅ 보안 감사 Phase 1-2
 
-검증 필요:
-⏳ 3-Stage Bootstrap 완전 실행
-⏳ 전체 벤치마크 Gate 통과
-⏳ stdlib 100% 테스트 커버리지
+검증 필요 (🔴 블로커):
+⏳ 3-Stage Bootstrap: Stage 2/3 WSL에서 미검증
+⏳ 전체 벤치마크 Gate: 단일 벤치마크만 테스트됨
+⏳ stdlib postcondition: string 10개, array 30개 경고
 
 미시작:
-❌ 크로스 컴파일 구현
+❌ 크로스 컴파일 구현 (설계 문서만)
 ❌ Formatter 주석 보존
+❌ DWARF 디버깅 지원
 
 진행중:
-🔄 보안 감사 (Phase 1-2 완료, Phase 3 침투 테스트 예정)
+🔄 보안 감사 Phase 3 (침투 테스트 예정)
 ```
+
+### 비판적 검토 주요 발견
+
+| 항목 | 문서 주장 | 실제 상태 | 차이 |
+|------|----------|----------|------|
+| 3-Stage Bootstrap | Stage 1 통과 | Stage 1만 검증 | Stage 2/3 미검증 |
+| Gate #3.1 | 0.89x-0.99x | fibonacci만 테스트 | 전체 스위트 미실행 |
+| 자체 컴파일 <60s | 0.56s | Rust 컴파일러 기준 | BMB 컴파일러는 >10분 |
+| stdlib | 완료 | 41개 postcondition 경고 | 경고 해결 필요 |
