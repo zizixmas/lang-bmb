@@ -709,11 +709,21 @@ fn print_str_nl(s: String) -> i64 =
   - 분할된 함수 본문: 세미콜론 위치 오류
   - 이스케이프 시퀀스: `\"`, `\\` 미지원
 
-**stdlib 수정 필요 항목**:
-- `stdlib/string/mod.bmb`: 전체 리팩토링 필요
-- `stdlib/array/mod.bmb`: 검증 필요
-- `stdlib/io/mod.bmb`: 검증 필요
-- `stdlib/process/mod.bmb`: 검증 필요
+**stdlib 수정 완료 (2026-01-14 후속 세션)**:
+- `stdlib/string/mod.bmb`: ✅ 전체 리팩토링 완료
+  - `.char_at()` → `.byte_at()` (v0.67 API 변경)
+  - 분할된 함수 본문 수정 (ends_with_check, count_char_from 등)
+  - 다중 post 절 통합 (char_count, int_to_string)
+- `stdlib/array/mod.bmb`: ✅ 리팩토링 완료
+  - 분할된 함수 본문 수정 (count_i64_from, min_i64_from, max_i64_from, count_range_from)
+- `stdlib/io/mod.bmb`: ✅ 문법 수정 완료
+  - `@extern` → `@builtin` 선언 패턴 변경
+  - `.char_at()` → `.byte_at()` 변경
+  - 참고: 함수 본문 없는 스펙 파일이므로 `bmb check` 불가
+- `stdlib/process/mod.bmb`: ℹ️ 스펙 파일 (본문 없음, check 불가)
+- `stdlib/test/mod.bmb`: ✅ 리팩토링 완료
+  - 분할된 함수 본문 수정 (count_passed_from)
+  - 다중 post 절 통합 (count_failed)
 
 ---
 
