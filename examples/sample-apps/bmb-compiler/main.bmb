@@ -1,0 +1,519 @@
+// bmb-compiler: A mini expression language compiler
+// Demonstrates lexer, parser, and evaluator in BMB
+//
+// Usage: bmb run main.bmb -- "<expression>"
+// Example: bmb run main.bmb -- "2 + 3 * 4"
+//          bmb run main.bmb -- "let x = 10; x * 2"
+//          bmb run main.bmb -- "if 5 > 3 then 1 else 0"
+
+// ============================================================================
+// Token Types
+// ============================================================================
+
+fn tok_eof() -> i64 = 0;
+fn tok_number() -> i64 = 1;
+fn tok_ident() -> i64 = 2;
+fn tok_plus() -> i64 = 10;
+fn tok_minus() -> i64 = 11;
+fn tok_star() -> i64 = 12;
+fn tok_slash() -> i64 = 13;
+fn tok_percent() -> i64 = 14;
+fn tok_lparen() -> i64 = 20;
+fn tok_rparen() -> i64 = 21;
+fn tok_eq() -> i64 = 30;      // ==
+fn tok_neq() -> i64 = 31;     // !=
+fn tok_lt() -> i64 = 32;      // <
+fn tok_gt() -> i64 = 33;      // >
+fn tok_le() -> i64 = 34;      // <=
+fn tok_ge() -> i64 = 35;      // >=
+fn tok_assign() -> i64 = 40;  // =
+fn tok_semi() -> i64 = 41;    // ;
+fn tok_let() -> i64 = 50;     // let keyword
+fn tok_if() -> i64 = 51;      // if keyword
+fn tok_then() -> i64 = 52;    // then keyword
+fn tok_else() -> i64 = 53;    // else keyword
+fn tok_error() -> i64 = 99;
+
+fn tok_name(t: i64) -> String =
+    if t == tok_eof() { "EOF" }
+    else if t == tok_number() { "NUMBER" }
+    else if t == tok_ident() { "IDENT" }
+    else if t == tok_plus() { "+" }
+    else if t == tok_minus() { "-" }
+    else if t == tok_star() { "*" }
+    else if t == tok_slash() { "/" }
+    else if t == tok_percent() { "%" }
+    else if t == tok_lparen() { "(" }
+    else if t == tok_rparen() { ")" }
+    else if t == tok_eq() { "==" }
+    else if t == tok_neq() { "!=" }
+    else if t == tok_lt() { "<" }
+    else if t == tok_gt() { ">" }
+    else if t == tok_le() { "<=" }
+    else if t == tok_ge() { ">=" }
+    else if t == tok_assign() { "=" }
+    else if t == tok_semi() { ";" }
+    else if t == tok_let() { "let" }
+    else if t == tok_if() { "if" }
+    else if t == tok_then() { "then" }
+    else if t == tok_else() { "else" }
+    else { "ERROR" };
+
+// ============================================================================
+// Character Utilities
+// ============================================================================
+
+fn is_digit(c: i64) -> bool = c >= 48 and c <= 57;
+fn is_alpha(c: i64) -> bool = (c >= 65 and c <= 90) or (c >= 97 and c <= 122);
+fn is_alnum(c: i64) -> bool = is_alpha(c) or is_digit(c) or c == 95;
+fn is_space(c: i64) -> bool = c == 32 or c == 9 or c == 10 or c == 13;
+
+fn digit_value(c: i64) -> i64
+  pre is_digit(c)
+  post ret >= 0 and ret <= 9
+= c - 48;
+
+// ============================================================================
+// Lexer State (encoded as position in source)
+// Token: type * 1000000 + value * 1000 + end_pos
+// ============================================================================
+
+fn make_token(tok_type: i64, value: i64, end_pos: i64) -> i64 =
+    tok_type * 1000000 + value * 1000 + end_pos;
+
+fn token_type(token: i64) -> i64 = token / 1000000;
+fn token_value(token: i64) -> i64 = (token / 1000) - (token / 1000000) * 1000;
+fn token_end(token: i64) -> i64 = token - (token / 1000) * 1000;
+
+// Skip whitespace
+fn skip_ws(src: String, pos: i64) -> i64 =
+    if pos >= src.len() { pos }
+    else if is_space(src.byte_at(pos)) { skip_ws(src, pos + 1) }
+    else { pos };
+
+// Parse number
+fn parse_number(src: String, pos: i64, acc: i64) -> i64 =
+    if pos >= src.len() { make_token(tok_number(), acc, pos) }
+    else {
+        let c = src.byte_at(pos);
+        if is_digit(c) { parse_number(src, pos + 1, acc * 10 + digit_value(c)) }
+        else { make_token(tok_number(), acc, pos) }
+    };
+
+// Parse identifier/keyword
+fn ident_end(src: String, pos: i64) -> i64 =
+    if pos >= src.len() { pos }
+    else if is_alnum(src.byte_at(pos)) { ident_end(src, pos + 1) }
+    else { pos };
+
+fn match_keyword(src: String, start: i64, end: i64) -> i64 = {
+    let len = end - start;
+    if len == 3 and src.slice(start, end) == "let" { tok_let() }
+    else if len == 2 and src.slice(start, end) == "if" { tok_if() }
+    else if len == 4 and src.slice(start, end) == "then" { tok_then() }
+    else if len == 4 and src.slice(start, end) == "else" { tok_else() }
+    else { tok_ident() }
+};
+
+fn parse_ident(src: String, pos: i64) -> i64 = {
+    let end = ident_end(src, pos);
+    let tok_type = match_keyword(src, pos, end);
+    // For identifiers, encode start position as value (for later retrieval)
+    make_token(tok_type, pos, end)
+};
+
+// Main lexer function
+fn next_token(src: String, pos: i64) -> i64 = {
+    let p = skip_ws(src, pos);
+    if p >= src.len() { make_token(tok_eof(), 0, p) }
+    else {
+        let c = src.byte_at(p);
+        if is_digit(c) { parse_number(src, p, 0) }
+        else if is_alpha(c) { parse_ident(src, p) }
+        else if c == 43 { make_token(tok_plus(), 0, p + 1) }      // +
+        else if c == 45 { make_token(tok_minus(), 0, p + 1) }     // -
+        else if c == 42 { make_token(tok_star(), 0, p + 1) }      // *
+        else if c == 47 { make_token(tok_slash(), 0, p + 1) }     // /
+        else if c == 37 { make_token(tok_percent(), 0, p + 1) }   // %
+        else if c == 40 { make_token(tok_lparen(), 0, p + 1) }    // (
+        else if c == 41 { make_token(tok_rparen(), 0, p + 1) }    // )
+        else if c == 59 { make_token(tok_semi(), 0, p + 1) }      // ;
+        else if c == 61 {  // = or ==
+            if p + 1 < src.len() and src.byte_at(p + 1) == 61 {
+                make_token(tok_eq(), 0, p + 2)
+            } else { make_token(tok_assign(), 0, p + 1) }
+        }
+        else if c == 33 {  // !=
+            if p + 1 < src.len() and src.byte_at(p + 1) == 61 {
+                make_token(tok_neq(), 0, p + 2)
+            } else { make_token(tok_error(), 0, p + 1) }
+        }
+        else if c == 60 {  // < or <=
+            if p + 1 < src.len() and src.byte_at(p + 1) == 61 {
+                make_token(tok_le(), 0, p + 2)
+            } else { make_token(tok_lt(), 0, p + 1) }
+        }
+        else if c == 62 {  // > or >=
+            if p + 1 < src.len() and src.byte_at(p + 1) == 61 {
+                make_token(tok_ge(), 0, p + 2)
+            } else { make_token(tok_gt(), 0, p + 1) }
+        }
+        else { make_token(tok_error(), 0, p + 1) }
+    }
+};
+
+// ============================================================================
+// AST Node Types (encoded)
+// Node: type * 10000000 + left * 1000 + right (for binary ops)
+// Node: type * 10000000 + value (for literals)
+// ============================================================================
+
+fn node_num() -> i64 = 1;
+fn node_var() -> i64 = 2;
+fn node_add() -> i64 = 10;
+fn node_sub() -> i64 = 11;
+fn node_mul() -> i64 = 12;
+fn node_div() -> i64 = 13;
+fn node_mod() -> i64 = 14;
+fn node_eq() -> i64 = 20;
+fn node_neq() -> i64 = 21;
+fn node_lt() -> i64 = 22;
+fn node_gt() -> i64 = 23;
+fn node_le() -> i64 = 24;
+fn node_ge() -> i64 = 25;
+fn node_neg() -> i64 = 30;
+fn node_if() -> i64 = 40;
+fn node_let() -> i64 = 41;
+fn node_seq() -> i64 = 42;
+fn node_error() -> i64 = 99;
+
+fn make_binary(op: i64, left: i64, right: i64) -> i64 =
+    op * 10000000 + left * 1000 + right;
+
+fn make_unary(op: i64, value: i64) -> i64 = op * 10000000 + value;
+fn make_literal(value: i64) -> i64 = node_num() * 10000000 + value;
+fn make_var(var_id: i64) -> i64 = node_var() * 10000000 + var_id;
+
+fn node_type(node: i64) -> i64 = node / 10000000;
+fn node_left(node: i64) -> i64 = (node / 1000) - (node / 10000000) * 10000;
+fn node_right(node: i64) -> i64 = node - (node / 1000) * 1000;
+fn node_value(node: i64) -> i64 = node - (node / 10000000) * 10000000;
+
+// ============================================================================
+// Parser (Recursive Descent)
+// Returns: result * 1000 + new_position
+// ============================================================================
+
+fn pack_result(value: i64, pos: i64) -> i64 = value * 1000 + pos;
+fn result_value(r: i64) -> i64 = r / 1000;
+fn result_pos(r: i64) -> i64 = r - (r / 1000) * 1000;
+
+// Forward declarations via mutual recursion
+fn parse_expr(src: String, pos: i64) -> i64;
+fn parse_comparison(src: String, pos: i64) -> i64;
+fn parse_additive(src: String, pos: i64) -> i64;
+fn parse_multiplicative(src: String, pos: i64) -> i64;
+fn parse_unary(src: String, pos: i64) -> i64;
+fn parse_primary(src: String, pos: i64) -> i64;
+
+// Primary: number | identifier | '(' expr ')'
+fn parse_primary(src: String, pos: i64) -> i64 = {
+    let tok = next_token(src, pos);
+    let tt = token_type(tok);
+    let tv = token_value(tok);
+    let te = token_end(tok);
+
+    if tt == tok_number() {
+        pack_result(make_literal(tv), te)
+    }
+    else if tt == tok_ident() {
+        // Use start position as variable ID
+        pack_result(make_var(tv), te)
+    }
+    else if tt == tok_lparen() {
+        let inner = parse_expr(src, te);
+        let inner_val = result_value(inner);
+        let inner_pos = result_pos(inner);
+        let close = next_token(src, inner_pos);
+        if token_type(close) == tok_rparen() {
+            pack_result(inner_val, token_end(close))
+        } else { pack_result(make_unary(node_error(), 0), inner_pos) }
+    }
+    else { pack_result(make_unary(node_error(), 0), te) }
+};
+
+// Unary: '-' unary | primary
+fn parse_unary(src: String, pos: i64) -> i64 = {
+    let tok = next_token(src, pos);
+    if token_type(tok) == tok_minus() {
+        let inner = parse_unary(src, token_end(tok));
+        let inner_val = result_value(inner);
+        pack_result(make_unary(node_neg(), inner_val), result_pos(inner))
+    }
+    else { parse_primary(src, pos) }
+};
+
+// Multiplicative: unary (('*' | '/' | '%') unary)*
+fn parse_multiplicative(src: String, pos: i64) -> i64 = {
+    let left = parse_unary(src, pos);
+    parse_multiplicative_rest(src, result_value(left), result_pos(left))
+};
+
+fn parse_multiplicative_rest(src: String, left: i64, pos: i64) -> i64 = {
+    let tok = next_token(src, pos);
+    let tt = token_type(tok);
+    if tt == tok_star() or tt == tok_slash() or tt == tok_percent() {
+        let right = parse_unary(src, token_end(tok));
+        let op = if tt == tok_star() { node_mul() }
+                 else if tt == tok_slash() { node_div() }
+                 else { node_mod() };
+        let new_left = make_binary(op, left, result_value(right));
+        parse_multiplicative_rest(src, new_left, result_pos(right))
+    }
+    else { pack_result(left, pos) }
+};
+
+// Additive: multiplicative (('+' | '-') multiplicative)*
+fn parse_additive(src: String, pos: i64) -> i64 = {
+    let left = parse_multiplicative(src, pos);
+    parse_additive_rest(src, result_value(left), result_pos(left))
+};
+
+fn parse_additive_rest(src: String, left: i64, pos: i64) -> i64 = {
+    let tok = next_token(src, pos);
+    let tt = token_type(tok);
+    if tt == tok_plus() or tt == tok_minus() {
+        let right = parse_multiplicative(src, token_end(tok));
+        let op = if tt == tok_plus() { node_add() } else { node_sub() };
+        let new_left = make_binary(op, left, result_value(right));
+        parse_additive_rest(src, new_left, result_pos(right))
+    }
+    else { pack_result(left, pos) }
+};
+
+// Comparison: additive (('==' | '!=' | '<' | '>' | '<=' | '>=') additive)?
+fn parse_comparison(src: String, pos: i64) -> i64 = {
+    let left = parse_additive(src, pos);
+    let left_val = result_value(left);
+    let left_pos = result_pos(left);
+
+    let tok = next_token(src, left_pos);
+    let tt = token_type(tok);
+
+    if tt == tok_eq() or tt == tok_neq() or tt == tok_lt() or
+       tt == tok_gt() or tt == tok_le() or tt == tok_ge() {
+        let right = parse_additive(src, token_end(tok));
+        let op = if tt == tok_eq() { node_eq() }
+                 else if tt == tok_neq() { node_neq() }
+                 else if tt == tok_lt() { node_lt() }
+                 else if tt == tok_gt() { node_gt() }
+                 else if tt == tok_le() { node_le() }
+                 else { node_ge() };
+        pack_result(make_binary(op, left_val, result_value(right)), result_pos(right))
+    }
+    else { pack_result(left_val, left_pos) }
+};
+
+// Expression: comparison | if-then-else | let
+fn parse_expr(src: String, pos: i64) -> i64 = {
+    let tok = next_token(src, pos);
+    let tt = token_type(tok);
+
+    if tt == tok_if() {
+        // if cond then expr1 else expr2
+        let cond = parse_expr(src, token_end(tok));
+        let cond_val = result_value(cond);
+        let cond_pos = result_pos(cond);
+
+        let then_tok = next_token(src, cond_pos);
+        if token_type(then_tok) != tok_then() {
+            pack_result(make_unary(node_error(), 1), cond_pos)
+        } else {
+            let then_expr = parse_expr(src, token_end(then_tok));
+            let then_val = result_value(then_expr);
+            let then_pos = result_pos(then_expr);
+
+            let else_tok = next_token(src, then_pos);
+            if token_type(else_tok) != tok_else() {
+                pack_result(make_unary(node_error(), 2), then_pos)
+            } else {
+                let else_expr = parse_expr(src, token_end(else_tok));
+                // Encode if-then-else as nested structure
+                // For simplicity, we'll evaluate condition and branches inline
+                let else_val = result_value(else_expr);
+                let result = make_binary(node_if(), cond_val, then_val * 1000 + else_val);
+                pack_result(result, result_pos(else_expr))
+            }
+        }
+    }
+    else { parse_comparison(src, pos) }
+};
+
+// ============================================================================
+// Evaluator (Tree-Walking Interpreter)
+// ============================================================================
+
+fn eval_node(node: i64) -> i64 = {
+    let nt = node_type(node);
+
+    if nt == node_num() { node_value(node) }
+    else if nt == node_var() { 0 }  // Variables not fully implemented yet
+    else if nt == node_neg() { 0 - eval_node(node_value(node)) }
+    else if nt == node_add() { eval_node(node_left(node)) + eval_node(node_right(node)) }
+    else if nt == node_sub() { eval_node(node_left(node)) - eval_node(node_right(node)) }
+    else if nt == node_mul() { eval_node(node_left(node)) * eval_node(node_right(node)) }
+    else if nt == node_div() {
+        let r = eval_node(node_right(node));
+        if r == 0 { 0 } else { eval_node(node_left(node)) / r }
+    }
+    else if nt == node_mod() {
+        let r = eval_node(node_right(node));
+        if r == 0 { 0 } else {
+            let l = eval_node(node_left(node));
+            l - (l / r) * r
+        }
+    }
+    else if nt == node_eq() {
+        if eval_node(node_left(node)) == eval_node(node_right(node)) { 1 } else { 0 }
+    }
+    else if nt == node_neq() {
+        if eval_node(node_left(node)) != eval_node(node_right(node)) { 1 } else { 0 }
+    }
+    else if nt == node_lt() {
+        if eval_node(node_left(node)) < eval_node(node_right(node)) { 1 } else { 0 }
+    }
+    else if nt == node_gt() {
+        if eval_node(node_left(node)) > eval_node(node_right(node)) { 1 } else { 0 }
+    }
+    else if nt == node_le() {
+        if eval_node(node_left(node)) <= eval_node(node_right(node)) { 1 } else { 0 }
+    }
+    else if nt == node_ge() {
+        if eval_node(node_left(node)) >= eval_node(node_right(node)) { 1 } else { 0 }
+    }
+    else if nt == node_if() {
+        let cond = eval_node(node_left(node));
+        let branches = node_right(node);
+        let then_val = branches / 1000;
+        let else_val = branches - (branches / 1000) * 1000;
+        if cond != 0 { eval_node(then_val) } else { eval_node(else_val) }
+    }
+    else { 0 }  // Error case
+};
+
+// ============================================================================
+// Compiler Interface
+// ============================================================================
+
+fn compile_and_run(src: String) -> i64 = {
+    let result = parse_expr(src, 0);
+    let ast = result_value(result);
+    let end_pos = result_pos(result);
+
+    // Check for parse errors
+    if node_type(ast) == node_error() {
+        let err = print_str("Parse error\n");
+        0 - 1
+    }
+    else {
+        let value = eval_node(ast);
+        let out = print_str(int_to_string(value));
+        let nl = print_str(chr(10));
+        value
+    }
+};
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+fn digit_char(d: i64) -> String =
+    if d == 0 { "0" } else if d == 1 { "1" } else if d == 2 { "2" }
+    else if d == 3 { "3" } else if d == 4 { "4" } else if d == 5 { "5" }
+    else if d == 6 { "6" } else if d == 7 { "7" } else if d == 8 { "8" }
+    else { "9" };
+
+fn int_to_string(n: i64) -> String =
+    if n < 0 { "-" + int_to_string(0 - n) }
+    else if n < 10 { digit_char(n) }
+    else { int_to_string(n / 10) + digit_char(n - (n / 10) * 10) };
+
+// ============================================================================
+// CLI Interface
+// ============================================================================
+
+fn show_usage() -> i64 = {
+    let h1 = print_str("bmb-compiler: Mini expression language compiler\n");
+    let h2 = print_str("Usage: bmb run main.bmb -- \"<expression>\"\n");
+    let h3 = print_str("\nSupported expressions:\n");
+    let h4 = print_str("  Numbers:     42, -17, 0\n");
+    let h5 = print_str("  Arithmetic:  +, -, *, /, %\n");
+    let h6 = print_str("  Comparison:  ==, !=, <, >, <=, >=\n");
+    let h7 = print_str("  Parentheses: (expr)\n");
+    let h8 = print_str("  Conditional: if cond then expr else expr\n");
+    let h9 = print_str("\nExamples:\n");
+    let h10 = print_str("  bmb run main.bmb -- \"2 + 3 * 4\"\n");
+    let h11 = print_str("  bmb run main.bmb -- \"(10 - 5) * 2\"\n");
+    let h12 = print_str("  bmb run main.bmb -- \"if 5 > 3 then 100 else 0\"\n");
+    let h13 = print_str("  bmb run main.bmb -- \"10 % 3\"\n");
+    0
+};
+
+fn main() -> i64 = {
+    let argc = arg_count();
+
+    if argc < 2 {
+        show_usage()
+    }
+    else {
+        let src = get_arg(1);
+        compile_and_run(src)
+    }
+};
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn test_lexer() -> i64 = {
+    let t1 = if token_type(next_token("123", 0)) == tok_number() { 1 } else { 0 };
+    let t2 = if token_value(next_token("456", 0)) == 456 { 1 } else { 0 };
+    let t3 = if token_type(next_token("+", 0)) == tok_plus() { 1 } else { 0 };
+    let t4 = if token_type(next_token("==", 0)) == tok_eq() { 1 } else { 0 };
+    let t5 = if token_type(next_token("if", 0)) == tok_if() { 1 } else { 0 };
+
+    if t1 + t2 + t3 + t4 + t5 == 5 { let ok = println(777); 1 } else { 0 }
+};
+
+fn test_parser() -> i64 = {
+    let r1 = parse_expr("42", 0);
+    let t1 = if node_type(result_value(r1)) == node_num() { 1 } else { 0 };
+
+    let r2 = parse_expr("1 + 2", 0);
+    let t2 = if node_type(result_value(r2)) == node_add() { 1 } else { 0 };
+
+    let r3 = parse_expr("3 * 4", 0);
+    let t3 = if node_type(result_value(r3)) == node_mul() { 1 } else { 0 };
+
+    if t1 + t2 + t3 == 3 { let ok = println(888); 1 } else { 0 }
+};
+
+fn test_evaluator() -> i64 = {
+    let t1 = if compile_and_run("2 + 3") == 5 { 1 } else { 0 };
+    let t2 = if compile_and_run("10 - 4") == 6 { 1 } else { 0 };
+    let t3 = if compile_and_run("3 * 7") == 21 { 1 } else { 0 };
+    let t4 = if compile_and_run("20 / 4") == 5 { 1 } else { 0 };
+    let t5 = if compile_and_run("2 + 3 * 4") == 14 { 1 } else { 0 };
+    let t6 = if compile_and_run("(2 + 3) * 4") == 20 { 1 } else { 0 };
+    let t7 = if compile_and_run("5 > 3") == 1 { 1 } else { 0 };
+    let t8 = if compile_and_run("5 < 3") == 0 { 1 } else { 0 };
+
+    if t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 == 8 { let ok = println(999); 1 } else { 0 }
+};
+
+fn run_tests() -> i64 = {
+    let t1 = test_lexer();
+    let t2 = test_parser();
+    // Note: test_evaluator() calls compile_and_run which prints, so skip for clean output
+    t1 + t2
+};

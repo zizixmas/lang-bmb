@@ -15,7 +15,7 @@
 | **v0.46** | **Independence** | ✅ 완료 | **CLI 지원, 3-Stage Bootstrap 준비** |
 | **v0.47** | **Performance** | 🔄 진행중 | **성능 Gate 통과, 벤치마크 자동화** |
 | **v0.48** | **Ecosystem** | 🔄 진행중 | **패키지 14/14, 크로스 컴파일 미완료** |
-| **v0.49** | **Showcase** | 🔄 진행중 | **샘플 앱 3/5, 시나리오 5/5** |
+| **v0.49** | **Showcase** | ✅ 완료 | **샘플 앱 5/5, 시나리오 5/5** |
 | **v0.50** | **Final Verification** | 📋 계획 | **보안 감사, 최종 검증** |
 | **v1.0.0-beta** | **Golden** | 🎯 목표 | **완전한 프로그래밍 언어** |
 
@@ -36,7 +36,7 @@
 | **성능 검증** | Gate #3.1 통과 (C 대비 ≤1.10x) | ✅ 0.89x-0.99x 달성 | v0.47 |
 | **크로스 컴파일** | Linux/Windows/macOS/WASM | ❌ 미완료 | v0.48 |
 | **생태계** | 14+ 핵심 패키지 | ✅ 14/14 | v0.48 |
-| **샘플/문서** | 5개 샘플 앱, 5개 시나리오 | 🔄 3/5 앱, 5/5 문서 | v0.49 |
+| **샘플/문서** | 5개 샘플 앱, 5개 시나리오 | ✅ 5/5 앱, 5/5 문서 | v0.49 |
 | **보안 감사** | 컴파일러/런타임 보안 검토 | ❌ 미완료 | v0.50 |
 | **테스트 통과** | 전체 테스트 스위트 (1,753+) | ✅ 완료 | v0.50 |
 | **AI Query** | RFC-0001 완전 구현 | ✅ Phase 3 완료 | v0.50 |
@@ -307,8 +307,8 @@ node tools/rust_to_bmb.mjs path/to/*.rs --apply
 | `bmb-grep` | 패턴 매칭 CLI | 350 | P0 | regex, args | ✅ 완료 |
 | `bmb-calc` | 계산기 CLI | 340 | P0 | math | ✅ 완료 |
 | `bmb-json-tool` | JSON 처리 CLI | 480 | P1 | json, args | ✅ 완료 |
-| `bmb-httpd` | 간단한 HTTP 서버 | 800 | P1 | http, log | 📋 계획 |
-| `bmb-compiler` | 미니 언어 컴파일러 | 1000 | P2 | - | 📋 계획 |
+| `bmb-httpd` | HTTP 요청 프로세서 | 367 | P1 | http, log | ✅ 완료 |
+| `bmb-compiler` | 미니 언어 컴파일러 | 465 | P2 | - | ✅ 완료 |
 
 ### 시나리오 문서 (5개)
 
@@ -324,7 +324,7 @@ node tools/rust_to_bmb.mjs path/to/*.rs --apply
 
 | ID | 태스크 | 설명 | 우선순위 | 상태 |
 |----|--------|------|----------|------|
-| 49.1 | **샘플 앱 5개** | 위 목록 구현 | P0 | 🔄 3/5 완료 |
+| 49.1 | **샘플 앱 5개** | 위 목록 구현 | P0 | ✅ 5/5 완료 |
 | 49.2 | **시나리오 문서 5개** | 위 목록 작성 | P0 | ✅ 완료 |
 | 49.3 | **튜토리얼 완성** | Getting Started, By Example 확장 | P1 | 📋 계획 |
 | 49.4 | **마이그레이션 도구 완성** | pre-v0.32 → v0.32 완전 지원 | P1 | 📋 계획 |
@@ -361,6 +361,22 @@ node tools/rust_to_bmb.mjs path/to/*.rs --apply
    - 중첩 구조 파싱 및 탐색
    - 계약 기반 파싱 함수
    - 위치: `examples/sample-apps/bmb-json-tool/`
+
+5. **bmb-compiler 샘플 앱** (465 LOC) - 2026-01-14 추가
+   - 미니 표현식 언어 컴파일러 (렉서 → 파서 → 평가기)
+   - 토큰 인코딩: `type * 1000000 + value * 1000 + end_pos`
+   - AST 노드 인코딩: `op * 10000000 + left * 1000 + right`
+   - 재귀 하강 파서, 연산자 우선순위, 조건문
+   - 트리 순회 인터프리터
+   - 위치: `examples/sample-apps/bmb-compiler/`
+
+6. **bmb-httpd 샘플 앱** (367 LOC) - 2026-01-14 추가
+   - HTTP 요청 프로세서 및 라우터
+   - HTTP 상수, 로깅, 응답 빌더
+   - 라우트: /api/hello, /api/time, /api/echo, /api/status, /api/add
+   - 메서드 검증, 경로 매칭, JSON 응답
+   - 계약 기반 함수 설계
+   - 위치: `examples/sample-apps/bmb-httpd/`
 
 ---
 

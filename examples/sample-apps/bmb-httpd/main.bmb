@@ -1,0 +1,366 @@
+// bmb-httpd: HTTP request processor and response generator
+// Demonstrates HTTP protocol handling in BMB
+//
+// Usage: bmb run main.bmb -- "<method>" "<path>" [body]
+// Example: bmb run main.bmb -- "GET" "/api/hello"
+//          bmb run main.bmb -- "POST" "/api/echo" "hello world"
+//          bmb run main.bmb -- "GET" "/api/time"
+
+// ============================================================================
+// HTTP Constants
+// ============================================================================
+
+// Methods
+fn method_get() -> i64 = 1;
+fn method_post() -> i64 = 2;
+fn method_put() -> i64 = 3;
+fn method_delete() -> i64 = 4;
+
+// Status codes
+fn status_ok() -> i64 = 200;
+fn status_created() -> i64 = 201;
+fn status_bad_request() -> i64 = 400;
+fn status_not_found() -> i64 = 404;
+fn status_method_not_allowed() -> i64 = 405;
+fn status_server_error() -> i64 = 500;
+
+fn status_text(code: i64) -> String =
+    if code == 200 { "OK" }
+    else if code == 201 { "Created" }
+    else if code == 400 { "Bad Request" }
+    else if code == 404 { "Not Found" }
+    else if code == 405 { "Method Not Allowed" }
+    else if code == 500 { "Internal Server Error" }
+    else { "Unknown" };
+
+fn method_text(m: i64) -> String =
+    if m == method_get() { "GET" }
+    else if m == method_post() { "POST" }
+    else if m == method_put() { "PUT" }
+    else if m == method_delete() { "DELETE" }
+    else { "UNKNOWN" };
+
+// ============================================================================
+// Logging (from bmb-log concepts)
+// ============================================================================
+
+fn level_info() -> i64 = 2;
+fn level_warn() -> i64 = 3;
+fn level_error() -> i64 = 4;
+
+fn log_level_name(level: i64) -> String =
+    if level == 2 { "INFO" }
+    else if level == 3 { "WARN" }
+    else if level == 4 { "ERROR" }
+    else { "DEBUG" };
+
+fn log_msg(level: i64, msg: String) -> i64 = {
+    let u1 = print_str("[");
+    let u2 = print_str(log_level_name(level));
+    let u3 = print_str("] ");
+    let u4 = print_str(msg);
+    let u5 = print_str(chr(10));
+    0
+};
+
+fn log_info(msg: String) -> i64 = log_msg(level_info(), msg);
+fn log_warn(msg: String) -> i64 = log_msg(level_warn(), msg);
+fn log_error(msg: String) -> i64 = log_msg(level_error(), msg);
+
+// ============================================================================
+// String Utilities
+// ============================================================================
+
+fn digit_char(d: i64) -> String =
+    if d == 0 { "0" } else if d == 1 { "1" } else if d == 2 { "2" }
+    else if d == 3 { "3" } else if d == 4 { "4" } else if d == 5 { "5" }
+    else if d == 6 { "6" } else if d == 7 { "7" } else if d == 8 { "8" }
+    else { "9" };
+
+fn int_to_string(n: i64) -> String =
+    if n < 0 { "-" + int_to_string(0 - n) }
+    else if n < 10 { digit_char(n) }
+    else { int_to_string(n / 10) + digit_char(n - (n / 10) * 10) };
+
+fn str_eq(a: String, b: String) -> bool = a == b;
+
+fn starts_with_at(s: String, prefix: String, pos: i64, ppos: i64) -> bool =
+    if ppos >= prefix.len() { true }
+    else if pos >= s.len() { false }
+    else if s.byte_at(pos) != prefix.byte_at(ppos) { false }
+    else { starts_with_at(s, prefix, pos + 1, ppos + 1) };
+
+fn starts_with(s: String, prefix: String) -> bool = starts_with_at(s, prefix, 0, 0);
+
+// ============================================================================
+// Request Parsing
+// ============================================================================
+
+fn parse_method(method_str: String) -> i64 =
+    if str_eq(method_str, "GET") { method_get() }
+    else if str_eq(method_str, "POST") { method_post() }
+    else if str_eq(method_str, "PUT") { method_put() }
+    else if str_eq(method_str, "DELETE") { method_delete() }
+    else { 0 };
+
+fn is_valid_path(path: String) -> bool
+  post ret == true or ret == false
+= path.len() > 0 and path.byte_at(0) == 47;  // starts with /
+
+// ============================================================================
+// Response Building
+// ============================================================================
+
+fn send_status_line(status: i64) -> i64 = {
+    let u1 = print_str("HTTP/1.1 ");
+    let u2 = print_str(int_to_string(status));
+    let u3 = print_str(" ");
+    let u4 = print_str(status_text(status));
+    let u5 = print_str(chr(10));
+    0
+};
+
+fn send_header(name: String, value: String) -> i64 = {
+    let u1 = print_str(name);
+    let u2 = print_str(": ");
+    let u3 = print_str(value);
+    let u4 = print_str(chr(10));
+    0
+};
+
+fn send_body(body: String) -> i64 = {
+    let u1 = print_str(chr(10));  // blank line before body
+    let u2 = print_str(body);
+    let u3 = print_str(chr(10));
+    0
+};
+
+fn send_json_response(status: i64, json_body: String) -> i64 = {
+    let u1 = send_status_line(status);
+    let u2 = send_header("Content-Type", "application/json");
+    let u3 = send_header("Content-Length", int_to_string(json_body.len()));
+    let u4 = send_body(json_body);
+    status
+};
+
+fn send_text_response(status: i64, text_body: String) -> i64 = {
+    let u1 = send_status_line(status);
+    let u2 = send_header("Content-Type", "text/plain");
+    let u3 = send_header("Content-Length", int_to_string(text_body.len()));
+    let u4 = send_body(text_body);
+    status
+};
+
+fn send_error(status: i64, message: String) -> i64 = {
+    let body = "{\"error\":\"" + message + "\"}";
+    send_json_response(status, body)
+};
+
+// ============================================================================
+// Route Handlers
+// ============================================================================
+
+// GET /api/hello - Simple greeting
+fn handle_hello(method: i64) -> i64 =
+    if method != method_get() {
+        send_error(status_method_not_allowed(), "Method not allowed")
+    }
+    else {
+        let body = "{\"message\":\"Hello, World!\"}";
+        send_json_response(status_ok(), body)
+    };
+
+// GET /api/time - Current "time" (simulated counter)
+fn handle_time(method: i64) -> i64 =
+    if method != method_get() {
+        send_error(status_method_not_allowed(), "Method not allowed")
+    }
+    else {
+        // Simulated timestamp (would be real time in actual server)
+        let timestamp = 1705276800;  // 2024-01-14 fake timestamp
+        let body = "{\"timestamp\":" + int_to_string(timestamp) + "}";
+        send_json_response(status_ok(), body)
+    };
+
+// POST /api/echo - Echo back the request body
+fn handle_echo(method: i64, body: String) -> i64 =
+    if method != method_post() {
+        send_error(status_method_not_allowed(), "Method not allowed")
+    }
+    else {
+        let response_body = "{\"echo\":\"" + body + "\"}";
+        send_json_response(status_ok(), response_body)
+    };
+
+// GET /api/status - Server status
+fn handle_status(method: i64) -> i64 =
+    if method != method_get() {
+        send_error(status_method_not_allowed(), "Method not allowed")
+    }
+    else {
+        let body = "{\"status\":\"running\",\"version\":\"0.1.0\"}";
+        send_json_response(status_ok(), body)
+    };
+
+// POST /api/add - Add two numbers from body "a,b"
+fn parse_add_body(body: String, pos: i64, acc: i64) -> i64 =
+    if pos >= body.len() { acc }
+    else {
+        let c = body.byte_at(pos);
+        if c >= 48 and c <= 57 { parse_add_body(body, pos + 1, acc * 10 + (c - 48)) }
+        else { acc }
+    };
+
+fn find_comma(body: String, pos: i64) -> i64 =
+    if pos >= body.len() { 0 - 1 }
+    else if body.byte_at(pos) == 44 { pos }  // ,
+    else { find_comma(body, pos + 1) };
+
+fn handle_add(method: i64, body: String) -> i64 =
+    if method != method_post() {
+        send_error(status_method_not_allowed(), "Method not allowed")
+    }
+    else {
+        let comma = find_comma(body, 0);
+        if comma < 0 {
+            send_error(status_bad_request(), "Expected format: a,b")
+        }
+        else {
+            let a = parse_add_body(body, 0, 0);
+            let b = parse_add_body(body, comma + 1, 0);
+            let sum = a + b;
+            let response = "{\"a\":" + int_to_string(a) + ",\"b\":" + int_to_string(b) +
+                          ",\"sum\":" + int_to_string(sum) + "}";
+            send_json_response(status_ok(), response)
+        }
+    };
+
+// ============================================================================
+// Router
+// ============================================================================
+
+fn route_request(method: i64, path: String, body: String) -> i64 = {
+    let l = log_info(method_text(method) + " " + path);
+
+    if str_eq(path, "/api/hello") { handle_hello(method) }
+    else if str_eq(path, "/api/time") { handle_time(method) }
+    else if str_eq(path, "/api/echo") { handle_echo(method, body) }
+    else if str_eq(path, "/api/status") { handle_status(method) }
+    else if str_eq(path, "/api/add") { handle_add(method, body) }
+    else if str_eq(path, "/") { handle_hello(method) }
+    else {
+        let w = log_warn("Route not found: " + path);
+        send_error(status_not_found(), "Not Found")
+    }
+};
+
+// ============================================================================
+// CLI Interface
+// ============================================================================
+
+fn is_flag_arg(s: String) -> bool =
+    s.len() > 0 and s.byte_at(0) == 45;
+
+fn get_positional_rec(n: i64, idx: i64, current: i64) -> String =
+    if idx >= arg_count() { "" }
+    else {
+        let arg = get_arg(idx);
+        if is_flag_arg(arg) { get_positional_rec(n, idx + 1, current) }
+        else if current == n { arg }
+        else { get_positional_rec(n, idx + 1, current + 1) }
+    };
+
+fn get_positional(n: i64) -> String
+  pre n >= 0
+= get_positional_rec(n, 1, 0);
+
+fn count_positional_rec(idx: i64, count: i64) -> i64 =
+    if idx >= arg_count() { count }
+    else {
+        let arg = get_arg(idx);
+        if is_flag_arg(arg) { count_positional_rec(idx + 1, count) }
+        else { count_positional_rec(idx + 1, count + 1) }
+    };
+
+fn count_positional() -> i64
+  post ret >= 0
+= count_positional_rec(1, 0);
+
+fn show_usage() -> i64 = {
+    let h1 = print_str("bmb-httpd: HTTP request processor\n");
+    let h2 = print_str("Usage: bmb run main.bmb -- <method> <path> [body]\n");
+    let h3 = print_str("\nRoutes:\n");
+    let h4 = print_str("  GET  /              Hello endpoint\n");
+    let h5 = print_str("  GET  /api/hello     Returns greeting JSON\n");
+    let h6 = print_str("  GET  /api/time      Returns timestamp JSON\n");
+    let h7 = print_str("  GET  /api/status    Returns server status\n");
+    let h8 = print_str("  POST /api/echo      Echoes request body\n");
+    let h9 = print_str("  POST /api/add       Adds two numbers (body: a,b)\n");
+    let h10 = print_str("\nExamples:\n");
+    let h11 = print_str("  bmb run main.bmb -- GET /api/hello\n");
+    let h12 = print_str("  bmb run main.bmb -- POST /api/echo \"hello\"\n");
+    let h13 = print_str("  bmb run main.bmb -- POST /api/add \"10,25\"\n");
+    0
+};
+
+fn main() -> i64 = {
+    let pos_count = count_positional();
+
+    if pos_count < 2 {
+        show_usage()
+    }
+    else {
+        let method_str = get_positional(0);
+        let path = get_positional(1);
+        let body = if pos_count >= 3 { get_positional(2) } else { "" };
+
+        let method = parse_method(method_str);
+        if method == 0 {
+            let e = log_error("Invalid method: " + method_str);
+            send_error(status_bad_request(), "Invalid method")
+        }
+        else if not is_valid_path(path) {
+            let e = log_error("Invalid path: " + path);
+            send_error(status_bad_request(), "Invalid path")
+        }
+        else {
+            route_request(method, path, body)
+        }
+    }
+};
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn test_parsing() -> i64 = {
+    let t1 = if parse_method("GET") == method_get() { 1 } else { 0 };
+    let t2 = if parse_method("POST") == method_post() { 1 } else { 0 };
+    let t3 = if is_valid_path("/api/test") { 1 } else { 0 };
+    let t4 = if not is_valid_path("invalid") { 1 } else { 0 };
+
+    if t1 + t2 + t3 + t4 == 4 { let ok = println(777); 1 } else { 0 }
+};
+
+fn test_routing() -> i64 = {
+    let t1 = if str_eq("/api/hello", "/api/hello") { 1 } else { 0 };
+    let t2 = if starts_with("/api/test", "/api") { 1 } else { 0 };
+    let t3 = if not starts_with("/other", "/api") { 1 } else { 0 };
+
+    if t1 + t2 + t3 == 3 { let ok = println(888); 1 } else { 0 }
+};
+
+fn test_utils() -> i64 = {
+    let t1 = if int_to_string(123) == "123" { 1 } else { 0 };
+    let t2 = if int_to_string(0) == "0" { 1 } else { 0 };
+    let t3 = if find_comma("10,20", 0) == 2 { 1 } else { 0 };
+
+    if t1 + t2 + t3 == 3 { let ok = println(999); 1 } else { 0 }
+};
+
+fn run_tests() -> i64 = {
+    let t1 = test_parsing();
+    let t2 = test_routing();
+    let t3 = test_utils();
+    t1 + t2 + t3
+};
