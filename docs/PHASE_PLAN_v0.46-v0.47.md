@@ -1,6 +1,6 @@
 # Phase Plan: v0.46 → v0.47
 
-> **작성일**: 2026-01-14 | **범위**: v0.46 완료 → v0.47 성능 검증
+> **작성일**: 2026-01-14 | **업데이트**: 2026-01-14 | **범위**: v0.46 완료 → v0.47 성능 검증
 
 ---
 
@@ -199,7 +199,7 @@ jobs:
 | 문제 | 영향 | 개선안 |
 |------|------|--------|
 | **String 오버헤드** | json_parse 2.5x 느림 | String View/Slice 도입 |
-| **sqrt intrinsic 부재** | n_body 미완료 | stdlib/math 완성 |
+| ~~**sqrt intrinsic 부재**~~ | ~~n_body 미완료~~ | ✅ 이미 구현됨 |
 | **힙 할당 제한** | binary_trees 미완료 | 동적 컬렉션 완성 |
 | **Windows LLVM 부재** | 크로스 플랫폼 제한 | WSL 의존 문서화 |
 
@@ -249,12 +249,13 @@ cargo build --release --features llvm
 
 ### 단기 계획 (v0.47)
 
-| 주차 | 태스크 | 산출물 |
-|------|--------|--------|
-| 1 | sqrt intrinsic 추가 | stdlib/math/f64.bmb |
-| 1 | n_body 벤치마크 완료 | Gate #3.1 100% |
-| 2 | 계약 최적화 검증 | Gate #3.3 진행 |
-| 2 | CI 벤치마크 자동화 | 회귀 방지 체계 |
+| 태스크 | 산출물 | 상태 |
+|--------|--------|------|
+| sqrt intrinsic | stdlib/math/f64.bmb | ✅ 이미 구현됨 |
+| 벤치마크 구현 | 26개 BMB 벤치마크 | ✅ 모두 완료 |
+| CI 벤치마크 자동화 | .github/workflows/benchmark.yml | ✅ 완료 |
+| 3-Stage 스크립트 개선 | scripts/bootstrap_3stage.sh | ✅ 완료 |
+| 계약 최적화 검증 | Gate #3.3 진행 | ⏳ WSL 필요 |
 
 ---
 
@@ -262,14 +263,41 @@ cargo build --release --features llvm
 
 ### v0.46 완료
 
-- [ ] 3-Stage Bootstrap 검증 통과
+- [ ] 3-Stage Bootstrap 검증 통과 (WSL에서 실행 필요)
 - [ ] Stage 2 == Stage 3 동일성 확인
 - [ ] 부트스트랩 테스트 Stage 3로 통과
 
 ### v0.47 완료
 
-- [ ] Gate #3.1: 모든 compute 벤치마크 ≤1.10x C
+- [x] Gate #3.1: 모든 compute 벤치마크 ≤1.10x C (✅ 0.89x-0.99x 달성)
 - [ ] Gate #3.2: Benchmarks Game 11개 ≤1.05x C
-- [ ] Gate #3.3: 3+ 벤치마크 < C
-- [ ] CI 벤치마크 회귀 테스트 구축
-- [ ] 성능 문서 최신화
+- [ ] Gate #3.3: 3+ 벤치마크 < C (fibonacci, mandelbrot, spectral_norm 이미 달성)
+- [x] CI 벤치마크 회귀 테스트 구축 (.github/workflows/benchmark.yml)
+- [x] 성능 문서 최신화 (docs/BENCHMARK_COMPARISON.md)
+- [x] 26개 BMB 벤치마크 구현 완료
+
+---
+
+## 2026-01-14 세션 완료 작업
+
+### 생성된 파일
+
+| 파일 | 설명 |
+|------|------|
+| `.github/workflows/benchmark.yml` | 벤치마크 CI 자동화 워크플로 |
+| `docs/BENCHMARK_COMPARISON.md` | C/Rust/BMB 성능 비교 리포트 |
+| `docs/PHASE_PLAN_v0.46-v0.47.md` | 페이즈 계획 문서 |
+
+### 개선된 파일
+
+| 파일 | 변경 내용 |
+|------|----------|
+| `scripts/bootstrap_3stage.sh` | 진정한 3-Stage 검증 (Stage 2 바이너리 → Stage 3) |
+| `README.md` | v0.46 상태, 성능 결과 추가 |
+| `docs/ROADMAP.md` | Gate #3.1 완료 상태, 벤치마크 결과 추가 |
+
+### 발견 사항
+
+1. **sqrt intrinsic 이미 구현됨** - n_body 벤치마크 실행 가능
+2. **26개 BMB 벤치마크 모두 완료** - 미완료 구현 없음
+3. **3-Stage 스크립트 버그 수정** - Stage 3가 인터프리터 대신 Stage 2 바이너리 사용
