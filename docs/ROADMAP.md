@@ -15,7 +15,7 @@
 | **v0.46** | **Independence** | ✅ 완료 | **CLI 지원, 3-Stage Bootstrap 준비** |
 | **v0.47** | **Performance** | 🔄 진행중 | **성능 Gate 통과, 벤치마크 자동화** |
 | **v0.48** | **Ecosystem** | 🔄 진행중 | **패키지 14/14, 크로스 컴파일 미완료** |
-| **v0.49** | **Showcase** | 🔄 진행중 | **샘플 앱 1/5, 시나리오 5/5** |
+| **v0.49** | **Showcase** | 🔄 진행중 | **샘플 앱 3/5, 시나리오 5/5** |
 | **v0.50** | **Final Verification** | 📋 계획 | **보안 감사, 최종 검증** |
 | **v1.0.0-beta** | **Golden** | 🎯 목표 | **완전한 프로그래밍 언어** |
 
@@ -36,7 +36,7 @@
 | **성능 검증** | Gate #3.1 통과 (C 대비 ≤1.10x) | ✅ 0.89x-0.99x 달성 | v0.47 |
 | **크로스 컴파일** | Linux/Windows/macOS/WASM | ❌ 미완료 | v0.48 |
 | **생태계** | 14+ 핵심 패키지 | ✅ 14/14 | v0.48 |
-| **샘플/문서** | 5개 샘플 앱, 5개 시나리오 | 🔄 1/5 앱, 5/5 문서 | v0.49 |
+| **샘플/문서** | 5개 샘플 앱, 5개 시나리오 | 🔄 3/5 앱, 5/5 문서 | v0.49 |
 | **보안 감사** | 컴파일러/런타임 보안 검토 | ❌ 미완료 | v0.50 |
 | **테스트 통과** | 전체 테스트 스위트 (1,753+) | ✅ 완료 | v0.50 |
 | **AI Query** | RFC-0001 완전 구현 | ✅ Phase 3 완료 | v0.50 |
@@ -304,9 +304,9 @@ node tools/rust_to_bmb.mjs path/to/*.rs --apply
 
 | 샘플 | 설명 | LOC | 우선순위 | 사용 패키지 | 상태 |
 |------|------|-----|----------|------------|------|
-| `bmb-grep` | grep 클론 | 500 | P0 | regex, fs, args | 📋 계획 |
+| `bmb-grep` | 패턴 매칭 CLI | 350 | P0 | regex, args | ✅ 완료 |
 | `bmb-calc` | 계산기 CLI | 340 | P0 | math | ✅ 완료 |
-| `bmb-json-tool` | JSON 처리 CLI | 400 | P1 | json, fs, args | 📋 계획 |
+| `bmb-json-tool` | JSON 처리 CLI | 480 | P1 | json, args | ✅ 완료 |
 | `bmb-httpd` | 간단한 HTTP 서버 | 800 | P1 | http, log | 📋 계획 |
 | `bmb-compiler` | 미니 언어 컴파일러 | 1000 | P2 | - | 📋 계획 |
 
@@ -324,7 +324,7 @@ node tools/rust_to_bmb.mjs path/to/*.rs --apply
 
 | ID | 태스크 | 설명 | 우선순위 | 상태 |
 |----|--------|------|----------|------|
-| 49.1 | **샘플 앱 5개** | 위 목록 구현 | P0 | 🔄 1/5 완료 |
+| 49.1 | **샘플 앱 5개** | 위 목록 구현 | P0 | 🔄 3/5 완료 |
 | 49.2 | **시나리오 문서 5개** | 위 목록 작성 | P0 | ✅ 완료 |
 | 49.3 | **튜토리얼 완성** | Getting Started, By Example 확장 | P1 | 📋 계획 |
 | 49.4 | **마이그레이션 도구 완성** | pre-v0.32 → v0.32 완전 지원 | P1 | 📋 계획 |
@@ -347,6 +347,20 @@ node tools/rust_to_bmb.mjs path/to/*.rs --apply
    - 비교 함수: min, max, gcd, lcm
    - CLI 인자 파싱 및 문자열 처리 데모
    - 위치: `examples/sample-apps/bmb-calc/`
+
+3. **bmb-grep 샘플 앱** (350 LOC) - 2026-01-14 추가
+   - 패턴 매칭: 대소문자 구분/무시, 반전 매칭
+   - CLI 플래그: -n (라인번호), -c (카운트), -v (반전), -i (대소문자무시)
+   - 다중 라인 텍스트 처리 (\n 지원)
+   - 계약 기반 함수 설계
+   - 위치: `examples/sample-apps/bmb-grep/`
+
+4. **bmb-json-tool 샘플 앱** (480 LOC) - 2026-01-14 추가
+   - 명령어: type, length, keys, validate, get
+   - JSON 경로 탐색: .key, [index] 문법
+   - 중첩 구조 파싱 및 탐색
+   - 계약 기반 파싱 함수
+   - 위치: `examples/sample-apps/bmb-json-tool/`
 
 ---
 
