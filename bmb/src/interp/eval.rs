@@ -18,7 +18,7 @@ use std::rc::Rc;
 // Used by arg_count() and get_arg() builtins to access program arguments
 // passed via `bmb run file.bmb arg1 arg2 ...`
 thread_local! {
-    static PROGRAM_ARGS: RefCell<Vec<String>> = RefCell::new(Vec::new());
+    static PROGRAM_ARGS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
 }
 
 /// v0.46: Set program arguments for the interpreter

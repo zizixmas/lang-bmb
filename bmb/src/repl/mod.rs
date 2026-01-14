@@ -198,13 +198,13 @@ impl Repl {
         } else {
             // Try to get a better error message with i64
             let source = format!("fn __repl__() -> i64 = {input};");
-            if let Ok(tokens) = tokenize(&source) {
-                if let Ok(program) = parse("<repl>", &source, tokens) {
-                    let mut checker = crate::types::TypeChecker::new();
-                    if let Err(err) = checker.check_program(&program) {
-                        eprintln!("Type error: {}", err.message());
-                        return;
-                    }
+            if let Ok(tokens) = tokenize(&source)
+                && let Ok(program) = parse("<repl>", &source, tokens)
+            {
+                let mut checker = crate::types::TypeChecker::new();
+                if let Err(err) = checker.check_program(&program) {
+                    eprintln!("Type error: {}", err.message());
+                    return;
                 }
             }
             eprintln!("Could not evaluate expression");

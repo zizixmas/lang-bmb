@@ -786,20 +786,22 @@ fn lint_file(path: &PathBuf, strict: bool, include_paths: &[PathBuf]) -> Result<
                 let module_name = &use_stmt.path[0].node;
                 let pkg_dir_name = module_name.replace('_', "-");
                 let module_path = include_path.join(&pkg_dir_name).join("src").join("lib.bmb");
-                if module_path.exists() {
-                    if let Ok(lib_source) = std::fs::read_to_string(&module_path) {
-                        if let Ok(lib_tokens) = bmb::lexer::tokenize(&lib_source) {
-                            if let Ok(lib_ast) = bmb::parser::parse(&module_path.display().to_string(), &lib_source, lib_tokens) {
-                                let module = bmb::resolver::Module {
-                                    name: module_name.clone(),
-                                    path: module_path.clone(),
-                                    program: lib_ast,
-                                    exports: std::collections::HashMap::new(),
-                                };
-                                checker.register_module(&module);
-                            }
-                        }
-                    }
+                if module_path.exists()
+                    && let Ok(lib_source) = std::fs::read_to_string(&module_path)
+                    && let Ok(lib_tokens) = bmb::lexer::tokenize(&lib_source)
+                    && let Ok(lib_ast) = bmb::parser::parse(
+                        &module_path.display().to_string(),
+                        &lib_source,
+                        lib_tokens,
+                    )
+                {
+                    let module = bmb::resolver::Module {
+                        name: module_name.clone(),
+                        path: module_path.clone(),
+                        program: lib_ast,
+                        exports: std::collections::HashMap::new(),
+                    };
+                    checker.register_module(&module);
                 }
             }
         }

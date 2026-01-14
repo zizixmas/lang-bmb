@@ -498,14 +498,15 @@ impl QueryEngine {
                 // Find who calls this function (reverse deps)
                 if reverse {
                     for other_fn in &self.index.functions {
-                        if let Some(body) = &other_fn.body_info {
-                            if body.calls.contains(&name.to_string()) && other_fn.name != name {
-                                called_by.push(CallerInfo {
-                                    name: other_fn.name.clone(),
-                                    file: other_fn.file.clone(),
-                                    line: other_fn.line,
-                                });
-                            }
+                        if let Some(body) = &other_fn.body_info
+                            && body.calls.contains(&name.to_string())
+                            && other_fn.name != name
+                        {
+                            called_by.push(CallerInfo {
+                                name: other_fn.name.clone(),
+                                file: other_fn.file.clone(),
+                                line: other_fn.line,
+                            });
                         }
                     }
                 }
@@ -544,19 +545,18 @@ impl QueryEngine {
             }
             visited.insert(call.name.clone());
 
-            if let Some(func) = self.index.functions.iter().find(|f| f.name == call.name) {
-                if let Some(body) = &func.body_info {
-                    for nested_call in &body.calls {
-                        if !visited.contains(nested_call) {
-                            let count = 1;
-                            if !all_calls.iter().any(|c| c.name == *nested_call) {
-                                all_calls.push(CallInfo {
-                                    name: nested_call.clone(),
-                                    count,
-                                    recursive: false,
-                                });
-                            }
-                        }
+            if let Some(func) = self.index.functions.iter().find(|f| f.name == call.name)
+                && let Some(body) = &func.body_info
+            {
+                for nested_call in &body.calls {
+                    if !visited.contains(nested_call)
+                        && !all_calls.iter().any(|c| c.name == *nested_call)
+                    {
+                        all_calls.push(CallInfo {
+                            name: nested_call.clone(),
+                            count: 1,
+                            recursive: false,
+                        });
                     }
                 }
             }
@@ -762,14 +762,15 @@ impl QueryEngine {
                 // Find dependents (reverse deps)
                 let mut dependents = Vec::new();
                 for other_fn in &self.index.functions {
-                    if let Some(body) = &other_fn.body_info {
-                        if body.calls.contains(&name.to_string()) && other_fn.name != name {
-                            dependents.push(DependentInfo {
-                                name: other_fn.name.clone(),
-                                file: other_fn.file.clone(),
-                                line: other_fn.line,
-                            });
-                        }
+                    if let Some(body) = &other_fn.body_info
+                        && body.calls.contains(&name.to_string())
+                        && other_fn.name != name
+                    {
+                        dependents.push(DependentInfo {
+                            name: other_fn.name.clone(),
+                            file: other_fn.file.clone(),
+                            line: other_fn.line,
+                        });
                     }
                 }
 
@@ -876,10 +877,8 @@ impl QueryEngine {
                 });
 
                 // Recurse if depth allows
-                if depth > 1 {
-                    if let Some(body) = &func.body_info {
-                        self.collect_context_deps(&body.calls, depth - 1, visited, dep_functions);
-                    }
+                if depth > 1 && let Some(body) = &func.body_info {
+                    self.collect_context_deps(&body.calls, depth - 1, visited, dep_functions);
                 }
             }
         }
@@ -1234,15 +1233,16 @@ impl QueryEngine {
                 let mut files_affected = std::collections::HashSet::new();
 
                 for other_fn in &self.index.functions {
-                    if let Some(body) = &other_fn.body_info {
-                        if body.calls.contains(&name.to_string()) && other_fn.name != name {
-                            direct_callers.push(CallerInfo {
-                                name: other_fn.name.clone(),
-                                file: other_fn.file.clone(),
-                                line: other_fn.line,
-                            });
-                            files_affected.insert(other_fn.file.clone());
-                        }
+                    if let Some(body) = &other_fn.body_info
+                        && body.calls.contains(&name.to_string())
+                        && other_fn.name != name
+                    {
+                        direct_callers.push(CallerInfo {
+                            name: other_fn.name.clone(),
+                            file: other_fn.file.clone(),
+                            line: other_fn.line,
+                        });
+                        files_affected.insert(other_fn.file.clone());
                     }
                 }
 
