@@ -365,8 +365,7 @@ fn print_keys_iter(s: String, pos: i64, first: bool) -> i64 = {
                  else if s.byte_at(p) == char_comma() { skip_ws(s, p + 1) }
                  else { p };
         let key = parse_string_value(s, p2);
-        let out = print_str(key);
-        let nl = print_str(chr(10));
+        let out = print_str_nl(key);
         let p3 = skip_string(s, p2);
         let p4 = skip_ws(s, p3);
         let p5 = if p4 < s.len() and s.byte_at(p4) == char_colon() { skip_ws(s, p4 + 1) }
@@ -380,7 +379,7 @@ fn print_keys(s: String, pos: i64) -> i64 = {
     let p = skip_ws(s, pos);
     if p >= s.len() { 0 - 1 }
     else if s.byte_at(p) != char_lbrace() { 0 - 1 }
-    else { print_keys_iter(s, p + 1, true); 0 }
+    else { let u = print_keys_iter(s, p + 1, true); 0 }
 };
 
 // ============================================================================
@@ -495,10 +494,15 @@ fn str_eq(a: String, b: String) -> bool = a == b;
 fn cmd_type(json: String) -> i64 = {
     let t = detect_type(json, 0);
     let name = type_name(t);
-    let out = print_str(name);
-    let nl = print_str(chr(10));
+    let out = print_str_nl(name);
     if t == json_error() { 0 - 1 } else { 0 }
 };
+
+fn print_str_nl(s: String) -> i64 =
+    let x = print_str(s);
+    let y = print_str("
+");
+    0;
 
 fn cmd_length(json: String) -> i64 = {
     let t = detect_type(json, 0);
@@ -507,12 +511,11 @@ fn cmd_length(json: String) -> i64 = {
               else if t == json_string() { parse_string_value(json, 0).len() }
               else { 0 - 1 };
     if len < 0 {
-        let err = print_str("Error: length requires array, object, or string\n");
+        let err = print_str_nl("Error: length requires array, object, or string");
         0 - 1
     }
     else {
-        let out = print_str(int_to_string(len));
-        let nl = print_str(chr(10));
+        let out = print_str_nl(int_to_string(len));
         len
     }
 };
@@ -520,7 +523,7 @@ fn cmd_length(json: String) -> i64 = {
 fn cmd_keys(json: String) -> i64 = {
     let t = detect_type(json, 0);
     if t != json_object() {
-        let err = print_str("Error: keys requires an object\n");
+        let err = print_str_nl("Error: keys requires an object");
         0 - 1
     }
     else { print_keys(json, 0) }
@@ -528,11 +531,11 @@ fn cmd_keys(json: String) -> i64 = {
 
 fn cmd_validate(json: String) -> i64 = {
     if is_valid_json(json) {
-        let out = print_str("valid\n");
+        let out = print_str_nl("valid");
         0
     }
     else {
-        let out = print_str("invalid\n");
+        let out = print_str_nl("invalid");
         1
     }
 };
@@ -540,38 +543,35 @@ fn cmd_validate(json: String) -> i64 = {
 fn cmd_get(json: String, path: String) -> i64 = {
     let pos = navigate(json, 0, path, 0);
     if pos < 0 {
-        let err = print_str("Error: path not found\n");
+        let err = print_str_nl("Error: path not found");
         0 - 1
     }
     else {
         let t = detect_type(json, pos);
         if t == json_number() {
             let v = parse_number_value(json, pos);
-            let out = print_str(int_to_string(v));
-            let nl = print_str(chr(10));
+            let out = print_str_nl(int_to_string(v));
             0
         }
         else if t == json_string() {
             let v = parse_string_value(json, pos);
-            let out = print_str(v);
-            let nl = print_str(chr(10));
+            let out = print_str_nl(v);
             0
         }
         else if t == json_bool() {
             let v = parse_bool_value(json, pos);
-            let out = if v { print_str("true\n") } else { print_str("false\n") };
+            let out = if v { print_str_nl("true") } else { print_str_nl("false") };
             0
         }
         else if t == json_null() {
-            let out = print_str("null\n");
+            let out = print_str_nl("null");
             0
         }
         else {
             // Array or object - print raw slice
             let end = skip_value(json, pos);
             let raw = json.slice(pos, end);
-            let out = print_str(raw);
-            let nl = print_str(chr(10));
+            let out = print_str_nl(raw);
             0
         }
     }
@@ -582,21 +582,24 @@ fn cmd_get(json: String, path: String) -> i64 = {
 // ============================================================================
 
 fn show_usage() -> i64 = {
-    let h1 = print_str("bmb-json-tool: JSON processing CLI\n");
-    let h2 = print_str("Usage: bmb run main.bmb -- <command> <json> [path]\n");
-    let h3 = print_str("\nCommands:\n");
-    let h4 = print_str("  type <json>         Show value type\n");
-    let h5 = print_str("  length <json>       Show array/object/string length\n");
-    let h6 = print_str("  keys <json>         List object keys\n");
-    let h7 = print_str("  validate <json>     Check if JSON is valid\n");
-    let h8 = print_str("  get <json> <path>   Extract value at path\n");
-    let h9 = print_str("\nPath syntax:\n");
-    let h10 = print_str("  .key      Object field access\n");
-    let h11 = print_str("  [index]   Array element access\n");
-    let h12 = print_str("\nExamples:\n");
-    let h13 = print_str("  bmb run main.bmb -- type '{\"a\":1}'\n");
-    let h14 = print_str("  bmb run main.bmb -- get '{\"a\":{\"b\":42}}' '.a.b'\n");
-    let h15 = print_str("  bmb run main.bmb -- length '[1,2,3]'\n");
+    let h1 = print_str_nl("bmb-json-tool: JSON processing CLI");
+    let h2 = print_str_nl("Usage: bmb run main.bmb -- <command> <json> [path]");
+    let h3 = print_str_nl("");
+    let h4 = print_str_nl("Commands:");
+    let h5 = print_str_nl("  type <json>         Show value type");
+    let h6 = print_str_nl("  length <json>       Show array/object/string length");
+    let h7 = print_str_nl("  keys <json>         List object keys");
+    let h8 = print_str_nl("  validate <json>     Check if JSON is valid");
+    let h9 = print_str_nl("  get <json> <path>   Extract value at path");
+    let h10 = print_str_nl("");
+    let h11 = print_str_nl("Path syntax:");
+    let h12 = print_str_nl("  .key      Object field access");
+    let h13 = print_str_nl("  [index]   Array element access");
+    let h14 = print_str_nl("");
+    let h15 = print_str_nl("Examples:");
+    let h16 = print_str_nl("  bmb run main.bmb -- type json_object");
+    let h17 = print_str_nl("  bmb run main.bmb -- get nested_object .a.b");
+    let h18 = print_str_nl("  bmb run main.bmb -- length array");
     0
 };
 
@@ -620,7 +623,7 @@ fn main() -> i64 = {
         else if str_eq(cmd, "validate") { cmd_validate(json) }
         else if str_eq(cmd, "get") {
             if pos_count < 3 {
-                let err = print_str("Error: get requires a path argument\n");
+                let err = print_str_nl("Error: get requires a path argument");
                 0 - 1
             }
             else {
@@ -629,9 +632,7 @@ fn main() -> i64 = {
             }
         }
         else {
-            let err = print_str("Unknown command: ");
-            let cmd_out = print_str(cmd);
-            let nl = print_str(chr(10));
+            let err = print_str_nl("Unknown command: " + cmd);
             show_usage()
         }
     }

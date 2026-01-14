@@ -4,8 +4,8 @@
 //
 // Examples:
 //   bmb run main.bmb -- "hello" "hello world"
-//   bmb run main.bmb -- "error" "line1\nline2 error\nline3" -n
-//   bmb run main.bmb -- "test" "test1\ntest2\nother" -c
+//   bmb run main.bmb -- "error" "multiline text with error" -n
+//   bmb run main.bmb -- "test" "test input" -c
 
 // ============================================================================
 // Character and String Utilities
@@ -142,10 +142,10 @@ fn int_to_string(n: i64) -> String =
 fn print_line(line: String, line_num: i64, show_num: bool) -> i64 = {
     if show_num {
         let num = print_str(int_to_string(line_num));
-        let colon = print_str(": ")
+        let colon = print_str(": ");
+        0
     } else { 0 };
-    let out = print_str(line);
-    let nl = print_str(chr(10));
+    let out = print_str_nl(line);
     1
 };
 
@@ -236,17 +236,25 @@ fn count_positional() -> i64
 // Help and Usage
 // ============================================================================
 
+fn print_str_nl(s: String) -> i64 =
+    let x = print_str(s);
+    let y = print_str("
+");
+    0;
+
 fn show_usage() -> i64 = {
-    let h1 = print_str("bmb-grep: Pattern matching tool\n");
-    let h2 = print_str("Usage: bmb run main.bmb -- <pattern> <text> [options]\n");
-    let h3 = print_str("\nOptions:\n");
-    let h4 = print_str("  -n    Show line numbers\n");
-    let h5 = print_str("  -c    Count matches only\n");
-    let h6 = print_str("  -v    Invert match (show non-matching lines)\n");
-    let h7 = print_str("  -i    Case insensitive matching\n");
-    let h8 = print_str("\nExamples:\n");
-    let h9 = print_str("  bmb run main.bmb -- \"error\" \"line1\\nline2 error\\nline3\"\n");
-    let h10 = print_str("  bmb run main.bmb -- \"test\" \"TEST case\" -i\n");
+    let h1 = print_str_nl("bmb-grep: Pattern matching tool");
+    let h2 = print_str_nl("Usage: bmb run main.bmb -- <pattern> <text> [options]");
+    let h3 = print_str_nl("");
+    let h4 = print_str_nl("Options:");
+    let h5 = print_str_nl("  -n    Show line numbers");
+    let h6 = print_str_nl("  -c    Count matches only");
+    let h7 = print_str_nl("  -v    Invert match (show non-matching lines)");
+    let h8 = print_str_nl("  -i    Case insensitive matching");
+    let h9 = print_str_nl("");
+    let h10 = print_str_nl("Examples:");
+    let h11 = print_str_nl("  bmb run main.bmb -- error text_with_error");
+    let h12 = print_str_nl("  bmb run main.bmb -- test TESTCASE -i");
     0
 };
 
@@ -270,14 +278,12 @@ fn main() -> i64 = {
         let case_i = has_flag("-i");
 
         if pattern.len() == 0 {
-            let err = print_str("Error: Pattern cannot be empty\n");
+            let err = print_str_nl("Error: Pattern cannot be empty");
             0 - 1
         }
         else if count_only {
             let count = grep_count(text, pattern, invert, case_i);
-            let out = print_str("Matches: ");
-            let num = print_str(int_to_string(count));
-            let nl = print_str(chr(10));
+            let out = print_str_nl("Matches: " + int_to_string(count));
             count
         }
         else {
@@ -300,13 +306,10 @@ fn test_pattern_match() -> i64 = {
 };
 
 fn test_line_processing() -> i64 = {
-    // Test with escaped newlines
-    let text = "line1\\nline2\\nline3";
-    let lines = count_lines(text);
-
-    let t1 = if lines == 3 { 1 } else { 0 };
-    let t2 = if process_line("hello world", "world", false, false) { 1 } else { 0 };
-    let t3 = if not process_line("hello world", "world", true, false) { 1 } else { 0 };
+    // Test pattern matching
+    let t1 = if process_line("hello world", "world", false, false) { 1 } else { 0 };
+    let t2 = if not process_line("hello world", "world", true, false) { 1 } else { 0 };
+    let t3 = if find_newline("abc", 0) == 3 { 1 } else { 0 };
 
     if t1 + t2 + t3 == 3 { let ok = println(888); 1 } else { 0 }
 };
