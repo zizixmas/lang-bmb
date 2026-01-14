@@ -14,8 +14,8 @@
 | **v0.45** | **Foundation Completion** | ✅ 완료 | **stdlib 확정, 도구 안정화, bmb lint 추가** |
 | **v0.46** | **Independence** | ✅ 완료 | **CLI 지원, 3-Stage Bootstrap 준비** |
 | **v0.47** | **Performance** | 🔄 진행중 | **성능 Gate 통과, 벤치마크 자동화** |
-| **v0.48** | **Ecosystem** | 📋 계획 | **패키지, 크로스 컴파일** |
-| **v0.49** | **Showcase** | 📋 계획 | **샘플 앱, 시나리오** |
+| **v0.48** | **Ecosystem** | 🔄 진행중 | **패키지 14/14, 크로스 컴파일 미완료** |
+| **v0.49** | **Showcase** | 🔄 진행중 | **샘플 앱 1/5, 시나리오 5/5** |
 | **v0.50** | **Final Verification** | 📋 계획 | **보안 감사, 최종 검증** |
 | **v1.0.0-beta** | **Golden** | 🎯 목표 | **완전한 프로그래밍 언어** |
 
@@ -36,7 +36,7 @@
 | **성능 검증** | Gate #3.1 통과 (C 대비 ≤1.10x) | ✅ 0.89x-0.99x 달성 | v0.47 |
 | **크로스 컴파일** | Linux/Windows/macOS/WASM | ❌ 미완료 | v0.48 |
 | **생태계** | 14+ 핵심 패키지 | ✅ 14/14 | v0.48 |
-| **샘플/문서** | 5개 샘플 앱, 5개 시나리오 | ❌ 미완료 | v0.49 |
+| **샘플/문서** | 5개 샘플 앱, 5개 시나리오 | 🔄 1/5 앱, 5/5 문서 | v0.49 |
 | **보안 감사** | 컴파일러/런타임 보안 검토 | ❌ 미완료 | v0.50 |
 | **테스트 통과** | 전체 테스트 스위트 (1,753+) | ✅ 완료 | v0.50 |
 | **AI Query** | RFC-0001 완전 구현 | ✅ Phase 3 완료 | v0.50 |
@@ -302,35 +302,51 @@ node tools/rust_to_bmb.mjs path/to/*.rs --apply
 
 ### 샘플 애플리케이션 (5개)
 
-| 샘플 | 설명 | LOC | 우선순위 | 사용 패키지 |
-|------|------|-----|----------|------------|
-| `bmb-grep` | grep 클론 | 500 | P0 | regex, fs, args |
-| `bmb-calc` | 계산기 (REPL) | 300 | P0 | math |
-| `bmb-json-tool` | JSON 처리 CLI | 400 | P1 | json, fs, args |
-| `bmb-httpd` | 간단한 HTTP 서버 | 800 | P1 | http, log |
-| `bmb-compiler` | 미니 언어 컴파일러 | 1000 | P2 | - |
+| 샘플 | 설명 | LOC | 우선순위 | 사용 패키지 | 상태 |
+|------|------|-----|----------|------------|------|
+| `bmb-grep` | grep 클론 | 500 | P0 | regex, fs, args | 📋 계획 |
+| `bmb-calc` | 계산기 CLI | 340 | P0 | math | ✅ 완료 |
+| `bmb-json-tool` | JSON 처리 CLI | 400 | P1 | json, fs, args | 📋 계획 |
+| `bmb-httpd` | 간단한 HTTP 서버 | 800 | P1 | http, log | 📋 계획 |
+| `bmb-compiler` | 미니 언어 컴파일러 | 1000 | P2 | - | 📋 계획 |
 
 ### 시나리오 문서 (5개)
 
-| 시나리오 | 설명 | 파일 |
-|----------|------|------|
-| 시스템 프로그래밍 | 메모리 안전성과 계약 | `docs/scenarios/SYSTEMS.md` |
-| 계약 기반 검증 | 정적 검증으로 버그 제거 | `docs/scenarios/CONTRACTS.md` |
-| 성능 최적화 | C 수준 성능 달성 방법 | `docs/scenarios/PERFORMANCE.md` |
-| Rust에서 마이그레이션 | Rust 개발자를 위한 가이드 | `docs/scenarios/FROM_RUST.md` |
-| AI 코드 생성 | LLM과 BMB의 시너지 | `docs/scenarios/AI_NATIVE.md` |
+| 시나리오 | 설명 | 파일 | 상태 |
+|----------|------|------|------|
+| 시스템 프로그래밍 | 메모리 안전성과 계약 | `docs/scenarios/SYSTEMS.md` | ✅ 완료 |
+| 계약 기반 검증 | 정적 검증으로 버그 제거 | `docs/scenarios/CONTRACTS.md` | ✅ 완료 |
+| 성능 최적화 | C 수준 성능 달성 방법 | `docs/scenarios/PERFORMANCE.md` | ✅ 완료 |
+| Rust에서 마이그레이션 | Rust 개발자를 위한 가이드 | `docs/scenarios/FROM_RUST.md` | ✅ 완료 |
+| AI 코드 생성 | LLM과 BMB의 시너지 | `docs/scenarios/AI_NATIVE.md` | ✅ 완료 |
 
 ### 태스크
 
-| ID | 태스크 | 설명 | 우선순위 |
-|----|--------|------|----------|
-| 49.1 | **샘플 앱 5개** | 위 목록 구현 | P0 |
-| 49.2 | **시나리오 문서 5개** | 위 목록 작성 | P0 |
-| 49.3 | **튜토리얼 완성** | Getting Started, By Example 확장 | P1 |
-| 49.4 | **마이그레이션 도구 완성** | pre-v0.32 → v0.32 완전 지원 | P1 |
-| 49.5 | **`bmb q ctx`** | AI 컨텍스트 생성 | P1 |
-| 49.6 | **`bmb q sig`** | 시그니처 검색 (`--accepts`, `--returns`) | P1 |
-| 49.7 | **`--format llm`** | LLM 최적화 출력 형식 | P1 |
+| ID | 태스크 | 설명 | 우선순위 | 상태 |
+|----|--------|------|----------|------|
+| 49.1 | **샘플 앱 5개** | 위 목록 구현 | P0 | 🔄 1/5 완료 |
+| 49.2 | **시나리오 문서 5개** | 위 목록 작성 | P0 | ✅ 완료 |
+| 49.3 | **튜토리얼 완성** | Getting Started, By Example 확장 | P1 | 📋 계획 |
+| 49.4 | **마이그레이션 도구 완성** | pre-v0.32 → v0.32 완전 지원 | P1 | 📋 계획 |
+| 49.5 | **`bmb q ctx`** | AI 컨텍스트 생성 | P1 | 📋 계획 |
+| 49.6 | **`bmb q sig`** | 시그니처 검색 (`--accepts`, `--returns`) | P1 | 📋 계획 |
+| 49.7 | **`--format llm`** | LLM 최적화 출력 형식 | P1 | 📋 계획 |
+
+### 완료된 작업 (2026-01-14)
+
+1. **시나리오 문서 5개** (전체 완료)
+   - `SYSTEMS.md`: 시스템 프로그래밍, 메모리 안전성, 저수준 패턴
+   - `CONTRACTS.md`: 계약 기반 검증, pre/post/where, 실제 예제
+   - `PERFORMANCE.md`: 성능 최적화, C 대비 벤치마크, 최적화 기법
+   - `FROM_RUST.md`: Rust 개발자 마이그레이션 가이드, 문법 비교
+   - `AI_NATIVE.md`: AI 코드 생성, 명세 우선 개발, bmb q 활용
+
+2. **bmb-calc 샘플 앱** (340 LOC)
+   - 산술 연산: add, sub, mul, div, mod, pow
+   - 수학 함수: sqrt, abs, fac, fib, prime
+   - 비교 함수: min, max, gcd, lcm
+   - CLI 인자 파싱 및 문자열 처리 데모
+   - 위치: `examples/sample-apps/bmb-calc/`
 
 ---
 
