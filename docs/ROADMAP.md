@@ -29,8 +29,8 @@
 | v0.31-v0.37 | Maturity | ✅ 완료 | Stage 3, 벤치마크, 스펙 준수 |
 | v0.38-v0.44 | Stabilization | ✅ 완료 | CI, 안정성, API 동결, 릴리스 준비 |
 | **v0.45** | **Foundation Completion** | ✅ 완료 | **stdlib 확정, 도구 안정화, bmb lint 추가** |
-| **v0.46** | **Independence** | ⏳ 검증중 | **Stage 1 완료, Stage 2/3 WSL 검증 필요** |
-| **v0.47** | **Performance** | 🔄 진행중 | **성능 Gate 통과, 벤치마크 자동화** |
+| **v0.46** | **Independence** | ⏳ 검증중 | **Stage 1 완료, Stage 2 실패 (소스 리팩토링 필요)** |
+| **v0.47** | **Performance** | ❌ 미통과 | **Gate #3.1 실패 (2/9 통과), 2개 벤치마크 C보다 빠름** |
 | **v0.48** | **Ecosystem** | 🔄 진행중 | **패키지 14/14, 크로스 컴파일 미완료** |
 | **v0.49** | **Showcase** | ✅ 완료 | **샘플 앱 5/5, 시나리오 5/5** |
 | **v0.50** | **Final Verification** | 🔄 진행중 | **보안 감사 1차 완료, 최종 검증** |
@@ -48,9 +48,9 @@
 | **에러 메시지** | 사용자 친화적 컴파일 에러 | ✅ ariadne 기반 | v0.45 |
 | **개발 도구** | LSP, Formatter, Linter 안정화 | ✅ LSP+Linter, ⏳ Formatter | v0.45 |
 | **Rust 제거** | Cargo.toml 불필요, BMB-only 빌드 | ⏳ WSL 검증 후 | v0.46 |
-| **자체 컴파일** | BMB 컴파일러가 자신을 컴파일 | ⏳ Stage 1만 검증 | v0.46 |
+| **자체 컴파일** | BMB 컴파일러가 자신을 컴파일 | ❌ Stage 2 실패 (긴 if-else 리팩토링 필요) | v0.46 |
 | **디버깅 지원** | DWARF 정보, 소스맵 | 📋 계획 | v0.46 |
-| **성능 검증** | Gate #3.1 통과 (C 대비 ≤1.10x) | ✅ 0.89x-0.99x 달성 | v0.47 |
+| **성능 검증** | Gate #3.1 통과 (C 대비 ≤1.10x) | ❌ 2/9 통과 (fannkuch, binary_trees만) | v0.47 |
 | **크로스 컴파일** | Linux/Windows/macOS/WASM | ❌ 미완료 | v0.48 |
 | **생태계** | 14+ 핵심 패키지 | ✅ 14/14 | v0.48 |
 | **샘플/문서** | 5개 샘플 앱, 5개 시나리오 | ✅ 5/5 앱, 5/5 문서 | v0.49 |
@@ -820,9 +820,10 @@ fn print_str_nl(s: String) -> i64 =
 
 | 리스크 | 심각도 | 설명 | 완화 방법 |
 |--------|--------|------|----------|
-| Bootstrap 자체 컴파일 성능 | 🔴 High | 30K LOC 컴파일에 >10분 소요 | 점진적 컴파일 또는 최적화 |
-| json_parse 성능 | 🟠 Medium | C 대비 2.5x 느림 | 문자열 연산 최적화 |
-| Gate #3.2 미검증 | 🟡 Low | 전체 벤치마크 스위트 미실행 | WSL에서 검증 필요 |
+| Bootstrap 긴 if-else | 🔴 High | 1000+ 문자 if-else 체인으로 Stage 2 SEGFAULT | 소스 리팩토링 (if-else 분할) |
+| Gate #3.1 미통과 | 🔴 High | 2/9 벤치마크만 통과 (fibonacci 2.7x, mandelbrot 22x 느림) | 벤치마크 구현 통일, 최적화 |
+| Bootstrap 자체 컴파일 성능 | 🟠 Medium | 30K LOC 컴파일에 >10분 소요 | 점진적 컴파일 또는 최적화 |
+| 벤치마크 구현 불일치 | 🟠 Medium | C/BMB 알고리즘 다름 (불공정 비교) | 동일 알고리즘으로 통일 |
 
 ### 프로세스 리스크
 
@@ -1123,3 +1124,54 @@ fn print_str_nl(s: String) -> i64 =
 | P1 | 정제 타입 검증 연동 (SMT) | 📋 계획 |
 | P2 | Formatter 주석 보존 | 📋 계획 |
 | P2 | LSP hover/completion 구현 | 📋 계획 |
+
+### 2026-01-15 WSL Bootstrap 및 벤치마크 검증 세션
+
+**환경**: WSL Ubuntu, LLVM 21
+
+**3-Stage Bootstrap 검증 결과**:
+
+| 단계 | 결과 | 상세 |
+|------|------|------|
+| Stage 1 | ✅ 성공 | Rust BMB → bmb-stage1 (0.918s, 189KB) |
+| Stage 1 실행 | ✅ 성공 | 간단한 프로그램 컴파일 가능 |
+| Stage 2 | ❌ 실패 | SEGFAULT (소스 1100줄+ 시점) |
+
+**Stage 1 segfault 근본 원인 분석**:
+- 부트스트랩 소스에 1000+ 문자 if-else 체인 존재 (line 152: 1432자, line 1090: 1156자)
+- 재귀 하강 파서가 깊은 중첩에서 스택 오버플로우/지수적 복잡도 발생
+- 해결책: 부트스트랩 소스 리팩토링 필요 (긴 if-else 체인 분할)
+
+**벤치마크 Gate #3.1 결과**:
+
+| 벤치마크 | C (ms) | BMB (ms) | 비율 | 상태 |
+|----------|--------|----------|------|------|
+| fibonacci | 11.49 | 31.40 | 2.73x | ✗ |
+| mandelbrot | 2.31 | 50.75 | 22.0x | ✗ |
+| n_body | 21.70 | 51.96 | 2.39x | ✗ |
+| **fannkuch** | 61.34 | 27.70 | **0.45x** | ✓★ |
+| **binary_trees** | 126.22 | 53.37 | **0.42x** | ✓★ |
+| bounds_check | 2.75 | 31.17 | 11.32x | ✗ |
+| aliasing | 4.17 | 37.90 | 9.10x | ✗ |
+
+**결과**: Gate #3.1 실패 (2 pass, 7 fail)
+
+**분석**:
+1. **2개 벤치마크가 C보다 빠름**: fannkuch (2.2x), binary_trees (2.4x) - 알고리즘 최적화 효과
+2. **contract 벤치마크 불공정 비교**: BMB/C 구현이 다른 알고리즘 사용 (리팩토링 필요)
+3. **일부 벤치마크 최적화 필요**: fibonacci, n_body 등
+
+**발견된 이슈**:
+| 이슈 | 심각도 | 설명 |
+|------|--------|------|
+| Bootstrap 긴 if-else | 🔴 High | Stage 2 컴파일 불가 |
+| 벤치마크 구현 불일치 | 🟠 Medium | C/BMB 알고리즘 다름 |
+| sqrt 링크 에러 | 🟡 Low | 일부 C 벤치마크 -lm 필요 |
+
+**다음 작업 우선순위**:
+| 우선순위 | 작업 | 상태 |
+|----------|------|------|
+| P0 | Bootstrap 긴 if-else 리팩토링 | 📋 계획 |
+| P1 | 벤치마크 구현 통일 (C/BMB 공정 비교) | 📋 계획 |
+| P1 | 정제 타입 검증 연동 (SMT) | 📋 계획 |
+| P2 | fibonacci, n_body 최적화 분석 | 📋 계획 |
