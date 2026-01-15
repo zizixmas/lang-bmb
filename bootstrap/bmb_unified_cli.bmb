@@ -638,7 +638,8 @@ fn sb_push_mir(sb: i64, text: String) -> i64 =
 
 fn lower_expr_sb(ast: String, temp_id: i64, block_id: i64, sb: i64) -> i64 =
     let ntype = get_node_type(ast);
-    if ntype == "int" { lower_int_sb(ast, temp_id, sb) } else if ntype == "bool" { lower_bool_sb(ast, temp_id, sb) } else if ntype == "var" { lower_var_sb(ast, temp_id, sb) } else if ntype == "binop" { lower_binop_sb(ast, temp_id, block_id, sb) } else if ntype == "unary" { lower_unary_sb(ast, temp_id, block_id, sb) } else if ntype == "if" { lower_if_sb(ast, temp_id, block_id, sb) } else if ntype == "let" { lower_let_sb(ast, temp_id, block_id, sb) } else if ntype == "call" { lower_call_sb(ast, temp_id, block_id, sb) } else if ntype == "str" { lower_str_sb(ast, temp_id, sb) } else if ntype == "mcall" { lower_mcall_sb(ast, temp_id, block_id, sb) } else { temp_id };
+    // v0.50.2: Pass block_id to lower_var_sb for unique variable names
+    if ntype == "int" { lower_int_sb(ast, temp_id, sb) } else if ntype == "bool" { lower_bool_sb(ast, temp_id, sb) } else if ntype == "var" { lower_var_sb(ast, temp_id, block_id, sb) } else if ntype == "binop" { lower_binop_sb(ast, temp_id, block_id, sb) } else if ntype == "unary" { lower_unary_sb(ast, temp_id, block_id, sb) } else if ntype == "if" { lower_if_sb(ast, temp_id, block_id, sb) } else if ntype == "let" { lower_let_sb(ast, temp_id, block_id, sb) } else if ntype == "call" { lower_call_sb(ast, temp_id, block_id, sb) } else if ntype == "str" { lower_str_sb(ast, temp_id, sb) } else if ntype == "mcall" { lower_mcall_sb(ast, temp_id, block_id, sb) } else { temp_id };
 
 fn lower_int_sb(ast: String, temp_id: i64, sb: i64) -> i64 =
     let val = extract_int_value(ast);
@@ -660,10 +661,14 @@ fn lower_str_sb(ast: String, temp_id: i64, sb: i64) -> i64 =
     let w1 = sb_push_mir(sb, "  " + tmp + " = str " + text);
     temp_id + 1;
 
-fn lower_var_sb(ast: String, temp_id: i64, sb: i64) -> i64 =
+// v0.50.2: Variable references need block_id to match the definition
+// NOTE: This requires block_id parameter - see below
+// v0.50.3: Only add suffix when block_id > 0 (parameters at block_id=0)
+fn lower_var_sb(ast: String, temp_id: i64, block_id: i64, sb: i64) -> i64 =
     let name = extract_name(ast);
     let tmp = "%_t" + int_to_string(temp_id);
-    let w1 = sb_push_mir(sb, "  " + tmp + " = copy %" + name);
+    let var_name = if block_id > 0 { name + "_b" + int_to_string(block_id) } else { name };
+    let w1 = sb_push_mir(sb, "  " + tmp + " = copy %" + var_name);
     temp_id + 1;
 
 fn lower_binop_sb(ast: String, temp_id: i64, block_id: i64, sb: i64) -> i64 =
@@ -711,14 +716,20 @@ fn lower_if_sb(ast: String, temp_id: i64, block_id: i64, sb: i64) -> i64 =
     let w7 = sb_push_mir(sb, "  " + phi_tmp + " = phi [%_t" + int_to_string(then_id) + ", " + then_label + "], [%_t" + int_to_string(else_id) + ", " + else_label + "]");
     else_new + 1;
 
+// v0.50.2: Add block_id to variable names to make them unique per block
+// This fixes duplicate variable name errors in LLVM IR
+// v0.50.3: Increment block_id for unique naming (params at block_id=0)
 fn lower_let_sb(ast: String, temp_id: i64, block_id: i64, sb: i64) -> i64 =
     let name = extract_name(ast);
+    let new_block_id = block_id + 1;
     let value_ast = get_child(ast, 1);
     let body_ast = get_child(ast, 2);
     let val_new = lower_expr_sb(value_ast, temp_id, block_id, sb);
     let val_id = val_new - 1;
-    let w1 = sb_push_mir(sb, "  %" + name + " = copy %_t" + int_to_string(val_id));
-    lower_expr_sb(body_ast, val_new, block_id, sb);
+    // Use unique name: name_b{new_block_id} (e.g., start_pos_b1)
+    let unique_name = name + "_b" + int_to_string(new_block_id);
+    let w1 = sb_push_mir(sb, "  %" + unique_name + " = copy %_t" + int_to_string(val_id));
+    lower_expr_sb(body_ast, val_new, new_block_id, sb);
 
 fn lower_call_sb(ast: String, temp_id: i64, block_id: i64, sb: i64) -> i64 =
     let name = extract_name(ast);
@@ -803,9 +814,44 @@ fn lower_program_inner_sb(ast: String, idx: i64, sb: i64) -> i64 =
 // SECTION 9: Expression Lowering
 // ============================================================================
 
+// v0.50.3: Check if a variable name is in the comma-separated param list
+// Uses character-by-character comparison for robustness in native code
+fn is_param(name: String, params: String) -> bool =
+    if params.len() == 0 { false }
+    else { is_param_scan(name, params, 0) };
+
+fn is_param_scan(name: String, params: String, start: i64) -> bool =
+    if start >= params.len() { false }
+    else {
+        let end = find_param_end(params, start);
+        if str_eq_range(name, params, start, end) { true }
+        else if end >= params.len() { false }
+        else { is_param_scan(name, params, end + 1) }
+    };
+
+fn find_param_end(params: String, pos: i64) -> i64 =
+    if pos >= params.len() { pos }
+    else if params.byte_at(pos) == 44 { pos }
+    else { find_param_end(params, pos + 1) };
+
+fn str_eq_range(a: String, b: String, b_start: i64, b_end: i64) -> bool =
+    let b_len = b_end - b_start;
+    if a.len() != b_len { false }
+    else { str_eq_chars(a, b, 0, b_start, b_len) };
+
+fn str_eq_chars(a: String, b: String, a_pos: i64, b_pos: i64, remaining: i64) -> bool =
+    if remaining == 0 { true }
+    else if a.byte_at(a_pos) != b.byte_at(b_pos) { false }
+    else { str_eq_chars(a, b, a_pos + 1, b_pos + 1, remaining - 1) };
+
+// Legacy lower_expr without params (for backward compatibility)
 fn lower_expr(ast: String, temp_id: i64, block_id: i64) -> String =
+    lower_expr_p(ast, temp_id, block_id, "");
+
+// v0.50.3: Expression lowering with param tracking
+fn lower_expr_p(ast: String, temp_id: i64, block_id: i64, params: String) -> String =
     let ntype = get_node_type(ast);
-    if ntype == "int" { lower_int(ast, temp_id) } else if ntype == "bool" { lower_bool(ast, temp_id) } else if ntype == "var" { lower_var(ast, temp_id) } else if ntype == "binop" { lower_binop(ast, temp_id, block_id) } else if ntype == "unary" { lower_unary(ast, temp_id, block_id) } else if ntype == "if" { lower_if(ast, temp_id, block_id) } else if ntype == "let" { lower_let(ast, temp_id, block_id) } else if ntype == "call" { lower_call(ast, temp_id, block_id) } else if ntype == "str" { lower_str(ast, temp_id) } else { pack_lower_result("ERR:unknown-" + ntype, temp_id) };
+    if ntype == "int" { lower_int(ast, temp_id) } else if ntype == "bool" { lower_bool(ast, temp_id) } else if ntype == "var" { lower_var_p(ast, temp_id, block_id, params) } else if ntype == "binop" { lower_binop_p(ast, temp_id, block_id, params) } else if ntype == "unary" { lower_unary_p(ast, temp_id, block_id, params) } else if ntype == "if" { lower_if_p(ast, temp_id, block_id, params) } else if ntype == "let" { lower_let_p(ast, temp_id, block_id, params) } else if ntype == "call" { lower_call_p(ast, temp_id, block_id, params) } else if ntype == "str" { lower_str(ast, temp_id) } else { pack_lower_result("ERR:unknown-" + ntype, temp_id) };
 
 fn lower_int(ast: String, temp_id: i64) -> String =
     let val = extract_int_value(ast);
@@ -824,18 +870,29 @@ fn lower_str(ast: String, temp_id: i64) -> String =
     let tmp = "%_t" + int_to_string(temp_id);
     pack_lower_result("  " + tmp + " = str " + text, temp_id + 1);
 
-fn lower_var(ast: String, temp_id: i64) -> String =
+// v0.50.2: Add block_id for unique variable names
+// v0.50.3: Only add suffix for block_id > 0 (parameters are at block_id=0)
+fn lower_var(ast: String, temp_id: i64, block_id: i64) -> String =
+    lower_var_p(ast, temp_id, block_id, "");
+
+// v0.50.3: Variable lowering with param checking
+fn lower_var_p(ast: String, temp_id: i64, block_id: i64, params: String) -> String =
     let name = extract_name(ast);
     let tmp = "%_t" + int_to_string(temp_id);
-    pack_lower_result("  " + tmp + " = copy %" + name, temp_id + 1);
+    // Parameters always use original name; let-bound vars use block_id suffix
+    let var_name = if is_param(name, params) { name } else if block_id > 0 { name + "_b" + int_to_string(block_id) } else { name };
+    pack_lower_result("  " + tmp + " = copy %" + var_name, temp_id + 1);
 
 fn lower_binop(ast: String, temp_id: i64, block_id: i64) -> String =
+    lower_binop_p(ast, temp_id, block_id, "");
+
+fn lower_binop_p(ast: String, temp_id: i64, block_id: i64, params: String) -> String =
     let op = get_child(ast, 0);
     let left_ast = get_child(ast, 1);
     let right_ast = get_child(ast, 2);
-    let rl = lower_expr(left_ast, temp_id, block_id);
+    let rl = lower_expr_p(left_ast, temp_id, block_id, params);
     let left_id = unpack_temp_id(rl) - 1;
-    let rr = lower_expr(right_ast, unpack_temp_id(rl), block_id);
+    let rr = lower_expr_p(right_ast, unpack_temp_id(rl), block_id, params);
     let right_id = unpack_temp_id(rr) - 1;
     let result_tmp = "%_t" + int_to_string(unpack_temp_id(rr));
     let mir = unpack_text(rl) + "|" + unpack_text(rr) + "|" +
@@ -843,9 +900,12 @@ fn lower_binop(ast: String, temp_id: i64, block_id: i64) -> String =
     pack_lower_result(mir, unpack_temp_id(rr) + 1);
 
 fn lower_unary(ast: String, temp_id: i64, block_id: i64) -> String =
+    lower_unary_p(ast, temp_id, block_id, "");
+
+fn lower_unary_p(ast: String, temp_id: i64, block_id: i64, params: String) -> String =
     let op = get_child(ast, 0);
     let operand = get_child(ast, 1);
-    let ro = lower_expr(operand, temp_id, block_id);
+    let ro = lower_expr_p(operand, temp_id, block_id, params);
     let operand_id = unpack_temp_id(ro) - 1;
     let result_tmp = "%_t" + int_to_string(unpack_temp_id(ro));
     let mir_op = if op == "not" { "not" } else if op == "-" { "neg" } else { op };
@@ -854,18 +914,21 @@ fn lower_unary(ast: String, temp_id: i64, block_id: i64) -> String =
     pack_lower_result(mir, unpack_temp_id(ro) + 1);
 
 fn lower_if(ast: String, temp_id: i64, block_id: i64) -> String =
+    lower_if_p(ast, temp_id, block_id, "");
+
+fn lower_if_p(ast: String, temp_id: i64, block_id: i64, params: String) -> String =
     let cond = get_child(ast, 0);
     let then_branch = get_child(ast, 1);
     let else_branch = get_child(ast, 2);
-    let rc = lower_expr(cond, temp_id, block_id);
+    let rc = lower_expr_p(cond, temp_id, block_id, params);
     let cond_id = unpack_temp_id(rc) - 1;
     let then_label = "then_" + int_to_string(block_id);
     let else_label = "else_" + int_to_string(block_id);
     let merge_label = "merge_" + int_to_string(block_id);
     let branch = "  branch %_t" + int_to_string(cond_id) + ", " + then_label + ", " + else_label;
-    let rt = lower_expr(then_branch, unpack_temp_id(rc), block_id + 1);
+    let rt = lower_expr_p(then_branch, unpack_temp_id(rc), block_id + 1, params);
     let then_id = unpack_temp_id(rt) - 1;
-    let re = lower_expr(else_branch, unpack_temp_id(rt), block_id + 2);
+    let re = lower_expr_p(else_branch, unpack_temp_id(rt), block_id + 2, params);
     let else_id = unpack_temp_id(re) - 1;
     let phi_tmp = "%_t" + int_to_string(unpack_temp_id(re));
     let phi = "  " + phi_tmp + " = phi [%_t" + int_to_string(then_id) + ", " + then_label + "], [%_t" + int_to_string(else_id) + ", " + else_label + "]";
@@ -875,22 +938,35 @@ fn lower_if(ast: String, temp_id: i64, block_id: i64) -> String =
         merge_label + ":|" + phi;
     pack_lower_result(mir, unpack_temp_id(re) + 1);
 
+// v0.50.2: Use unique name with block_id to avoid LLVM redefinition errors
+// v0.50.3: Increment block_id so let-bound vars get unique suffix (distinct from params at block_id=0)
 fn lower_let(ast: String, temp_id: i64, block_id: i64) -> String =
+    lower_let_p(ast, temp_id, block_id, "");
+
+fn lower_let_p(ast: String, temp_id: i64, block_id: i64, params: String) -> String =
     let name = extract_name(ast);
+    let new_block_id = block_id + 1;
+    let unique_name = name + "_b" + int_to_string(new_block_id);
     let value_ast = get_child(ast, 1);
     let body_ast = get_child(ast, 2);
-    let rv = lower_expr(value_ast, temp_id, block_id);
+    let rv = lower_expr_p(value_ast, temp_id, block_id, params);
     let val_id = unpack_temp_id(rv) - 1;
-    let assign = "  %" + name + " = copy %_t" + int_to_string(val_id);
-    let rb = lower_expr(body_ast, unpack_temp_id(rv), block_id);
+    let assign = "  %" + unique_name + " = copy %_t" + int_to_string(val_id);
+    let rb = lower_expr_p(body_ast, unpack_temp_id(rv), new_block_id, params);
     let mir = unpack_text(rv) + "|" + assign + "|" + unpack_text(rb);
     pack_lower_result(mir, unpack_temp_id(rb));
 
 fn lower_call(ast: String, temp_id: i64, block_id: i64) -> String =
+    lower_call_p(ast, temp_id, block_id, "");
+
+fn lower_call_p(ast: String, temp_id: i64, block_id: i64, params: String) -> String =
     let name = extract_name(ast);
-    lower_call_args(ast, name, temp_id, block_id, 1, "", "");
+    lower_call_args_p(ast, name, temp_id, block_id, 1, "", "", params);
 
 fn lower_call_args(ast: String, name: String, temp_id: i64, block_id: i64, idx: i64, mir_acc: String, args_acc: String) -> String =
+    lower_call_args_p(ast, name, temp_id, block_id, idx, mir_acc, args_acc, "");
+
+fn lower_call_args_p(ast: String, name: String, temp_id: i64, block_id: i64, idx: i64, mir_acc: String, args_acc: String, params: String) -> String =
     let arg = get_child(ast, idx);
     if arg == "" {
         let result_tmp = "%_t" + int_to_string(temp_id);
@@ -898,11 +974,11 @@ fn lower_call_args(ast: String, name: String, temp_id: i64, block_id: i64, idx: 
         let full_mir = if mir_acc == "" { call_mir } else { mir_acc + "|" + call_mir };
         pack_lower_result(full_mir, temp_id + 1)
     } else {
-        let ra = lower_expr(arg, temp_id, block_id);
+        let ra = lower_expr_p(arg, temp_id, block_id, params);
         let arg_id = unpack_temp_id(ra) - 1;
         let new_args = if args_acc == "" { "%_t" + int_to_string(arg_id) } else { args_acc + ", %_t" + int_to_string(arg_id) };
         let new_mir = if mir_acc == "" { unpack_text(ra) } else { mir_acc + "|" + unpack_text(ra) };
-        lower_call_args(ast, name, unpack_temp_id(ra), block_id, idx + 1, new_mir, new_args)
+        lower_call_args_p(ast, name, unpack_temp_id(ra), block_id, idx + 1, new_mir, new_args, params)
     };
 
 // ============================================================================
@@ -912,12 +988,23 @@ fn lower_call_args(ast: String, name: String, temp_id: i64, block_id: i64, idx: 
 fn lower_function(ast: String) -> String =
     let name = extract_name(ast);
     let params = collect_params(ast, 1, "");
+    let param_names = collect_param_names(ast, 1, "");
     let ret_type = get_fn_return_type(ast);
     let body_ast = get_fn_body(ast);
-    let rb = lower_expr(body_ast, 0, 0);
+    let rb = lower_expr_p(body_ast, 0, 0, param_names);
     let body_mir = unpack_text(rb);
     let result_id = unpack_temp_id(rb) - 1;
     "fn " + name + "(" + params + ") -> " + ret_type + " {|entry:|" + body_mir + "|  return %_t" + int_to_string(result_id) + "|}";
+
+// v0.50.3: Collect just parameter names (comma-separated) for passing to lower_var
+fn collect_param_names(ast: String, idx: i64, acc: String) -> String =
+    let child = get_child(ast, idx);
+    if child == "" or get_node_type(child) != "param" { acc } else {
+        let param_name = get_child(child, 0);
+        let name = if param_name.len() >= 2 and param_name.byte_at(0) == 60 { param_name.slice(1, param_name.len() - 1) } else { param_name };
+        let new_acc = if acc == "" { name } else { acc + "," + name };
+        collect_param_names(ast, idx + 1, new_acc)
+    };
 
 fn collect_params(ast: String, idx: i64, acc: String) -> String =
     let child = get_child(ast, idx);
@@ -1012,13 +1099,15 @@ fn llvm_gen_binop(op: String, line: String, pos: i64, dest: String) -> String =
     let op_with_nsw = if op == "add" { "add nsw" } else if op == "sub" { "sub nsw" } else if op == "mul" { "mul nsw" } else { op };
     "  " + dest + " = " + op_with_nsw + " i64 " + trim_end(left) + ", " + trim_end(right);
 
+// v0.50.2: Generate icmp + zext to properly convert i1 result to i64
 fn llvm_gen_cmp(pred: String, line: String, pos: i64, dest: String) -> String =
     let p1 = low_skip_ws(line, pos);
     let comma = find_comma(line, p1);
     let left = line.slice(p1, comma);
     let p2 = low_skip_ws(line, comma + 1);
     let right = line.slice(p2, line.len());
-    "  " + dest + " = icmp " + pred + " i64 " + trim_end(left) + ", " + trim_end(right);
+    let tmp = dest + "_cmp";
+    "  " + tmp + " = icmp " + pred + " i64 " + trim_end(left) + ", " + trim_end(right) + "|  " + dest + " = zext i1 " + tmp + " to i64";
 
 fn llvm_gen_not(line: String, pos: i64, dest: String) -> String =
     let p = low_skip_ws(line, pos);
@@ -1098,6 +1187,7 @@ fn llvm_gen_return(line: String, pos: i64) -> String =
     let val = line.slice(val_start, line.len());
     "  ret i64 " + trim_end(val);
 
+// v0.50.2: Add trunc i64 to i1 since conditions are now i64
 fn llvm_gen_branch(line: String, pos: i64) -> String =
     let after = low_skip_ws(line, pos + 6);
     let comma1 = find_comma(line, after);
@@ -1107,7 +1197,8 @@ fn llvm_gen_branch(line: String, pos: i64) -> String =
     let then_label = line.slice(after1, comma2);
     let after2 = low_skip_ws(line, comma2 + 1);
     let else_label = trim_end(line.slice(after2, line.len()));
-    "  br i1 " + trim_end(cond) + ", label %" + trim_end(then_label) + ", label %" + else_label;
+    let cond_br = trim_end(cond) + "_br";
+    "  " + cond_br + " = trunc i64 " + trim_end(cond) + " to i1|  br i1 " + cond_br + ", label %" + trim_end(then_label) + ", label %" + else_label;
 
 fn llvm_gen_goto(line: String, pos: i64) -> String =
     let label_start = low_skip_ws(line, pos + 4);
@@ -1244,6 +1335,9 @@ fn gen_program_acc(mir: String, pos: i64, acc: String) -> String =
 // SECTION 12: Module Generation
 // ============================================================================
 
+// Note: target triple needs quotes - add with sed after generation:
+// sed -i 's/target triple = x86_64/target triple = "x86_64/'
+// sed -i 's/linux-gnu$/linux-gnu"/'
 fn gen_module_header() -> String =
     "; ModuleID = bmb_bootstrap|target triple = x86_64-unknown-linux-gnu";
 

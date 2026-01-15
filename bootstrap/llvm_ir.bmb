@@ -64,13 +64,13 @@ fn read_until_ws(s: String, pos: i64) -> String =
 fn read_until_ws_acc(s: String, pos: i64, acc: String) -> String =
     if pos >= s.len() { acc } else {
         let c = s.byte_at(pos);
-        if c == 32 or c == 44 or c == 40 or c == 41 or c == 124 { acc } else { read_until_ws_acc(s, pos + 1, acc + char_to_string(c)) }
+        if c == 32 or c == 44 or c == 40 or c == 41 or c == 124 { acc } else { read_until_ws_acc(s, pos + 1, acc + byte_to_string(c)) }
     };
 
 fn strip_trailing_colon(s: String) -> String =
     if s.len() == 0 { "" } else if s.byte_at(s.len() - 1) == 58 { s.slice(0, s.len() - 1) } else { s };
 
-fn char_to_string(c: i64) -> String =
+fn byte_to_string(c: i64) -> String =
     if c == 32 { " " } else if c == 33 { "!" } else if c == 37 { "%" } else if c == 38 { "&" } else if c == 40 { "(" } else if c == 41 { ")" } else if c == 42 { "*" } else if c == 43 { "+" } else if c == 44 { "," } else if c == 45 { "-" } else if c == 46 { "." } else if c == 47 { "/" } else if c == 58 { ":" } else if c == 59 { ";" } else if c == 60 { "<" } else if c == 61 { "=" } else if c == 62 { ">" } else if c == 91 { "[" } else if c == 93 { "]" } else if c == 95 { "_" } else if c == 123 { "{" } else if c == 124 { "|" } else if c == 125 { "}" } else if c >= 48 and c <= 57 { digit_char(c - 48) } else if c >= 65 and c <= 90 { char_upper(c) } else if c >= 97 and c <= 122 { char_lower(c) } else { "?" };
 
 fn char_upper(c: i64) -> String =
@@ -161,9 +161,14 @@ fn mir_to_llvm_arith(op: String) -> String =
 // MIR: %_t0 = <= %a, %b  →  LLVM: %_t0 = icmp sle i64 %a, %b
 // MIR: %_t0 = >= %a, %b  →  LLVM: %_t0 = icmp sge i64 %a, %b
 
+// v0.50.2: Generate icmp + zext to properly convert i1 result to i64
+// icmp returns i1 but BMB treats booleans as i64, so we must zext
 fn gen_binop_cmp(dest: String, op: String, lhs: String, rhs: String, ty: String) -> String =
     let llvm_cmp = mir_to_llvm_cmp(op);
-    dest + " = icmp " + llvm_cmp + " " + ty + " " + lhs + ", " + rhs;
+    let tmp = dest + "_cmp";
+    // Line 1: icmp into temp i1 variable
+    // Line 2: zext i1 to i64
+    tmp + " = icmp " + llvm_cmp + " " + ty + " " + lhs + ", " + rhs + "|  " + dest + " = zext i1 " + tmp + " to i64";
 
 fn mir_to_llvm_cmp(op: String) -> String =
     if op == "==" { "eq" } else if op == "!=" { "ne" } else if op == "<" { "slt" } else if op == ">" { "sgt" } else if op == "<=" { "sle" } else if op == ">=" { "sge" } else { "eq" };  // default
@@ -467,7 +472,7 @@ fn read_switch_label(s: String, pos: i64) -> String =
 fn read_switch_label_acc(s: String, pos: i64, acc: String) -> String =
     if pos >= s.len() { acc } else {
         let c = s.byte_at(pos);
-        if c == 44 or c == 32 or c == 93 { acc } else { read_switch_label_acc(s, pos + 1, acc + char_to_string(c)) }  // comma, space, or ']'
+        if c == 44 or c == 32 or c == 93 { acc } else { read_switch_label_acc(s, pos + 1, acc + byte_to_string(c)) }  // comma, space, or ']'
     };
 
 // ============================================================================
@@ -811,7 +816,7 @@ fn read_until_bracket(s: String, pos: i64) -> String =
     read_until_bracket_rec(s, pos, "");
 
 fn read_until_bracket_rec(s: String, pos: i64, acc: String) -> String =
-    if pos >= s.len() { acc } else if s.byte_at(pos) == 91 { acc } else { read_until_bracket_rec(s, pos + 1, acc + char_to_string(s.byte_at(pos))) };  // 91='['
+    if pos >= s.len() { acc } else if s.byte_at(pos) == 91 { acc } else { read_until_bracket_rec(s, pos + 1, acc + byte_to_string(s.byte_at(pos))) };  // 91='['
 
 fn extract_index_expr(s: String, pos: i64) -> String =
     // Skip '[' and extract until ']'
@@ -819,7 +824,7 @@ fn extract_index_expr(s: String, pos: i64) -> String =
     extract_until_close_bracket(s, start, "");
 
 fn extract_until_close_bracket(s: String, pos: i64, acc: String) -> String =
-    if pos >= s.len() { acc } else if s.byte_at(pos) == 93 { acc } else { extract_until_close_bracket(s, pos + 1, acc + char_to_string(s.byte_at(pos))) };  // 93=']'
+    if pos >= s.len() { acc } else if s.byte_at(pos) == 93 { acc } else { extract_until_close_bracket(s, pos + 1, acc + byte_to_string(s.byte_at(pos))) };  // 93=']'
 
 // Binary operations: + %a, %b or == %a, %b or and %a, %b
 // v0.30.70: Range operator support
@@ -828,7 +833,8 @@ fn gen_instr_binop(dest: String, op: String, line: String, pos: i64) -> String =
     let pos2 = find_char(line, 44, pos);  // find comma
     let pos3 = skip_ws(line, pos2 + 1);
     let rhs = read_until_ws(line, pos3);
-    if is_arith_op(op) { gen_binop_arith(dest, op, lhs, rhs, "i64") } else if is_cmp_op(op) { gen_binop_cmp(dest, op, lhs, rhs, "i64") } else if is_logic_op(op) { gen_binop_logic(dest, op, lhs, rhs, "i1") } else if is_range_op(op) { gen_binop_range(dest, op, lhs, rhs) } else { "; unknown op: " + op };
+    // v0.50.2: Changed logic ops from i1 to i64 since comparisons now zext to i64
+    if is_arith_op(op) { gen_binop_arith(dest, op, lhs, rhs, "i64") } else if is_cmp_op(op) { gen_binop_cmp(dest, op, lhs, rhs, "i64") } else if is_logic_op(op) { gen_binop_logic(dest, op, lhs, rhs, "i64") } else if is_range_op(op) { gen_binop_range(dest, op, lhs, rhs) } else { "; unknown op: " + op };
 
 // ============================================================================
 // SECTION 10: LLVM IR Control Flow (v0.10.6)
@@ -844,10 +850,13 @@ fn gen_label(name: String) -> String =
 fn gen_br(target: String) -> String =
     "br label %" + target;
 
-// Conditional branch
-// br i1 %cond, label %then, label %else
+// Conditional branch - v0.50.2: Add trunc i64 to i1 since conditions are now i64
+// Input: i64 condition, generates:
+//   %cond_br = trunc i64 %cond to i1
+//   br i1 %cond_br, label %then, label %else
 fn gen_br_cond(cond: String, then_label: String, else_label: String) -> String =
-    "br i1 " + cond + ", label %" + then_label + ", label %" + else_label;
+    let cond_br = cond + "_br";
+    cond_br + " = trunc i64 " + cond + " to i1|  br i1 " + cond_br + ", label %" + then_label + ", label %" + else_label;
 
 // Return statement
 // ret i64 %value  or  ret void
@@ -984,7 +993,7 @@ fn read_until_char(s: String, pos: i64, c: i64) -> String =
     read_until_char_acc(s, pos, c, "");
 
 fn read_until_char_acc(s: String, pos: i64, c: i64, acc: String) -> String =
-    if pos >= s.len() { acc } else if s.byte_at(pos) == c { acc } else { read_until_char_acc(s, pos + 1, c, acc + char_to_string(s.byte_at(pos))) };
+    if pos >= s.len() { acc } else if s.byte_at(pos) == c { acc } else { read_until_char_acc(s, pos + 1, c, acc + byte_to_string(s.byte_at(pos))) };
 
 // find_arrow already defined above (45='-', 62='>')
 
@@ -1062,7 +1071,7 @@ fn extract_field(s: String, index: i64) -> String =
     extract_field_acc(s, 0, index, 0, "");
 
 fn extract_field_acc(s: String, pos: i64, target: i64, current: i64, acc: String) -> String =
-    if pos >= s.len() { if current == target { acc } else { "" } } else if s.byte_at(pos) == 124 { if current == target { acc } else { extract_field_acc(s, pos + 1, target, current + 1, "") } } else if current == target { extract_field_acc(s, pos + 1, target, current, acc + char_to_string(s.byte_at(pos))) } else { extract_field_acc(s, pos + 1, target, current, acc) };
+    if pos >= s.len() { if current == target { acc } else { "" } } else if s.byte_at(pos) == 124 { if current == target { acc } else { extract_field_acc(s, pos + 1, target, current + 1, "") } } else if current == target { extract_field_acc(s, pos + 1, target, current, acc + byte_to_string(s.byte_at(pos))) } else { extract_field_acc(s, pos + 1, target, current, acc) };
 
 // Generate complete function from MIR
 // Input: MIR function text with | separators
@@ -1157,7 +1166,7 @@ fn read_until_dot(s: String, pos: i64) -> String =
     read_until_dot_acc(s, pos, "");
 
 fn read_until_dot_acc(s: String, pos: i64, acc: String) -> String =
-    if pos >= s.len() { acc } else if s.byte_at(pos) == 46 { acc } else { read_until_dot_acc(s, pos + 1, acc + char_to_string(s.byte_at(pos))) };  // 46='.'
+    if pos >= s.len() { acc } else if s.byte_at(pos) == 46 { acc } else { read_until_dot_acc(s, pos + 1, acc + byte_to_string(s.byte_at(pos))) };  // 46='.'
 
 // Parse method name: "... %recv.method(...)" -> "method"
 fn parse_method_call_method(line: String) -> String =
@@ -1173,7 +1182,7 @@ fn read_until_paren(s: String, pos: i64) -> String =
     read_until_paren_acc(s, pos, "");
 
 fn read_until_paren_acc(s: String, pos: i64, acc: String) -> String =
-    if pos >= s.len() { acc } else if s.byte_at(pos) == 40 { acc } else { read_until_paren_acc(s, pos + 1, acc + char_to_string(s.byte_at(pos))) };  // 40='('
+    if pos >= s.len() { acc } else if s.byte_at(pos) == 40 { acc } else { read_until_paren_acc(s, pos + 1, acc + byte_to_string(s.byte_at(pos))) };  // 40='('
 
 // Parse args from method call: "...method(args)" -> "args"
 fn parse_method_call_args(line: String) -> String =
@@ -1187,7 +1196,7 @@ fn extract_paren_content(s: String, pos: i64) -> String =
     if pos >= s.len() or s.byte_at(pos) != 40 { "" } else { extract_until_close_paren(s, pos + 1, "") };
 
 fn extract_until_close_paren(s: String, pos: i64, acc: String) -> String =
-    if pos >= s.len() { acc } else if s.byte_at(pos) == 41 { acc } else { extract_until_close_paren(s, pos + 1, acc + char_to_string(s.byte_at(pos))) };  // 41=')'
+    if pos >= s.len() { acc } else if s.byte_at(pos) == 41 { acc } else { extract_until_close_paren(s, pos + 1, acc + byte_to_string(s.byte_at(pos))) };  // 41=')'
 
 fn find_method_call_pos(s: String, pos: i64) -> i64 =
     if pos + 10 >= s.len() { 0 - 1 } else if starts_with(s, "MethodCall", pos) { pos } else { find_method_call_pos(s, pos + 1) };
@@ -1380,8 +1389,7 @@ fn find_double_pipe(s: String, pos: i64) -> i64 =
     if pos + 1 >= s.len() { s.len() } else if s.byte_at(pos) == 124 and s.byte_at(pos + 1) == 124 { pos } else { find_double_pipe(s, pos + 1) };
 
 // Generate LLVM module header with target specification
-// Note: LLVM target triple would use quotes, but BMB cannot have quotes in strings
-// In real output, pipes would be newlines
+// Note: target triple needs quotes - add with sed after generation
 fn gen_module_header() -> String =
     "; ModuleID = bmb_bootstrap|target triple = x86_64-unknown-linux-gnu";
 
@@ -1542,15 +1550,16 @@ fn test_arith_ops() -> i64 =
     let t5 = if a5 == "%_t4 = srem i64 %a, %b" { 1 } else { 0 };
     t1 + t2 + t3 + t4 + t5;
 
+// v0.50.2: Updated tests to check for icmp+zext pattern
 fn test_cmp_ops() -> i64 =
     let c1 = gen_binop_cmp("%_t0", "==", "%a", "%b", "i64");
-    let t1 = if c1 == "%_t0 = icmp eq i64 %a, %b" { 1 } else { 0 };
+    let t1 = if str_contains(c1, "icmp eq i64") and str_contains(c1, "zext i1") { 1 } else { 0 };
     let c2 = gen_binop_cmp("%_t1", "!=", "%a", "%b", "i64");
-    let t2 = if c2 == "%_t1 = icmp ne i64 %a, %b" { 1 } else { 0 };
+    let t2 = if str_contains(c2, "icmp ne i64") and str_contains(c2, "zext i1") { 1 } else { 0 };
     let c3 = gen_binop_cmp("%_t2", "<", "%a", "%b", "i64");
-    let t3 = if c3 == "%_t2 = icmp slt i64 %a, %b" { 1 } else { 0 };
+    let t3 = if str_contains(c3, "icmp slt i64") and str_contains(c3, "zext i1") { 1 } else { 0 };
     let c4 = gen_binop_cmp("%_t3", ">", "%a", "%b", "i64");
-    let t4 = if c4 == "%_t3 = icmp sgt i64 %a, %b" { 1 } else { 0 };
+    let t4 = if str_contains(c4, "icmp sgt i64") and str_contains(c4, "zext i1") { 1 } else { 0 };
     t1 + t2 + t3 + t4;
 
 fn test_logic_ops() -> i64 =
@@ -1587,6 +1596,7 @@ fn test_unary_ops() -> i64 =
     t1 + t2;
 
 // v0.31.19: Updated for nsw flags
+// v0.50.2: Updated comparison test for icmp+zext pattern
 fn test_instruction_parsing() -> i64 =
     // Test const instruction (no nsw - loading constant)
     let i1 = gen_instruction("%_t0 = const I:42");
@@ -1594,9 +1604,9 @@ fn test_instruction_parsing() -> i64 =
     // Test arithmetic instruction (nsw for optimization)
     let i2 = gen_instruction("%_t0 = + %a, %b");
     let t2 = if i2 == "%_t0 = add nsw i64 %a, %b" { 1 } else { 0 };
-    // Test comparison instruction
+    // Test comparison instruction - now returns icmp+zext
     let i3 = gen_instruction("%_t0 = == %x, %y");
-    let t3 = if i3 == "%_t0 = icmp eq i64 %x, %y" { 1 } else { 0 };
+    let t3 = if str_contains(i3, "icmp eq i64") and str_contains(i3, "zext i1") { 1 } else { 0 };
     // Test neg instruction (nsw for negation optimization)
     let i4 = gen_instruction("%_t0 = neg %x");
     let t4 = if i4 == "%_t0 = sub nsw i64 0, %x" { 1 } else { 0 };
@@ -1706,13 +1716,14 @@ fn test_labels() -> i64 =
     let t3 = if l3 == "merge_0:" { 1 } else { 0 };
     t1 + t2 + t3;
 
+// v0.50.2: Updated test for trunc+br pattern
 fn test_branches() -> i64 =
     let b1 = gen_br("entry");
     let t1 = if b1 == "br label %entry" { 1 } else { 0 };
     let b2 = gen_br("merge_0");
     let t2 = if b2 == "br label %merge_0" { 1 } else { 0 };
     let b3 = gen_br_cond("%cond", "then_0", "else_0");
-    let t3 = if b3 == "br i1 %cond, label %then_0, label %else_0" { 1 } else { 0 };
+    let t3 = if str_contains(b3, "trunc i64 %cond to i1") and str_contains(b3, "br i1") { 1 } else { 0 };
     t1 + t2 + t3;
 
 fn test_returns() -> i64 =
@@ -1729,13 +1740,14 @@ fn test_phi() -> i64 =
     let t2 = if p2 == "%_t0 = phi i1 [ %x, %left ], [ %y, %right ]" { 1 } else { 0 };
     t1 + t2;
 
+// v0.50.2: Updated for trunc+br pattern
 fn test_terminators() -> i64 =
     let t1_in = gen_terminator("return %_t0");
     let t1 = if t1_in == "ret i64 %_t0" { 1 } else { 0 };
     let t2_in = gen_terminator("goto entry");
     let t2 = if t2_in == "br label %entry" { 1 } else { 0 };
     let t3_in = gen_terminator("branch %c, then_0, else_0");
-    let t3 = if t3_in == "br i1 %c, label %then_0, label %else_0" { 1 } else { 0 };
+    let t3 = if str_contains(t3_in, "trunc i64 %c to i1") and str_contains(t3_in, "br i1") { 1 } else { 0 };
     t1 + t2 + t3;
 
 fn test_line_detection() -> i64 =
@@ -1964,9 +1976,9 @@ fn test_while_ir() -> i64 =
     let lbl = gen_label_line("loop_start_0:");
     let t1 = if lbl == "loop_start_0:" { 1 } else { 0 };
 
-    // Test 2: Branch instruction
+    // Test 2: Branch instruction - v0.50.2: now includes trunc
     let br = gen_terminator("branch %_t0, body_0, loop_end_0");
-    let t2 = if has_pattern(br, "br i1 %_t0", 0) { 1 } else { 0 };
+    let t2 = if has_pattern(br, "trunc i64 %_t0", 0) and has_pattern(br, "br i1", 0) { 1 } else { 0 };
 
     // Test 3: Goto instruction
     let gt = gen_terminator("goto loop_start_0");
@@ -2009,9 +2021,9 @@ fn test_for_ir() -> i64 =
     let lbl3 = gen_label_line("for_end_0:");
     let t3 = if lbl3 == "for_end_0:" { 1 } else { 0 };
 
-    // Test 4: Branch to for_body or for_end
+    // Test 4: Branch to for_body or for_end - v0.50.2: includes trunc
     let br = gen_terminator("branch %_t0, for_body_0, for_end_0");
-    let t4 = if has_pattern(br, "br i1 %_t0, label %for_body_0, label %for_end_0", 0) { 1 } else { 0 };
+    let t4 = if has_pattern(br, "trunc i64 %_t0", 0) and has_pattern(br, "for_body_0", 0) { 1 } else { 0 };
 
     // Test 5: Goto back to for_start
     let gt = gen_terminator("goto for_start_0");
@@ -2049,9 +2061,9 @@ fn test_if_control_flow() -> i64 =
     let merge_lbl = gen_label_line("merge_0:");
     let t3 = if merge_lbl == "merge_0:" { 1 } else { 0 };
 
-    // Test 4: conditional branch with nested block indices
+    // Test 4: conditional branch with nested block indices - v0.50.2: includes trunc
     let br1 = gen_terminator("branch %cond, then_5, else_5");
-    let t4 = if br1 == "br i1 %cond, label %then_5, label %else_5" { 1 } else { 0 };
+    let t4 = if has_pattern(br1, "trunc i64 %cond", 0) and has_pattern(br1, "then_5", 0) { 1 } else { 0 };
 
     // Test 5: phi for merge with different values
     let phi1 = gen_phi("%result", "i64", "%x", "then_0", "%y", "else_0");
@@ -2958,10 +2970,10 @@ fn test_starts_with_ir() -> i64 =
 
 // v0.30.193: Extended char conversion tests
 fn test_char_conversion_ir() -> i64 =
-    let t1 = if char_to_string(65) == "A" { 1 } else { 0 };
-    let t2 = if char_to_string(97) == "a" { 1 } else { 0 };
-    let t3 = if char_to_string(48) == "0" { 1 } else { 0 };
-    let t4 = if char_to_string(32) == " " { 1 } else { 0 };
+    let t1 = if byte_to_string(65) == "A" { 1 } else { 0 };
+    let t2 = if byte_to_string(97) == "a" { 1 } else { 0 };
+    let t3 = if byte_to_string(48) == "0" { 1 } else { 0 };
+    let t4 = if byte_to_string(32) == " " { 1 } else { 0 };
     let t5 = if char_upper(66) == "B" { 1 } else { 0 };
     let t6 = if char_lower(98) == "b" { 1 } else { 0 };
     t1 + t2 + t3 + t4 + t5 + t6;
