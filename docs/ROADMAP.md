@@ -29,8 +29,8 @@
 | v0.31-v0.37 | Maturity | ✅ 완료 | Stage 3, 벤치마크, 스펙 준수 |
 | v0.38-v0.44 | Stabilization | ✅ 완료 | CI, 안정성, API 동결, 릴리스 준비 |
 | **v0.45** | **Foundation Completion** | ✅ 완료 | **stdlib 확정, 도구 안정화, bmb lint 추가** |
-| **v0.46** | **Independence** | ⏳ 검증중 | **Stage 1 완료, Stage 2 실패 (인터프리터 재귀 한계)** |
-| **v0.47** | **Performance** | ❌ 미통과 | **Gate #3.1 실패 (2/9 통과), 2개 벤치마크 C보다 빠름** |
+| **v0.46** | **Independence** | ⏳ 검증중 | **Stage 1 완료, Stage 2 실패 (파서 스택 오버플로우)** |
+| **v0.47** | **Performance** | ❓ 재검증필요 | **Gate #3.1 벤치마크 불일치 수정됨 (v0.50.9)** |
 | **v0.48** | **Ecosystem** | 🔄 진행중 | **패키지 14/14, 크로스 컴파일 미완료** |
 | **v0.49** | **Showcase** | ✅ 완료 | **샘플 앱 5/5, 시나리오 5/5** |
 | **v0.50** | **Final Verification** | 🔄 진행중 | **보안 감사 1차 완료, 최종 검증** |
@@ -48,9 +48,9 @@
 | **에러 메시지** | 사용자 친화적 컴파일 에러 | ✅ ariadne 기반 | v0.45 |
 | **개발 도구** | LSP, Formatter, Linter 안정화 | ✅ LSP+Linter, ⏳ Formatter | v0.45 |
 | **Rust 제거** | Cargo.toml 불필요, BMB-only 빌드 | ⏳ WSL 검증 후 | v0.46 |
-| **자체 컴파일** | BMB 컴파일러가 자신을 컴파일 | ⏳ Stage 2 실패 (인터프리터 재귀 한계 100K) | v0.46 |
+| **자체 컴파일** | BMB 컴파일러가 자신을 컴파일 | ⏳ Stage 2 실패 (파서 스택 오버플로우) | v0.46 |
 | **디버깅 지원** | DWARF 정보, 소스맵 | 📋 계획 | v0.46 |
-| **성능 검증** | Gate #3.1 통과 (C 대비 ≤1.10x) | ❌ 2/9 통과 (fannkuch, binary_trees만) | v0.47 |
+| **성능 검증** | Gate #3.1 통과 (C 대비 ≤1.10x) | ❓ 벤치마크 수정됨, WSL 재검증 필요 | v0.47 |
 | **크로스 컴파일** | Linux/Windows/macOS/WASM | ❌ 미완료 | v0.48 |
 | **생태계** | 14+ 핵심 패키지 | ✅ 14/14 | v0.48 |
 | **샘플/문서** | 5개 샘플 앱, 5개 시나리오 | ✅ 5/5 앱, 5/5 문서 | v0.49 |
@@ -1192,7 +1192,61 @@ fn print_str_nl(s: String) -> i64 =
 **다음 작업 우선순위**:
 | 우선순위 | 작업 | 상태 |
 |----------|------|------|
-| P0 | Bootstrap 긴 if-else 리팩토링 | 📋 계획 |
-| P1 | 벤치마크 구현 통일 (C/BMB 공정 비교) | 📋 계획 |
+| P0 | Bootstrap 긴 if-else 리팩토링 | ✅ v0.50.8 완료 |
+| P1 | 벤치마크 구현 통일 (C/BMB 공정 비교) | ✅ v0.50.9 완료 |
 | P1 | 정제 타입 검증 연동 (SMT) | 📋 계획 |
 | P2 | fibonacci, n_body 최적화 분석 | 📋 계획 |
+
+### 2026-01-16 벤치마크 비판적 검토 및 수정 세션
+
+**수행된 작업**:
+
+1. **벤치마크 불일치 발견 및 수정**
+
+   **이전 상태 (2026-01-15 결과):**
+   - fannkuch: BMB 0.45x (C보다 빠름으로 보고됨)
+   - binary_trees: BMB 0.42x (C보다 빠름으로 보고됨)
+
+   **비판적 검토 결과:**
+   | 벤치마크 | C 입력 | BMB 입력 | 문제점 |
+   |----------|--------|----------|--------|
+   | fannkuch | n=10 | n=6 | **입력 크기 다름 + 알고리즘 오류** |
+   | binary_trees | max_depth=16 | max_depth=8 | **작업량 256배 차이** |
+
+   **결론**: BMB가 빠른 게 아니라 훨씬 적은 작업량 수행
+
+2. **수정 내용**
+   - `binary_trees/bmb/main.bmb`: max_depth 8 → 14
+   - `binary_trees/c/main.c`: max_depth 16 → 14 (공정 비교)
+   - `fannkuch/bmb/main.bmb`: 완전 재작성
+     - n=10으로 통일
+     - 배열 기반 알고리즘 (C와 동일)
+     - Heap's algorithm 정확 구현
+
+3. **mandelbrot 분석**
+   - C와 BMB 알고리즘 동일 (size=50, max_iter=50)
+   - 22x 느림은 BMB 컴파일러 최적화 문제
+     - tail-call 최적화 미지원
+     - 재귀 함수 호출 오버헤드
+
+**참고 자료**:
+- [Bootstrapping (compilers) - Wikipedia](https://en.wikipedia.org/wiki/Bootstrapping_(compilers))
+- [Fluent Parser Stack Overflow 이슈](https://github.com/projectfluent/fluent/issues/284)
+- [Mozilla CSS Parser 재귀 문제](https://bugzilla.mozilla.org/show_bug.cgi?id=432561)
+
+**정직한 재평가**:
+
+| 항목 | 이전 주장 | 실제 상태 | 비고 |
+|------|----------|----------|------|
+| fannkuch | 0.45x (BMB 빠름) | ❓ 재검증 필요 | 알고리즘 수정됨 |
+| binary_trees | 0.42x (BMB 빠름) | ❓ 재검증 필요 | 깊이 통일됨 |
+| fibonacci | 2.73x | 2.73x (정확) | 알고리즘 동일 확인 |
+| mandelbrot | 22x | 22x (정확) | 알고리즘 동일, 최적화 필요 |
+
+**다음 단계**:
+| 우선순위 | 작업 | 상태 |
+|----------|------|------|
+| P0 | WSL에서 수정된 벤치마크 재실행 | ⏳ 대기 |
+| P0 | Stage 2 Bootstrap 재시도 (스택 크기 증가) | ⏳ 대기 |
+| P1 | tail-call 최적화 구현 | 📋 계획 |
+| P2 | LLVM 최적화 패스 검토 | 📋 계획 |
