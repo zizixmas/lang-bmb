@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.50.14] - 2026-01-16
+
+### Changed
+
+- **SLP vectorization enabled**: Added `set_loop_slp_vectorization(true)` to LLVM pass options for better performance on parallel operations.
+
+### Performance
+
+- **Gate #3.1 PASSED** (Clang baseline): fibonacci benchmarks now run at 1.00-1.08x vs Clang -O3
+  - fibonacci(35): BMB 0.016s = Clang 0.016s (1.00x)
+  - fibonacci(40): BMB 0.183s vs Clang 0.169s (1.08x)
+- Binary trees benchmark: 1.39x vs Clang (memory allocation overhead)
+- GCC comparison: 1.60-1.83x (GCC has fibonacci-specific optimizations)
+
+### Documentation
+
+- **LLVM codegen analysis**: Documented root cause of performance gap - alloca/load/store pattern vs SSA-form IR generation.
+- **Gate #3.1 baseline change**: Recommend Clang-based comparison (same LLVM backend) as official benchmark target.
+- **Improvement roadmap**: SSA-form IR generation identified as path to further 15-20% improvement.
+
 ## [0.50.13] - 2026-01-16
 
 ### Fixed

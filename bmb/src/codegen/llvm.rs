@@ -171,6 +171,7 @@ impl CodeGen {
 
             let pass_options = PassBuilderOptions::create();
             pass_options.set_loop_vectorization(true);
+            pass_options.set_loop_slp_vectorization(true);  // v0.50.14: Enable SLP vectorization
             pass_options.set_loop_unrolling(true);
             pass_options.set_merge_functions(true);
 
