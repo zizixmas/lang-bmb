@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.50.13] - 2026-01-16
+
+### Fixed
+
+- **Bootstrap LLVM IR variable scoping bug**: Function parameters were incorrectly renamed with block suffixes (e.g., `%d` → `%d_b2`) in nested else branches, causing undefined variable errors in generated LLVM IR.
+
+### Changed
+
+- Added `params` parameter to all `lower_*_sb` functions in bootstrap LLVM IR generator
+- New `extract_param_names` helper extracts parameter names from signature for scoping checks
+- `lower_var_sb` now uses `is_param()` to preserve original parameter names across all blocks
+
+### Known Issues
+
+- Stage 2 self-compilation still fails due to stack overflow when processing 30K+ line bootstrap file (pre-existing issue, tracked as v0.46 blocker)
+
 ## [0.50.12] - 2026-01-16
 
 ### Fixed

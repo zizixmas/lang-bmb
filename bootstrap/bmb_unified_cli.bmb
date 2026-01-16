@@ -733,29 +733,30 @@ fn sb_push_mir(sb: i64, text: String) -> i64 =
     } else { 0 };
 
 // v0.50.8: lower_expr dispatch helpers - split for faster parsing
-fn lower_expr_i(ast: String, ntype: String, temp_id: i64, block_id: i64, sb: i64) -> i64 =
+fn lower_expr_i(ast: String, ntype: String, temp_id: i64, block_id: i64, params: String, sb: i64) -> i64 =
     if ntype == "int" { lower_int_sb(ast, temp_id, sb) }
-    else if ntype == "if" { lower_if_sb(ast, temp_id, block_id, sb) }
+    else if ntype == "if" { lower_if_sb(ast, temp_id, block_id, params, sb) }
     else { temp_id };
 
-fn lower_expr_b(ast: String, ntype: String, temp_id: i64, block_id: i64, sb: i64) -> i64 =
+// v0.50.13: All lower_*_sb functions now take params to distinguish function parameters from let-bound vars
+fn lower_expr_b(ast: String, ntype: String, temp_id: i64, block_id: i64, params: String, sb: i64) -> i64 =
     if ntype == "bool" { lower_bool_sb(ast, temp_id, sb) }
-    else if ntype == "binop" { lower_binop_sb(ast, temp_id, block_id, sb) }
+    else if ntype == "binop" { lower_binop_sb(ast, temp_id, block_id, params, sb) }
     else { temp_id };
 
-fn lower_expr_sb(ast: String, temp_id: i64, block_id: i64, sb: i64) -> i64 =
+fn lower_expr_sb(ast: String, temp_id: i64, block_id: i64, params: String, sb: i64) -> i64 =
     let ntype = get_node_type(ast);
     let c = ntype.byte_at(0);
-    // v0.50.2: Pass block_id to lower_var_sb for unique variable names
+    // v0.50.13: Pass params to all lower_*_sb for correct variable scoping
     // Dispatch by first char: i(int,if), b(bool,binop), v, u, l, c, s, m
-    if c == 105 { lower_expr_i(ast, ntype, temp_id, block_id, sb) }
-    else if c == 98 { lower_expr_b(ast, ntype, temp_id, block_id, sb) }
-    else if ntype == "var" { lower_var_sb(ast, temp_id, block_id, sb) }
-    else if ntype == "unary" { lower_unary_sb(ast, temp_id, block_id, sb) }
-    else if ntype == "let" { lower_let_sb(ast, temp_id, block_id, sb) }
-    else if ntype == "call" { lower_call_sb(ast, temp_id, block_id, sb) }
+    if c == 105 { lower_expr_i(ast, ntype, temp_id, block_id, params, sb) }
+    else if c == 98 { lower_expr_b(ast, ntype, temp_id, block_id, params, sb) }
+    else if ntype == "var" { lower_var_sb(ast, temp_id, block_id, params, sb) }
+    else if ntype == "unary" { lower_unary_sb(ast, temp_id, block_id, params, sb) }
+    else if ntype == "let" { lower_let_sb(ast, temp_id, block_id, params, sb) }
+    else if ntype == "call" { lower_call_sb(ast, temp_id, block_id, params, sb) }
     else if ntype == "str" { lower_str_sb(ast, temp_id, sb) }
-    else if ntype == "mcall" { lower_mcall_sb(ast, temp_id, block_id, sb) }
+    else if ntype == "mcall" { lower_mcall_sb(ast, temp_id, block_id, params, sb) }
     else { temp_id };
 
 fn lower_int_sb(ast: String, temp_id: i64, sb: i64) -> i64 =
@@ -778,54 +779,54 @@ fn lower_str_sb(ast: String, temp_id: i64, sb: i64) -> i64 =
     let w1 = sb_push_mir(sb, "  " + tmp + " = str " + text);
     temp_id + 1;
 
-// v0.50.2: Variable references need block_id to match the definition
-// NOTE: This requires block_id parameter - see below
-// v0.50.3: Only add suffix when block_id > 0 (parameters at block_id=0)
-fn lower_var_sb(ast: String, temp_id: i64, block_id: i64, sb: i64) -> i64 =
+// v0.50.13: Variable references need params to correctly identify function parameters
+// Function parameters always use original name; let-bound vars use block_id suffix
+fn lower_var_sb(ast: String, temp_id: i64, block_id: i64, params: String, sb: i64) -> i64 =
     let name = extract_name(ast);
     let tmp = "%_t" + int_to_string(temp_id);
-    let var_name = if block_id > 0 { name + "_b" + int_to_string(block_id) } else { name };
+    // Parameters always use original name; let-bound vars use block_id suffix when block_id > 0
+    let var_name = if is_param(name, params) { name } else if block_id > 0 { name + "_b" + int_to_string(block_id) } else { name };
     let w1 = sb_push_mir(sb, "  " + tmp + " = copy %" + var_name);
     temp_id + 1;
 
-fn lower_binop_sb(ast: String, temp_id: i64, block_id: i64, sb: i64) -> i64 =
+fn lower_binop_sb(ast: String, temp_id: i64, block_id: i64, params: String, sb: i64) -> i64 =
     let op = get_child(ast, 0);
     let left_ast = get_child(ast, 1);
     let right_ast = get_child(ast, 2);
-    let left_new = lower_expr_sb(left_ast, temp_id, block_id, sb);
+    let left_new = lower_expr_sb(left_ast, temp_id, block_id, params, sb);
     let left_id = left_new - 1;
-    let right_new = lower_expr_sb(right_ast, left_new, block_id, sb);
+    let right_new = lower_expr_sb(right_ast, left_new, block_id, params, sb);
     let right_id = right_new - 1;
     let result_tmp = "%_t" + int_to_string(right_new);
     let w1 = sb_push_mir(sb, "  " + result_tmp + " = " + op + " %_t" + int_to_string(left_id) + ", %_t" + int_to_string(right_id));
     right_new + 1;
 
-fn lower_unary_sb(ast: String, temp_id: i64, block_id: i64, sb: i64) -> i64 =
+fn lower_unary_sb(ast: String, temp_id: i64, block_id: i64, params: String, sb: i64) -> i64 =
     let op = get_child(ast, 0);
     let operand = get_child(ast, 1);
-    let operand_new = lower_expr_sb(operand, temp_id, block_id, sb);
+    let operand_new = lower_expr_sb(operand, temp_id, block_id, params, sb);
     let operand_id = operand_new - 1;
     let result_tmp = "%_t" + int_to_string(operand_new);
     let mir_op = if op == "not" { "not" } else if op == "-" { "neg" } else { op };
     let w1 = sb_push_mir(sb, "  " + result_tmp + " = " + mir_op + " %_t" + int_to_string(operand_id));
     operand_new + 1;
 
-fn lower_if_sb(ast: String, temp_id: i64, block_id: i64, sb: i64) -> i64 =
+fn lower_if_sb(ast: String, temp_id: i64, block_id: i64, params: String, sb: i64) -> i64 =
     let cond = get_child(ast, 0);
     let then_branch = get_child(ast, 1);
     let else_branch = get_child(ast, 2);
-    let cond_new = lower_expr_sb(cond, temp_id, block_id, sb);
+    let cond_new = lower_expr_sb(cond, temp_id, block_id, params, sb);
     let cond_id = cond_new - 1;
     let then_label = "then_" + int_to_string(block_id);
     let else_label = "else_" + int_to_string(block_id);
     let merge_label = "merge_" + int_to_string(block_id);
     let w1 = sb_push_mir(sb, "  branch %_t" + int_to_string(cond_id) + ", " + then_label + ", " + else_label);
     let w2 = sb_push_mir(sb, then_label + ":");
-    let then_new = lower_expr_sb(then_branch, cond_new, block_id + 1, sb);
+    let then_new = lower_expr_sb(then_branch, cond_new, block_id + 1, params, sb);
     let then_id = then_new - 1;
     let w3 = sb_push_mir(sb, "  goto " + merge_label);
     let w4 = sb_push_mir(sb, else_label + ":");
-    let else_new = lower_expr_sb(else_branch, then_new, block_id + 2, sb);
+    let else_new = lower_expr_sb(else_branch, then_new, block_id + 2, params, sb);
     let else_id = else_new - 1;
     let w5 = sb_push_mir(sb, "  goto " + merge_label);
     let w6 = sb_push_mir(sb, merge_label + ":");
@@ -836,57 +837,57 @@ fn lower_if_sb(ast: String, temp_id: i64, block_id: i64, sb: i64) -> i64 =
 // v0.50.2: Add block_id to variable names to make them unique per block
 // This fixes duplicate variable name errors in LLVM IR
 // v0.50.3: Increment block_id for unique naming (params at block_id=0)
-fn lower_let_sb(ast: String, temp_id: i64, block_id: i64, sb: i64) -> i64 =
+fn lower_let_sb(ast: String, temp_id: i64, block_id: i64, params: String, sb: i64) -> i64 =
     let name = extract_name(ast);
     let new_block_id = block_id + 1;
     let value_ast = get_child(ast, 1);
     let body_ast = get_child(ast, 2);
-    let val_new = lower_expr_sb(value_ast, temp_id, block_id, sb);
+    let val_new = lower_expr_sb(value_ast, temp_id, block_id, params, sb);
     let val_id = val_new - 1;
     // Use unique name: name_b{new_block_id} (e.g., start_pos_b1)
     let unique_name = name + "_b" + int_to_string(new_block_id);
     let w1 = sb_push_mir(sb, "  %" + unique_name + " = copy %_t" + int_to_string(val_id));
-    lower_expr_sb(body_ast, val_new, new_block_id, sb);
+    lower_expr_sb(body_ast, val_new, new_block_id, params, sb);
 
-fn lower_call_sb(ast: String, temp_id: i64, block_id: i64, sb: i64) -> i64 =
+fn lower_call_sb(ast: String, temp_id: i64, block_id: i64, params: String, sb: i64) -> i64 =
     let name = extract_name(ast);
-    lower_call_args_sb(ast, name, temp_id, block_id, 1, "", sb);
+    lower_call_args_sb(ast, name, temp_id, block_id, params, 1, "", sb);
 
-fn lower_call_args_sb(ast: String, name: String, temp_id: i64, block_id: i64, idx: i64, args_acc: String, sb: i64) -> i64 =
+fn lower_call_args_sb(ast: String, name: String, temp_id: i64, block_id: i64, params: String, idx: i64, args_acc: String, sb: i64) -> i64 =
     let arg = get_child(ast, idx);
     if arg == "" {
         let result_tmp = "%_t" + int_to_string(temp_id);
         let w1 = sb_push_mir(sb, "  " + result_tmp + " = call @" + name + "(" + args_acc + ")");
         temp_id + 1
     } else {
-        let arg_new = lower_expr_sb(arg, temp_id, block_id, sb);
+        let arg_new = lower_expr_sb(arg, temp_id, block_id, params, sb);
         let arg_id = arg_new - 1;
         let new_args = if args_acc == "" { "%_t" + int_to_string(arg_id) } else { args_acc + ", %_t" + int_to_string(arg_id) };
-        lower_call_args_sb(ast, name, arg_new, block_id, idx + 1, new_args, sb)
+        lower_call_args_sb(ast, name, arg_new, block_id, params, idx + 1, new_args, sb)
     };
 
 // v0.50: Lower method call - (mcall obj <method> args...) -> call @method(obj, args...)
-fn lower_mcall_sb(ast: String, temp_id: i64, block_id: i64, sb: i64) -> i64 =
+fn lower_mcall_sb(ast: String, temp_id: i64, block_id: i64, params: String, sb: i64) -> i64 =
     let obj = get_child(ast, 0);          // The object expression
     let method = extract_name_at(ast, 1); // The method name
     // First lower the object
-    let obj_new = lower_expr_sb(obj, temp_id, block_id, sb);
+    let obj_new = lower_expr_sb(obj, temp_id, block_id, params, sb);
     let obj_id = obj_new - 1;
     let obj_arg = "%_t" + int_to_string(obj_id);
     // Then lower remaining args and make the call
-    lower_mcall_args_sb(ast, method, obj_new, block_id, 2, obj_arg, sb);
+    lower_mcall_args_sb(ast, method, obj_new, block_id, params, 2, obj_arg, sb);
 
-fn lower_mcall_args_sb(ast: String, method: String, temp_id: i64, block_id: i64, idx: i64, args_acc: String, sb: i64) -> i64 =
+fn lower_mcall_args_sb(ast: String, method: String, temp_id: i64, block_id: i64, params: String, idx: i64, args_acc: String, sb: i64) -> i64 =
     let arg = get_child(ast, idx);
     if arg == "" {
         let result_tmp = "%_t" + int_to_string(temp_id);
         let w1 = sb_push_mir(sb, "  " + result_tmp + " = call @" + method + "(" + args_acc + ")");
         temp_id + 1
     } else {
-        let arg_new = lower_expr_sb(arg, temp_id, block_id, sb);
+        let arg_new = lower_expr_sb(arg, temp_id, block_id, params, sb);
         let arg_id = arg_new - 1;
         let new_args = args_acc + ", %_t" + int_to_string(arg_id);
-        lower_mcall_args_sb(ast, method, arg_new, block_id, idx + 1, new_args, sb)
+        lower_mcall_args_sb(ast, method, arg_new, block_id, params, idx + 1, new_args, sb)
     };
 
 // Extract name from child at specific index (for mcall method name)
@@ -900,13 +901,15 @@ fn extract_name_at(ast: String, idx: i64) -> String =
         child
     };
 
+// v0.50.13: Pass params to lower_expr_sb for correct variable scoping
 fn lower_function_sb(ast: String) -> String =
     let name = extract_name(ast);
     let params = collect_params(ast, 1, "");
+    let param_names = extract_param_names(params);
     let ret_type = get_fn_return_type(ast);
     let body_ast = get_fn_body(ast);
     let sb = sb_new();
-    let final_temp = lower_expr_sb(body_ast, 0, 0, sb);
+    let final_temp = lower_expr_sb(body_ast, 0, 0, param_names, sb);
     let result_id = final_temp - 1;
     let w1 = sb_push_mir(sb, "  return %_t" + int_to_string(result_id));
     let body_mir = sb_build(sb);
@@ -930,6 +933,47 @@ fn lower_program_inner_sb(ast: String, idx: i64, sb: i64) -> i64 =
 // ============================================================================
 // SECTION 9: Expression Lowering
 // ============================================================================
+
+// v0.50.13: Extract parameter names from "a: i64, b: i64" -> "a,b"
+// This is needed to pass param names to lower_expr_sb for correct variable scoping
+fn extract_param_names(params: String) -> String =
+    if params.len() == 0 { "" }
+    else { extract_param_names_scan(params, 0, "") };
+
+fn extract_param_names_scan(params: String, pos: i64, acc: String) -> String =
+    if pos >= params.len() { acc }
+    else {
+        let c = params.byte_at(pos);
+        // Skip whitespace
+        if c == 32 { extract_param_names_scan(params, pos + 1, acc) }
+        // Start of param name - find end at ':' or ','
+        else if is_param_name_char(c) {
+            let end = find_param_name_end(params, pos + 1);
+            let name = params.slice(pos, end);
+            let new_acc = if acc.len() == 0 { name } else { acc + "," + name };
+            // Skip to after ':' type
+            let after_colon = skip_to_comma_or_end(params, end);
+            extract_param_names_scan(params, after_colon, new_acc)
+        }
+        // Skip non-name chars
+        else { extract_param_names_scan(params, pos + 1, acc) }
+    };
+
+fn is_param_name_char(c: i64) -> bool =
+    (c >= 97 and c <= 122) or (c >= 65 and c <= 90) or (c >= 48 and c <= 57) or c == 95;
+
+fn find_param_name_end(params: String, pos: i64) -> i64 =
+    if pos >= params.len() { pos }
+    else {
+        let c = params.byte_at(pos);
+        if c == 58 or c == 44 or c == 32 { pos }
+        else { find_param_name_end(params, pos + 1) }
+    };
+
+fn skip_to_comma_or_end(params: String, pos: i64) -> i64 =
+    if pos >= params.len() { pos }
+    else if params.byte_at(pos) == 44 { pos + 1 }
+    else { skip_to_comma_or_end(params, pos + 1) };
 
 // v0.50.3: Check if a variable name is in the comma-separated param list
 // Uses character-by-character comparison for robustness in native code
