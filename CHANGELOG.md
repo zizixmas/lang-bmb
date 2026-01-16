@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.50.15] - 2026-01-16
+
+### Added
+
+- **Bootstrap parser method chain extensions**: Stage 1 native compiler now supports:
+  - Method calls on function results: `foo().bar()` → `(mcall (call foo) bar)`
+  - Method calls on string literals: `"abc".len()` → `(mcall (str "abc") len)`
+  - Method calls on parenthesized expressions: `(x + y).abs()` → `(mcall (+ x y) abs)`
+- **parser_ast.bmb v0.32 syntax support**: Added braced if-else parsing alongside pre-v0.32 `then/else` syntax
+
+### Fixed
+
+- **Stage 1 parsing of bootstrap files**: `bootstrap/types.bmb` (8K+ lines) now parses completely with Stage 1 native compiler (requires unlimited stack)
+
+### Known Issues
+
+- Stage 2 self-compilation still limited by LLVM IR variable scoping in nested branches (pre-existing, tracked)
+- Requires `ulimit -s unlimited` for large files due to recursive descent parser depth
+
 ## [0.50.14] - 2026-01-16
 
 ### Changed

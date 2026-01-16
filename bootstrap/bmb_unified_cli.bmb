@@ -298,8 +298,17 @@ fn parse_atom(src: String, pos: i64) -> String =
         let name = get_ident_text(src, pos, tok);
         let next = next_token_raw(src, tok_end(tok));
         if tok_kind(next) == TK_LPAREN() {
+            // v0.50.15: Support method calls on function results: foo().bar()
             let rargs = parse_args(src, tok_end(next), "");
-            pack_result(unpack_pos(rargs), "(call <" + name + ">" + unpack_ast(rargs) + ")")
+            if is_error(rargs) { rargs } else {
+                let call_ast = "(call <" + name + ">" + unpack_ast(rargs) + ")";
+                let after_call = next_token_raw(src, unpack_pos(rargs));
+                if tok_kind(after_call) == TK_DOT() {
+                    parse_method_chain(src, tok_end(after_call), call_ast)
+                } else {
+                    pack_result(unpack_pos(rargs), call_ast)
+                }
+            }
         } else if tok_kind(next) == TK_DOT() {
             // v0.50: Method call - convert obj.method(args) to (mcall <obj> <method> args)
             parse_method_chain(src, tok_end(next), "(var <" + name + ">)")
@@ -310,14 +319,30 @@ fn parse_atom(src: String, pos: i64) -> String =
         // v0.50: String literal - extract text from source (including quotes)
         let start_pos = skip_ws_comments(src, pos);
         let text = src.slice(start_pos, tok_end(tok));
-        pack_result(tok_end(tok), "(str " + text + ")")
+        let str_ast = "(str " + text + ")";
+        // v0.50.15: Support method calls on string literals: "abc".len()
+        let after_str = next_token_raw(src, tok_end(tok));
+        if tok_kind(after_str) == TK_DOT() {
+            parse_method_chain(src, tok_end(after_str), str_ast)
+        } else {
+            pack_result(tok_end(tok), str_ast)
+        }
     } else if kind == TK_MINUS() {
         let re = parse_atom(src, tok_end(tok));
         pack_result(unpack_pos(re), "(unary - " + unpack_ast(re) + ")")
     } else if kind == TK_LPAREN() {
         let re = parse_expr(src, tok_end(tok));
         let next = next_token_raw(src, unpack_pos(re));
-        if tok_kind(next) == TK_RPAREN() { pack_result(tok_end(next), unpack_ast(re)) } else { make_error("paren") }
+        if tok_kind(next) == TK_RPAREN() {
+            let paren_ast = unpack_ast(re);
+            // v0.50.15: Support method calls on parenthesized expr: (x + y).abs()
+            let after_paren = next_token_raw(src, tok_end(next));
+            if tok_kind(after_paren) == TK_DOT() {
+                parse_method_chain(src, tok_end(after_paren), paren_ast)
+            } else {
+                pack_result(tok_end(next), paren_ast)
+            }
+        } else { make_error("paren") }
     } else if kind == TK_EOF() { make_error("atom-eof")
     // v0.50.1: All remaining kinds (200-413, 414+) are integer literals
     // Operators/punctuation in this range would be handled by parse_add/parse_mul/parse_compare

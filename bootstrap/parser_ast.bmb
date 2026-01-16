@@ -755,11 +755,39 @@ fn parse_paren(src: String, pos: i64) -> String =
         if tok_kind(tok) == TK_RPAREN() { pack_result(tok_end(tok), unpack_ast(r)) } else { pack_result(unpack_pos(r), make_error("paren")) }
     };
 
+// v0.50.15: Support both v0.32 syntax (braces) and pre-v0.32 syntax (then/else)
+// v0.32: if cond { then_expr } else { else_expr }
+// pre-v0.32: if cond then then_expr else else_expr
 fn parse_if(src: String, pos: i64) -> String =
     let rc = parse_expr(src, pos);
     if is_error(unpack_ast(rc)) { rc } else {
         let t1 = next_token_raw(src, unpack_pos(rc));
-        if tok_kind(t1) != TK_THEN() { pack_result(unpack_pos(rc), make_error("then")) } else {
+        // Check for v0.32 syntax (LBRACE) or pre-v0.32 syntax (THEN)
+        if tok_kind(t1) == TK_LBRACE() {
+            // v0.32: if cond { then } else { else }
+            let rt = parse_expr(src, tok_end(t1));
+            if is_error(unpack_ast(rt)) { rt } else {
+                let t2 = next_token_raw(src, unpack_pos(rt));
+                if tok_kind(t2) != TK_RBRACE() { pack_result(unpack_pos(rt), make_error("if-rbrace")) } else {
+                    let t3 = next_token_raw(src, tok_end(t2));
+                    if tok_kind(t3) != TK_ELSE() { pack_result(tok_end(t2), make_error("else")) } else {
+                        let t4 = next_token_raw(src, tok_end(t3));
+                        if tok_kind(t4) == TK_IF() {
+                            // else if: recursively parse
+                            let re = parse_if(src, tok_end(t4));
+                            if is_error(unpack_ast(re)) { re } else { pack_result(unpack_pos(re), "(if " + unpack_ast(rc) + " " + unpack_ast(rt) + " " + unpack_ast(re) + ")") }
+                        } else if tok_kind(t4) != TK_LBRACE() { pack_result(tok_end(t3), make_error("else-lbrace")) } else {
+                            let re = parse_expr(src, tok_end(t4));
+                            if is_error(unpack_ast(re)) { re } else {
+                                let t5 = next_token_raw(src, unpack_pos(re));
+                                if tok_kind(t5) != TK_RBRACE() { pack_result(unpack_pos(re), make_error("else-rbrace")) } else { pack_result(tok_end(t5), "(if " + unpack_ast(rc) + " " + unpack_ast(rt) + " " + unpack_ast(re) + ")") }
+                            }
+                        }
+                    }
+                }
+            }
+        } else if tok_kind(t1) == TK_THEN() {
+            // Pre-v0.32: if cond then then_expr else else_expr
             let rt = parse_expr(src, tok_end(t1));
             if is_error(unpack_ast(rt)) { rt } else {
                 let t2 = next_token_raw(src, unpack_pos(rt));
@@ -768,7 +796,7 @@ fn parse_if(src: String, pos: i64) -> String =
                     if is_error(unpack_ast(re)) { re } else { pack_result(unpack_pos(re), "(if " + unpack_ast(rc) + " " + unpack_ast(rt) + " " + unpack_ast(re) + ")") }
                 }
             }
-        }
+        } else { pack_result(unpack_pos(rc), make_error("then-or-brace")) }
     };
 
 // ============================================================
