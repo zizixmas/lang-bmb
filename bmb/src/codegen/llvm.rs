@@ -13,6 +13,7 @@ use inkwell::targets::{
 };
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum};
 use inkwell::values::{BasicMetadataValueEnum, BasicValueEnum, FunctionValue, PointerValue};
+use inkwell::passes::PassBuilderOptions;
 use inkwell::OptimizationLevel;
 use inkwell::{FloatPredicate, IntPredicate};
 use thiserror::Error;
@@ -157,6 +158,26 @@ impl CodeGen {
                 CodeModel::Default,
             )
             .ok_or(CodeGenError::TargetMachineError)?;
+
+        // v0.50.12: Run LLVM optimization passes before writing object file
+        // This is critical for performance - without this, the IR is unoptimized
+        if !matches!(self.opt_level, OptLevel::Debug) {
+            let passes = match self.opt_level {
+                OptLevel::Debug => "default<O0>",
+                OptLevel::Release => "default<O2>",
+                OptLevel::Size => "default<Os>",
+                OptLevel::Aggressive => "default<O3>",
+            };
+
+            let pass_options = PassBuilderOptions::create();
+            pass_options.set_loop_vectorization(true);
+            pass_options.set_loop_unrolling(true);
+            pass_options.set_merge_functions(true);
+
+            module
+                .run_passes(passes, &target_machine, pass_options)
+                .map_err(|e| CodeGenError::LlvmError(e.to_string()))?;
+        }
 
         target_machine
             .write_to_file(module, FileType::Object, output)
