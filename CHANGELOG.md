@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.50.12] - 2026-01-16
+
+### Fixed
+
+- **Critical performance bug**: LLVM optimization passes were not being run on generated IR, causing 5x slower native code than C. Now runs `default<O2>` or `default<O3>` passes based on optimization level.
+
+### Performance
+
+- **Native code benchmark**: fibonacci(40) improved from 5.15x slower to 2.0x slower than C (gcc -O3). The remaining gap is due to GCC's more aggressive loop unrolling.
+
+### Changed
+
+- Migrated all benchmark files in `ecosystem/benchmark-bmb/` to v0.32 syntax
+
 ## [0.50.11] - 2026-01-16
 
 ### Security

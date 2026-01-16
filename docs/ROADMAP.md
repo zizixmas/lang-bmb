@@ -1327,3 +1327,43 @@ fn print_str_nl(s: String) -> i64 =
 | 50.3 크로스 플랫폼 | ⏳ WSL 환경 필요 |
 | 50.4 릴리스 노트 | ✅ CHANGELOG.md 생성 |
 | 50.9 RFC-0001 상태 | ✅ "Implemented" 확인 |
+
+### 2026-01-16 WSL 검증 세션 (v0.50.12)
+
+**환경**: WSL Ubuntu, LLVM 21.x
+
+**수행된 작업**:
+
+1. **LLVM 최적화 패스 수정** (P0 성능 버그)
+   - 이전: LLVM IR이 최적화되지 않고 그대로 codegen → 5.15x slower than C
+   - 수정: `module.run_passes()` 추가하여 O2/O3 최적화 적용
+   - 결과: **5.15x → 2.0x** (2.6x 개선!)
+   - 남은 갭: GCC의 더 공격적인 루프 언롤링 차이
+
+2. **벤치마크 마이그레이션**
+   - `ecosystem/benchmark-bmb/benches/**/*.bmb` → v0.32 문법
+   - 11개 파일 마이그레이션 완료
+
+3. **3-Stage Bootstrap 검증**
+   - Stage 1: ✅ Rust BMB → bmb_cli_stage1_linux 생성
+   - Stage 2: ⚠️ LLVM IR 생성 성공 (302 함수, 18K 라인)
+   - Stage 2 바이너리: ❌ 변수 스코핑 버그 (`%d_b10` undefined)
+
+**벤치마크 결과 (fibonacci N=40)**:
+| 컴파일러 | 시간 | vs C |
+|----------|------|------|
+| C (gcc -O3) | 0.08s | 1.00x |
+| BMB (LLVM O3) | 0.16s | 2.00x |
+| BMB (이전, 최적화 없음) | 0.47s | 5.88x |
+
+**Stage 2 실패 원인**:
+Bootstrap 컴파일러의 LLVM IR 생성에서 if-else 체인의 PHI 노드에서
+변수 스코핑 버그 발생. `digit_char()` 함수에서 `%d_b2`, `%d_b4` 등
+정의되지 않은 변수 참조.
+
+**다음 조치**:
+| 우선순위 | 작업 | 상태 |
+|----------|------|------|
+| P0 | Bootstrap LLVM IR 변수 스코핑 수정 | 📋 계획 |
+| P1 | Gate #3.1 전체 벤치마크 (2.0x → 1.10x 목표) | 📋 계획 |
+| P2 | LLVM 18 vs 21 성능 비교 | 📋 계획 |
