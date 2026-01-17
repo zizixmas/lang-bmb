@@ -1389,6 +1389,129 @@ fn levenshtein(a: &str, b: &str) -> usize {
     prev[n]
 }
 
+// =============================================================================
+// v0.50.24 - Proof Query (Task 47.7-47.8)
+// =============================================================================
+
+use crate::index::{ProofEntry, ProofIndex, ProofStatus};
+
+/// Proof query result
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProofResult {
+    pub query: String,
+    pub z3_available: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub z3_version: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub proofs: Vec<ProofEntry>,
+    pub summary: ProofSummary,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<QueryError>,
+}
+
+/// Summary of proof verification status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProofSummary {
+    pub total: usize,
+    pub verified: usize,
+    pub failed: usize,
+    pub timeout: usize,
+    pub unknown: usize,
+    pub pending: usize,
+}
+
+impl ProofSummary {
+    pub fn from_proofs(proofs: &[ProofEntry]) -> Self {
+        let mut verified = 0;
+        let mut failed = 0;
+        let mut timeout = 0;
+        let mut unknown = 0;
+        let mut pending = 0;
+
+        for proof in proofs {
+            // Count both pre and post status
+            for status in [&proof.pre_status, &proof.post_status].into_iter().flatten() {
+                match status {
+                    ProofStatus::Verified => verified += 1,
+                    ProofStatus::Failed => failed += 1,
+                    ProofStatus::Timeout => timeout += 1,
+                    ProofStatus::Unknown => unknown += 1,
+                    ProofStatus::Pending | ProofStatus::Unavailable => pending += 1,
+                }
+            }
+        }
+
+        Self {
+            total: proofs.len(),
+            verified,
+            failed,
+            timeout,
+            unknown,
+            pending,
+        }
+    }
+}
+
+/// Query proof verification results
+pub fn query_proofs(
+    proof_index: &ProofIndex,
+    name: Option<&str>,
+    unverified: bool,
+    failed: bool,
+    timeout: bool,
+) -> ProofResult {
+    let mut proofs: Vec<ProofEntry> = proof_index.proofs.clone();
+
+    // Filter by name if specified
+    if let Some(name) = name {
+        proofs.retain(|p| p.name.contains(name));
+    }
+
+    // Filter by status
+    if unverified {
+        proofs.retain(|p| {
+            let pre_unverified = p.pre_status.is_none_or(|s| s != ProofStatus::Verified);
+            let post_unverified = p.post_status.is_none_or(|s| s != ProofStatus::Verified);
+            pre_unverified || post_unverified
+        });
+    }
+
+    if failed {
+        proofs.retain(|p| {
+            p.pre_status == Some(ProofStatus::Failed) || p.post_status == Some(ProofStatus::Failed)
+        });
+    }
+
+    if timeout {
+        proofs.retain(|p| {
+            p.pre_status == Some(ProofStatus::Timeout) || p.post_status == Some(ProofStatus::Timeout)
+        });
+    }
+
+    let query = if let Some(name) = name {
+        format!("proof:{}", name)
+    } else if unverified {
+        "proof:--unverified".to_string()
+    } else if failed {
+        "proof:--failed".to_string()
+    } else if timeout {
+        "proof:--timeout".to_string()
+    } else {
+        "proof:all".to_string()
+    };
+
+    let summary = ProofSummary::from_proofs(&proofs);
+
+    ProofResult {
+        query,
+        z3_available: proof_index.z3_available,
+        z3_version: proof_index.z3_version.clone(),
+        proofs,
+        summary,
+        error: None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

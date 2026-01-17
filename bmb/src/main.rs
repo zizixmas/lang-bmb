@@ -317,6 +317,24 @@ enum QueryType {
         #[arg(long, default_value = "127.0.0.1")]
         host: String,
     },
+    /// Query verification proof results (v0.50.24 - Task 47.7-47.8)
+    Proof {
+        /// Function name pattern (optional)
+        #[arg(default_value = "")]
+        name: String,
+        /// Show only unverified functions
+        #[arg(long)]
+        unverified: bool,
+        /// Show only failed verifications
+        #[arg(long)]
+        failed: bool,
+        /// Show only timed out verifications
+        #[arg(long)]
+        timeout: bool,
+        /// Output format (json, compact, llm)
+        #[arg(long, short = 'f', value_enum, default_value = "json")]
+        format: OutputFormat,
+    },
 }
 
 fn main() {
@@ -1009,6 +1027,9 @@ fn lint_directory(dir: &PathBuf, strict: bool, _include_paths: &[PathBuf]) -> Re
 }
 
 fn verify_file(path: &PathBuf, z3_path: &str, timeout: u32) -> Result<(), Box<dyn std::error::Error>> {
+    use bmb::index::{ProofEntry, ProofIndex, ProofStatus, write_proof_index};
+    use bmb::smt::VerifyResult;
+
     let source = std::fs::read_to_string(path)?;
     let filename = path.display().to_string();
 
@@ -1028,7 +1049,8 @@ fn verify_file(path: &PathBuf, z3_path: &str, timeout: u32) -> Result<(), Box<dy
         .with_timeout(timeout);
 
     // Check if solver is available
-    if !verifier.is_solver_available() {
+    let z3_available = verifier.is_solver_available();
+    if !z3_available {
         if is_human_output() {
             eprintln!("Warning: Z3 solver not found at '{}'. Install Z3 or specify --z3-path.", z3_path);
             eprintln!("Skipping contract verification.");
@@ -1038,8 +1060,69 @@ fn verify_file(path: &PathBuf, z3_path: &str, timeout: u32) -> Result<(), Box<dy
         return Ok(());
     }
 
+    // Get Z3 version if available
+    let z3_version = get_z3_version(z3_path);
+
     // Verify contracts
+    let start_time = std::time::Instant::now();
     let report = verifier.verify_program(&ast);
+    let verify_time_ms = start_time.elapsed().as_millis() as u64;
+
+    // v0.50.24: Create proof index entries from verification report
+    let mut proof_index = ProofIndex::new(z3_available, z3_version);
+    for func_report in &report.functions {
+        let pre_status = func_report.pre_result.as_ref().map(|r| match r {
+            VerifyResult::Verified => ProofStatus::Verified,
+            VerifyResult::Failed(_) => ProofStatus::Failed,
+            VerifyResult::Unknown(msg) if msg.contains("timeout") => ProofStatus::Timeout,
+            VerifyResult::Unknown(_) => ProofStatus::Unknown,
+            VerifyResult::SolverNotAvailable => ProofStatus::Unavailable,
+        });
+
+        let post_status = func_report.post_result.as_ref().map(|r| match r {
+            VerifyResult::Verified => ProofStatus::Verified,
+            VerifyResult::Failed(_) => ProofStatus::Failed,
+            VerifyResult::Unknown(msg) if msg.contains("timeout") => ProofStatus::Timeout,
+            VerifyResult::Unknown(_) => ProofStatus::Unknown,
+            VerifyResult::SolverNotAvailable => ProofStatus::Unavailable,
+        });
+
+        // Extract counterexample if failed
+        let counterexample = func_report.post_result.as_ref().and_then(|r| {
+            if let VerifyResult::Failed(ce) = r {
+                Some(ce.assignments.clone())
+            } else {
+                None
+            }
+        }).or_else(|| {
+            func_report.pre_result.as_ref().and_then(|r| {
+                if let VerifyResult::Failed(ce) = r {
+                    Some(ce.assignments.clone())
+                } else {
+                    None
+                }
+            })
+        });
+
+        proof_index.add_proof(ProofEntry {
+            name: func_report.name.clone(),
+            file: filename.clone(),
+            line: 1, // Would need span info for accurate line numbers
+            pre_status,
+            post_status,
+            counterexample,
+            verify_time_ms: Some(verify_time_ms / report.functions.len().max(1) as u64),
+            verified_at: Some(proof_index.verified_at.clone()),
+        });
+    }
+
+    // Save proof index to .bmb/index/proofs.json
+    let current_dir = std::env::current_dir()?;
+    if let Err(e) = write_proof_index(&proof_index, &current_dir) {
+        if is_human_output() {
+            eprintln!("Warning: Could not save proof index: {}", e);
+        }
+    }
 
     // Print report
     if is_human_output() {
@@ -1058,6 +1141,19 @@ fn verify_file(path: &PathBuf, z3_path: &str, timeout: u32) -> Result<(), Box<dy
     }
 
     Ok(())
+}
+
+/// Get Z3 version string
+fn get_z3_version(z3_path: &str) -> Option<String> {
+    use std::process::Command;
+    Command::new(z3_path)
+        .arg("--version")
+        .output()
+        .ok()
+        .and_then(|output| {
+            String::from_utf8(output.stdout).ok()
+        })
+        .map(|s| s.trim().to_string())
 }
 
 fn parse_file(path: &PathBuf, format: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -2196,6 +2292,43 @@ fn run_query(query_type: QueryType) -> Result<(), Box<dyn std::error::Error>> {
 
         QueryType::Serve { port, host } => {
             return run_query_server(&host, port, engine);
+        }
+
+        QueryType::Proof { name, unverified, failed, timeout, format } => {
+            use bmb::index::read_proof_index;
+            use bmb::query::query_proofs;
+
+            // Try to read proof index
+            match read_proof_index(&current_dir) {
+                Ok(proof_index) => {
+                    let name_filter = if name.is_empty() { None } else { Some(name.as_str()) };
+                    let result = query_proofs(&proof_index, name_filter, unverified, failed, timeout);
+                    println!("{}", format_output(&result, fmt_str(format))?);
+                }
+                Err(_) => {
+                    // No proof index yet - suggest running bmb verify
+                    let result = bmb::query::ProofResult {
+                        query: "proof:all".to_string(),
+                        z3_available: false,
+                        z3_version: None,
+                        proofs: Vec::new(),
+                        summary: bmb::query::ProofSummary {
+                            total: 0,
+                            verified: 0,
+                            failed: 0,
+                            timeout: 0,
+                            unknown: 0,
+                            pending: 0,
+                        },
+                        error: Some(bmb::query::QueryError {
+                            code: "NO_PROOF_INDEX".to_string(),
+                            message: "No proof index found. Run 'bmb verify <file>' to generate verification results.".to_string(),
+                            suggestions: vec!["bmb verify main.bmb".to_string()],
+                        }),
+                    };
+                    println!("{}", format_output(&result, fmt_str(format))?);
+                }
+            }
         }
     }
 

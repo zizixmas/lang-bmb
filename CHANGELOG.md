@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.50.24] - 2026-01-17
+
+### Added
+
+- **Proof verification query** (Task 47.7-47.8): `bmb q proof` queries verification results
+  - Filters: `--unverified`, `--failed`, `--timeout`
+  - Shows Z3 availability and version
+  - Summary stats: total, verified, failed, timeout, unknown, pending
+  - Counterexample display for failed verifications
+- **Proof index generation**: `bmb verify` now saves results to `.bmb/index/proofs.json`
+  - Tracks pre/post verification status per function
+  - Records verification time and timestamp
+  - Stores counterexamples for failed verifications
+
+### Changed
+
+- `ProofIndex`, `ProofEntry`, `ProofStatus` types added to `bmb::index` module
+- `query_proofs()` function added to `bmb::query` module
+
 ## [0.50.23] - 2026-01-17
 
 ### Added
