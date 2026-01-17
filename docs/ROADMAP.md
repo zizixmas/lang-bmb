@@ -617,9 +617,11 @@ v0.50 최종 검증 ◄──────────────── (전체 
 - ✅ `bmb q fn` - 함수 조회 (`--has-pre`, `--has-post`, `--recursive`)
 - ✅ `bmb q type` - 타입 조회
 - ✅ `bmb q metrics` - 프로젝트 통계
-- ⏳ v0.48: `bmb q deps`, `bmb q contract`
-- ⏳ v0.49: `bmb q ctx`, `bmb q sig`, `--format llm`
-- ⏳ v0.50: `bmb q batch`, `bmb q impact`, `bmb q serve`
+- ✅ v0.47: `bmb q deps`, `bmb q contract`
+- ✅ v0.48: `bmb q ctx`, `bmb q sig`, `--format llm`
+- ✅ v0.50: `bmb q batch`, `bmb q impact`, `bmb q serve`, `bmb q proof`
+- ✅ v0.50.21: `bmb index --watch`
+- ✅ v0.50.22: `bmb q serve` (HTTP server)
 
 ---
 
@@ -991,7 +993,7 @@ fn print_str_nl(s: String) -> i64 =
 |----------|------|------|
 | P0 | WSL에서 3-Stage Bootstrap 검증 | ⏳ 대기 (Windows 환경 제약) |
 | P0 | 전체 벤치마크 Gate 실행 | ⏳ 대기 (WSL 필요) |
-| P1 | Formatter 주석 보존 | 📋 계획 |
+| P1 | Formatter 주석 보존 | ✅ v0.50.20 완료 |
 | P2 | LSP hover/completion 구현 | 📋 계획 |
 
 ### 2026-01-15 stdlib 문법 오류 수정 세션 (v0.50.4)
@@ -1052,7 +1054,7 @@ fn print_str_nl(s: String) -> i64 =
 |----------|------|------|
 | P0 | WSL에서 3-Stage Bootstrap 검증 | ⏳ 대기 |
 | P0 | 전체 벤치마크 Gate 실행 | ⏳ 대기 |
-| P1 | Formatter 주석 보존 | 📋 계획 |
+| P1 | Formatter 주석 보존 | ✅ v0.50.20 완료 |
 | P2 | LSP hover/completion 구현 | 📋 계획 |
 
 ### 2026-01-15 테스트 커버리지 확장 세션 (v0.50.5)
@@ -1096,7 +1098,7 @@ fn print_str_nl(s: String) -> i64 =
 | P0 | 전체 벤치마크 Gate 실행 | ⏳ 대기 |
 | P1 | 정제 타입 구현 | 📋 계획 |
 | P1 | 타입 별칭 구현 | ✅ 완료 |
-| P2 | Formatter 주석 보존 | 📋 계획 |
+| P2 | Formatter 주석 보존 | ✅ v0.50.20 완료 |
 | P2 | LSP hover/completion 구현 | 📋 계획 |
 
 ### 2026-01-15 타입 별칭 구현 세션 (v0.50.6)
@@ -1143,7 +1145,7 @@ fn print_str_nl(s: String) -> i64 =
 | P0 | WSL에서 3-Stage Bootstrap 검증 | ⏳ 대기 |
 | P0 | 전체 벤치마크 Gate 실행 | ⏳ 대기 |
 | P1 | 정제 타입 검증 연동 (SMT) | 📋 계획 |
-| P2 | Formatter 주석 보존 | 📋 계획 |
+| P2 | Formatter 주석 보존 | ✅ v0.50.20 완료 |
 | P2 | LSP hover/completion 구현 | 📋 계획 |
 
 ### 2026-01-15 WSL Bootstrap 및 벤치마크 검증 세션
@@ -1540,7 +1542,7 @@ define i64 @fib(i64 %0) {
 | 우선순위 | 작업 | 상태 |
 |----------|------|------|
 | P0 | WSL에서 Stage 2/3 Bootstrap 검증 | ⏳ 대기 (LLVM 필요) |
-| P1 | bmb q batch 구현 | 📋 계획 |
-| P1 | bmb q impact 구현 | 📋 계획 |
-| P1 | Formatter 주석 보존 | 📋 계획 |
+| P1 | bmb q batch 구현 | ✅ 구현됨 |
+| P1 | bmb q impact 구현 | ✅ 구현됨 |
+| P1 | Formatter 주석 보존 | ✅ v0.50.20 완료 |
 | P2 | LSP hover/completion 구현 | 📋 계획 |
