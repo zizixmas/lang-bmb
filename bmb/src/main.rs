@@ -1219,6 +1219,30 @@ fn collect_test_files(dir: &PathBuf) -> Result<Vec<PathBuf>, Box<dyn std::error:
     Ok(files)
 }
 
+/// Extract comments from source code with their line numbers
+/// Returns a Vec of (line_number, comment_text) where line_number is 0-indexed
+fn extract_comments(source: &str) -> Vec<(usize, String)> {
+    let mut comments = Vec::new();
+
+    for (line_num, line) in source.lines().enumerate() {
+        let trimmed = line.trim();
+        // Check for // style comments (whole line only)
+        if trimmed.starts_with("//") {
+            comments.push((line_num, line.to_string()));
+        } else if trimmed.starts_with("--") {
+            // Legacy -- comment (whole line)
+            comments.push((line_num, line.to_string()));
+        }
+    }
+
+    comments
+}
+
+/// Get the line number from a byte offset in source
+fn line_number_at_offset(source: &str, offset: usize) -> usize {
+    source[..offset.min(source.len())].matches('\n').count()
+}
+
 fn fmt_file(path: &PathBuf, check: bool) -> Result<(), Box<dyn std::error::Error>> {
     let files = if path.is_dir() {
         collect_bmb_files(path)?
@@ -1242,14 +1266,17 @@ fn fmt_file(path: &PathBuf, check: bool) -> Result<(), Box<dyn std::error::Error
         let source = std::fs::read_to_string(file)?;
         let filename = file.display().to_string();
 
+        // Extract comments before parsing (they get lost during tokenization)
+        let comments = extract_comments(&source);
+
         // Tokenize
         let tokens = bmb::lexer::tokenize(&source)?;
 
         // Parse
         let ast = bmb::parser::parse(&filename, &source, tokens)?;
 
-        // Format AST back to source
-        let formatted = format_program(&ast);
+        // Format AST back to source, preserving comments
+        let formatted = format_program_with_comments(&ast, &source, &comments);
 
         if check {
             if source != formatted {
@@ -1299,16 +1326,77 @@ fn collect_bmb_files(dir: &PathBuf) -> Result<Vec<PathBuf>, Box<dyn std::error::
     Ok(files)
 }
 
-fn format_program(program: &bmb::ast::Program) -> String {
+/// Get the starting span of an Item (for comment attachment)
+fn get_item_span(item: &bmb::ast::Item) -> bmb::ast::Span {
+    use bmb::ast::Item;
+    match item {
+        Item::FnDef(f) => f.span,
+        Item::StructDef(s) => s.span,
+        Item::EnumDef(e) => e.span,
+        Item::TypeAlias(t) => t.span,
+        Item::Use(u) => u.span,
+        Item::ExternFn(e) => e.span,
+        Item::TraitDef(t) => t.span,
+        Item::ImplBlock(i) => i.span,
+    }
+}
+
+/// Format program with comment preservation
+/// Attaches comments to the items they precede based on line numbers
+fn format_program_with_comments(
+    program: &bmb::ast::Program,
+    source: &str,
+    comments: &[(usize, String)],
+) -> String {
     use bmb::ast::{Item, Visibility};
 
     let mut output = String::new();
+    let mut used_comments: std::collections::HashSet<usize> = std::collections::HashSet::new();
 
+    // Collect item spans (line numbers)
+    let mut item_lines: Vec<(usize, usize)> = Vec::new(); // (item_index, start_line)
+    for (idx, item) in program.items.iter().enumerate() {
+        let span = get_item_span(item);
+        let start_line = line_number_at_offset(source, span.start);
+        item_lines.push((idx, start_line));
+    }
+
+    // Find file-level comments (before first item)
+    let first_item_line = item_lines.first().map(|(_, l)| *l).unwrap_or(usize::MAX);
+    for (line_num, comment_text) in comments {
+        if *line_num < first_item_line && !used_comments.contains(line_num) {
+            output.push_str(comment_text);
+            output.push('\n');
+            used_comments.insert(*line_num);
+        }
+    }
+
+    // Process each item with its preceding comments
     for (i, item) in program.items.iter().enumerate() {
+        let item_start_line = item_lines.iter().find(|(idx, _)| *idx == i).map(|(_, l)| *l).unwrap_or(0);
+
+        // Find the end of the previous item (or file start)
+        let prev_end_line = if i > 0 {
+            item_lines.iter().find(|(idx, _)| *idx == i - 1).map(|(_, l)| *l + 1).unwrap_or(0)
+        } else {
+            0
+        };
+
+        // Add blank line between items (if not first item)
         if i > 0 {
-            output.push_str("\n\n");
+            output.push('\n');
         }
 
+        // Find comments between previous item end and this item start
+        for (line_num, comment_text) in comments {
+            if *line_num >= prev_end_line && *line_num < item_start_line && !used_comments.contains(line_num) {
+                output.push_str(comment_text);
+                output.push('\n');
+                used_comments.insert(*line_num);
+            }
+        }
+
+        // Format the item
         match item {
             Item::FnDef(fn_def) => {
                 output.push_str(&format_fn_def(fn_def));
@@ -1337,7 +1425,6 @@ fn format_program(program: &bmb::ast::Program) -> String {
                 let path_str: Vec<_> = u.path.iter().map(|s| s.node.as_str()).collect();
                 output.push_str(&format!("use {};", path_str.join("::")));
             }
-            // v0.13.0: Format extern function declarations
             Item::ExternFn(e) => {
                 if e.visibility == Visibility::Public {
                     output.push_str("pub ");
@@ -1349,7 +1436,6 @@ fn format_program(program: &bmb::ast::Program) -> String {
                 output.push_str(&params.join(", "));
                 output.push_str(&format!(") -> {};", format_type(&e.ret_ty.node)));
             }
-            // v0.20.1: Format trait definitions
             Item::TraitDef(t) => {
                 if t.visibility == Visibility::Public {
                     output.push_str("pub ");
@@ -1364,7 +1450,6 @@ fn format_program(program: &bmb::ast::Program) -> String {
                 }
                 output.push('}');
             }
-            // v0.20.1: Format impl blocks
             Item::ImplBlock(i) => {
                 output.push_str(&format!("impl {} for {} {{\n", i.trait_name.node, format_type(&i.target_type.node)));
                 for method in &i.methods {
@@ -1374,7 +1459,6 @@ fn format_program(program: &bmb::ast::Program) -> String {
                 }
                 output.push('}');
             }
-            // v0.50.6: Format type aliases
             Item::TypeAlias(t) => {
                 if t.visibility == Visibility::Public {
                     output.push_str("pub ");
@@ -1382,9 +1466,19 @@ fn format_program(program: &bmb::ast::Program) -> String {
                 output.push_str(&format!("type {} = {};", t.name.node, format_type(&t.target.node)));
             }
         }
+        output.push('\n');
     }
 
-    output.push('\n');
+    // Add any trailing comments (after last item)
+    let last_item_line = item_lines.last().map(|(_, l)| *l).unwrap_or(0);
+    for (line_num, comment_text) in comments {
+        if *line_num > last_item_line && !used_comments.contains(line_num) {
+            output.push_str(comment_text);
+            output.push('\n');
+            used_comments.insert(*line_num);
+        }
+    }
+
     output
 }
 

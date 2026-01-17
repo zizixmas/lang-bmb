@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.50.20] - 2026-01-17
+
+### Added
+
+- **Formatter comment preservation** (v0.45.5): `bmb fmt` now preserves comments in source files
+  - File-level comments (before first item)
+  - Function-level comments (before each function/struct/enum)
+  - Both `//` and `--` (legacy) comment styles supported
+  - Uses span information to attach comments to correct items
+
+### Changed
+
+- Formatter uses `format_program_with_comments()` instead of simple AST formatting
+- Comment extraction via `extract_comments()` pre-pass before parsing
+
 ## [0.50.18] - 2026-01-16
 
 ### Fixed
