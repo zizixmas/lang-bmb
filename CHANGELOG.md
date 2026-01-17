@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.50.21] - 2026-01-17
+
+### Added
+
+- **Index watch mode** (v0.50.8): `bmb index --watch` now monitors .bmb files for changes and re-indexes automatically
+  - Uses `notify` crate for cross-platform file system watching
+  - 500ms debouncing to avoid rapid re-indexing during saves
+  - Only re-indexes when .bmb files change (ignores other file types)
+  - Graceful error handling during re-indexing
+
+### Dependencies
+
+- Added `notify = "8"` for file system event watching
+- Added `notify-debouncer-mini = "0.6"` for event debouncing
+
 ## [0.50.20] - 2026-01-17
 
 ### Added

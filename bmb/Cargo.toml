@@ -23,6 +23,8 @@ stacker.workspace = true
 tower-lsp.workspace = true
 tokio.workspace = true
 chrono.workspace = true
+notify.workspace = true
+notify-debouncer-mini.workspace = true
 
 # Optional LLVM code generation
 inkwell = { workspace = true, optional = true, features = ["llvm21-1"] }

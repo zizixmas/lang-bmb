@@ -1928,7 +1928,21 @@ fn start_lsp() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// v0.25: Generate project index for AI tools
-fn index_project(path: &PathBuf, _watch: bool, verbose: bool) -> Result<(), Box<dyn std::error::Error>> {
+/// v0.50.21: Added --watch mode for real-time index updates
+fn index_project(path: &PathBuf, watch: bool, verbose: bool) -> Result<(), Box<dyn std::error::Error>> {
+    // Initial index generation
+    do_index_project(path, verbose)?;
+
+    // If watch mode, start file watcher
+    if watch {
+        run_index_watcher(path, verbose)?;
+    }
+
+    Ok(())
+}
+
+/// Perform the actual indexing operation
+fn do_index_project(path: &PathBuf, verbose: bool) -> Result<(), Box<dyn std::error::Error>> {
     use bmb::index::{IndexGenerator, write_index};
 
     // Determine project name from directory
@@ -1996,6 +2010,62 @@ fn index_project(path: &PathBuf, _watch: bool, verbose: bool) -> Result<(), Box<
     println!("  Functions: {}", index.manifest.functions);
     println!("  Types: {}", index.manifest.types);
     println!("  Contracts: {}", index.manifest.contracts);
+
+    Ok(())
+}
+
+/// v0.50.21: Watch for file changes and re-index automatically
+fn run_index_watcher(path: &PathBuf, verbose: bool) -> Result<(), Box<dyn std::error::Error>> {
+    use notify_debouncer_mini::{new_debouncer, notify::RecursiveMode};
+    use std::sync::mpsc::channel;
+    use std::time::Duration;
+
+    println!("👀 Watching for changes... (Press Ctrl+C to stop)");
+
+    // Create a channel to receive events
+    let (tx, rx) = channel();
+
+    // Create a debounced watcher with 500ms delay
+    let mut debouncer = new_debouncer(Duration::from_millis(500), tx)?;
+
+    // Watch the directory recursively
+    debouncer.watcher().watch(path.as_path(), RecursiveMode::Recursive)?;
+
+    // Process events
+    loop {
+        match rx.recv() {
+            Ok(result) => {
+                match result {
+                    Ok(events) => {
+                        // Check if any .bmb file changed
+                        let bmb_changed = events.iter().any(|e| {
+                            e.path.extension().is_some_and(|ext| ext == "bmb")
+                        });
+
+                        if bmb_changed {
+                            if verbose {
+                                println!("\n📝 Detected .bmb file change, re-indexing...");
+                            } else {
+                                println!("\n🔄 Re-indexing...");
+                            }
+
+                            // Re-index the project
+                            if let Err(e) = do_index_project(path, verbose) {
+                                eprintln!("  Error during re-index: {}", e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Watch error: {}", e);
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("Channel error: {}", e);
+                break;
+            }
+        }
+    }
 
     Ok(())
 }

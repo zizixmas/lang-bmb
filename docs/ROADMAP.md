@@ -482,7 +482,7 @@ node tools/rust_to_bmb.mjs path/to/*.rs --apply
 | 50.5 | **`bmb q batch`** | 배치 쿼리 (queries.json) | P1 |
 | 50.6 | **`bmb q impact`** | 변경 영향 분석 | P1 |
 | 50.7 | **`bmb q serve`** | HTTP 쿼리 서버 모드 | P2 |
-| 50.8 | **`bmb index --watch`** | 실시간 인덱스 갱신 | P2 |
+| 50.8 | **`bmb index --watch`** | 실시간 인덱스 갱신 | P2 | ✅ v0.50.21 완료 |
 | 50.9 | **RFC-0001 문서 갱신** | "Draft" → "Implemented" | P1 |
 
 ---
