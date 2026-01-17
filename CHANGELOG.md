@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.50.22] - 2026-01-17
+
+### Added
+
+- **HTTP Query Server** (Task 50.7): `bmb q serve` starts an HTTP server for AI tools
+  - Endpoints: `GET /health`, `GET /metrics`, `POST /query`
+  - Supports all query types: sym, fn, type, metrics, deps, contract, impact
+  - JSON request/response format
+  - Default: `127.0.0.1:3000`, configurable with `--host` and `--port`
+  - No additional dependencies (uses std::net::TcpListener)
+
 ## [0.50.21] - 2026-01-17
 
 ### Added

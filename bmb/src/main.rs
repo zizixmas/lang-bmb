@@ -304,6 +304,15 @@ enum QueryType {
         #[arg(long, short = 'f', value_enum, default_value = "json")]
         format: OutputFormat,
     },
+    /// Start HTTP query server (v0.50 - RFC-0001)
+    Serve {
+        /// Port to listen on
+        #[arg(long, short = 'p', default_value = "3000")]
+        port: u16,
+        /// Host to bind to
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
+    },
 }
 
 fn main() {
@@ -2169,9 +2178,216 @@ fn run_query(query_type: QueryType) -> Result<(), Box<dyn std::error::Error>> {
             let result = engine.query_impact(&target, &change);
             println!("{}", format_output(&result, fmt_str(format))?);
         }
+
+        QueryType::Serve { port, host } => {
+            return run_query_server(&host, port, engine);
+        }
     }
 
     Ok(())
+}
+
+/// v0.50.22: HTTP query server for AI tools (RFC-0001 Task 50.7)
+fn run_query_server(
+    host: &str,
+    port: u16,
+    engine: bmb::query::QueryEngine,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use std::io::Read;
+    use std::net::TcpListener;
+    use bmb::query::format_output;
+
+    let addr = format!("{}:{}", host, port);
+    let listener = TcpListener::bind(&addr)?;
+
+    println!("BMB Query Server v0.50.22");
+    println!("Listening on http://{}", addr);
+    println!("Endpoints:");
+    println!("  GET  /health      - Health check");
+    println!("  POST /query       - Run query (JSON body)");
+    println!("  GET  /metrics     - Project metrics");
+    println!("Press Ctrl+C to stop");
+
+    for stream in listener.incoming() {
+        match stream {
+            Ok(mut stream) => {
+                // Read request
+                let mut buffer = [0; 8192];
+                let n = stream.read(&mut buffer)?;
+                let request = String::from_utf8_lossy(&buffer[..n]);
+
+                // Parse request line
+                let first_line = request.lines().next().unwrap_or("");
+                let parts: Vec<&str> = first_line.split_whitespace().collect();
+
+                if parts.len() < 2 {
+                    send_response(&mut stream, 400, "Bad Request")?;
+                    continue;
+                }
+
+                let method = parts[0];
+                let path = parts[1];
+
+                // Route request
+                let (status, body) = match (method, path) {
+                    ("GET", "/health") => {
+                        (200, r#"{"status":"ok","version":"0.50.22"}"#.to_string())
+                    }
+                    ("GET", "/metrics") => {
+                        let metrics = engine.query_metrics();
+                        match format_output(&metrics, "json") {
+                            Ok(json) => (200, json),
+                            Err(e) => (500, format!(r#"{{"error":"{}"}}"#, e)),
+                        }
+                    }
+                    ("POST", "/query") => {
+                        // Extract JSON body
+                        let body_start = request.find("\r\n\r\n").map(|i| i + 4)
+                            .or_else(|| request.find("\n\n").map(|i| i + 2));
+
+                        match body_start {
+                            Some(start) => {
+                                let json_body = &request[start..];
+                                handle_query_request(&engine, json_body.trim())
+                            }
+                            None => (400, r#"{"error":"No request body"}"#.to_string()),
+                        }
+                    }
+                    _ => {
+                        (404, r#"{"error":"Not found"}"#.to_string())
+                    }
+                };
+
+                send_json_response(&mut stream, status, &body)?;
+            }
+            Err(e) => {
+                eprintln!("Connection error: {}", e);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Handle POST /query request
+fn handle_query_request(engine: &bmb::query::QueryEngine, json_body: &str) -> (u16, String) {
+    use bmb::query::format_output;
+
+    // Parse query JSON
+    let query: serde_json::Value = match serde_json::from_str(json_body) {
+        Ok(v) => v,
+        Err(e) => return (400, format!(r#"{{"error":"Invalid JSON: {}"}}"#, e)),
+    };
+
+    let query_type = query.get("type").and_then(|v| v.as_str()).unwrap_or("");
+
+    match query_type {
+        "sym" => {
+            let pattern = query.get("pattern").and_then(|v| v.as_str()).unwrap_or("");
+            let public = query.get("public").and_then(|v| v.as_bool()).unwrap_or(false);
+            let result = engine.query_symbols(pattern, None, public);
+            match format_output(&result, "json") {
+                Ok(json) => (200, json),
+                Err(e) => (500, format!(r#"{{"error":"{}"}}"#, e)),
+            }
+        }
+        "fn" => {
+            let name = query.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            if !name.is_empty() {
+                let result = engine.query_function(name);
+                match format_output(&result, "json") {
+                    Ok(json) => (200, json),
+                    Err(e) => (500, format!(r#"{{"error":"{}"}}"#, e)),
+                }
+            } else {
+                (400, r#"{"error":"Missing 'name' field"}"#.to_string())
+            }
+        }
+        "type" => {
+            let name = query.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            if !name.is_empty() {
+                let result = engine.query_type(name);
+                match format_output(&result, "json") {
+                    Ok(json) => (200, json),
+                    Err(e) => (500, format!(r#"{{"error":"{}"}}"#, e)),
+                }
+            } else {
+                (400, r#"{"error":"Missing 'name' field"}"#.to_string())
+            }
+        }
+        "metrics" => {
+            let result = engine.query_metrics();
+            match format_output(&result, "json") {
+                Ok(json) => (200, json),
+                Err(e) => (500, format!(r#"{{"error":"{}"}}"#, e)),
+            }
+        }
+        "deps" => {
+            let target = query.get("target").and_then(|v| v.as_str()).unwrap_or("");
+            let reverse = query.get("reverse").and_then(|v| v.as_bool()).unwrap_or(false);
+            let transitive = query.get("transitive").and_then(|v| v.as_bool()).unwrap_or(false);
+            let result = engine.query_deps(target, reverse, transitive);
+            match format_output(&result, "json") {
+                Ok(json) => (200, json),
+                Err(e) => (500, format!(r#"{{"error":"{}"}}"#, e)),
+            }
+        }
+        "contract" => {
+            let name = query.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            let uses_old = query.get("uses_old").and_then(|v| v.as_bool()).unwrap_or(false);
+            let result = engine.query_contract(name, uses_old);
+            match format_output(&result, "json") {
+                Ok(json) => (200, json),
+                Err(e) => (500, format!(r#"{{"error":"{}"}}"#, e)),
+            }
+        }
+        "impact" => {
+            let target = query.get("target").and_then(|v| v.as_str()).unwrap_or("");
+            let change = query.get("change").and_then(|v| v.as_str()).unwrap_or("");
+            let result = engine.query_impact(target, change);
+            match format_output(&result, "json") {
+                Ok(json) => (200, json),
+                Err(e) => (500, format!(r#"{{"error":"{}"}}"#, e)),
+            }
+        }
+        _ => {
+            (400, format!(r#"{{"error":"Unknown query type: {}"}}"#, query_type))
+        }
+    }
+}
+
+/// Send HTTP response with status code and body
+fn send_response(stream: &mut std::net::TcpStream, status: u16, body: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    let status_text = match status {
+        200 => "OK",
+        400 => "Bad Request",
+        404 => "Not Found",
+        500 => "Internal Server Error",
+        _ => "Unknown",
+    };
+    let response = format!(
+        "HTTP/1.1 {} {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        status, status_text, body.len(), body
+    );
+    stream.write_all(response.as_bytes())
+}
+
+/// Send JSON HTTP response
+fn send_json_response(stream: &mut std::net::TcpStream, status: u16, body: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    let status_text = match status {
+        200 => "OK",
+        400 => "Bad Request",
+        404 => "Not Found",
+        500 => "Internal Server Error",
+        _ => "Unknown",
+    };
+    let response = format!(
+        "HTTP/1.1 {} {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        status, status_text, body.len(), body
+    );
+    stream.write_all(response.as_bytes())
 }
 
 /// v0.30.246: Stage 3 self-hosting verification

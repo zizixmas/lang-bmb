@@ -479,11 +479,11 @@ node tools/rust_to_bmb.mjs path/to/*.rs --apply
 | 50.2 | **전체 테스트 검증** | 모든 테스트 스위트 통과 | P0 |
 | 50.3 | **크로스 플랫폼 검증** | 3개 OS 빌드 및 실행 | P0 |
 | 50.4 | **릴리스 노트 작성** | CHANGELOG, 마이그레이션 가이드 | P0 |
-| 50.5 | **`bmb q batch`** | 배치 쿼리 (queries.json) | P1 |
-| 50.6 | **`bmb q impact`** | 변경 영향 분석 | P1 |
-| 50.7 | **`bmb q serve`** | HTTP 쿼리 서버 모드 | P2 |
+| 50.5 | **`bmb q batch`** | 배치 쿼리 (queries.json) | P1 | ✅ 구현됨 |
+| 50.6 | **`bmb q impact`** | 변경 영향 분석 | P1 | ✅ 구현됨 |
+| 50.7 | **`bmb q serve`** | HTTP 쿼리 서버 모드 | P2 | ✅ v0.50.22 완료 |
 | 50.8 | **`bmb index --watch`** | 실시간 인덱스 갱신 | P2 | ✅ v0.50.21 완료 |
-| 50.9 | **RFC-0001 문서 갱신** | "Draft" → "Implemented" | P1 |
+| 50.9 | **RFC-0001 문서 갱신** | "Draft" → "Implemented" | P1 | ✅ 완료 |
 
 ---
 
